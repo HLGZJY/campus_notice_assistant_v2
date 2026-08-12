@@ -160,3 +160,21 @@ models:
 ## 关联项目
 
 - [Llama 3.1 本地 RAG](../Llama%203.1%20本地%20RAG%20-%20与任意网页对话，完全离线) — 本项目的前身，验证了 RAG 与网页对话的可行性
+
+---
+
+## Docker image (multi-stage) and Phase 8 notes
+
+A multi-stage Dockerfile has been added to build the frontend and package the backend runtime with built static assets. See `Dockerfile`, `.dockerignore`, and `requirements-backend.txt`.
+
+Build and run (example):
+
+```bash
+# Build
+docker build -t campus-notice:phase8 .
+# Run
+docker run -p 8000:8000 campus-notice:phase8
+# Visit http://localhost:8000
+```
+
+If engine features (Chroma, LangChain, heavy ML deps) are required inside the image, add those packages to `requirements-backend.txt` before building or create a separate engine image.
