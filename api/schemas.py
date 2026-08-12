@@ -398,3 +398,38 @@ class TaskView(BaseModel):
     error: Optional[str] = None
     created_at: str
     updated_at: str
+
+
+# ---------- 问答（阶段 5，盘点 §5.7 唯一例外） ----------
+#
+# 约定：SSE 事件负载由 api/routes/qa.py 手动序列化（QAResult 是 services 返回
+# dict 约定的唯一例外，路由层做 as_source 转换）。以下模型仅用于 /openapi.json
+# 契约文档与 index-stats 响应，不参与流式事件输出。
+
+
+class QaSourceRef(BaseModel):
+    """回答引用的来源通知（as_source 转换后的契约形态）。"""
+
+    notice_id: int
+    title: str = ""
+    url: str = ""
+    notice_type: str = ""
+    deadline: Optional[str] = None
+
+
+class QaResultView(BaseModel):
+    """问答完整结果（SSE done 事件负载的文档形态）。"""
+
+    answer: str
+    sources: list[QaSourceRef] = Field(default_factory=list)
+    retrieved_chunks: int = 0
+
+
+class IndexStatsView(BaseModel):
+    """向量索引统计（问答页索引状态角标）。"""
+
+    model_config = ConfigDict(extra="allow")
+
+    chunks: int = 0
+    persist_dir: str = ""
+    error: Optional[str] = None

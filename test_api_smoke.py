@@ -590,6 +590,120 @@ def _smoke(client, db_mod, config_dir, tmpdir, real_config_path, real_config_sna
     r = client.get("/api/v1/tasks/999999")
     check("tasks 不存在 404", r.status_code == 404, f"status={r.status_code}")
 
+    print("== 12. 问答 SSE 流式（离线 mock，复用 test_demo.py 确定性语义） ==")
+    import asyncio
+    import json
+
+    from core.qa import QAResult, QAAgent, SourceRef
+
+    # ---- 12.1 主链路：delta → done（QAResult 路由层 as_source 序列化） ----
+    async def _fake_stream(question):
+        yield ("delta", "你好，")
+        yield ("delta", "2026 数学建模竞赛报名截止 5 月 20 日。")
+        yield (
+            "done",
+            QAResult(
+                answer="你好，2026 数学建模竞赛报名截止 5 月 20 日。",
+                sources=[
+                    SourceRef(
+                        notice_id=1,
+                        title="2026 数学建模竞赛报名",
+                        url="http://t1",
+                        notice_type="competition",
+                        deadline="2026-05-20",
+                    )
+                ],
+                retrieved_chunks=2,
+            ),
+        )
+
+    with patch("core.qa.QAAgent") as FakeAgent:
+        FakeAgent.return_value.ask_stream = _fake_stream
+        with client.stream(
+            "GET", "/api/v1/qa/ask/stream", params={"question": "最近有哪些比赛？"}
+        ) as r:
+            check(
+                "stream 200 + text/event-stream",
+                r.status_code == 200 and r.headers["content-type"].startswith("text/event-stream"),
+                f"status={r.status_code} ctype={r.headers.get('content-type')}",
+            )
+            events = [
+                json.loads(line[6:])
+                for line in r.iter_lines()
+                if line.startswith("data: ")
+            ]
+    types = [e["type"] for e in events]
+    check("事件序列 delta,delta,done", types == ["delta", "delta", "done"], f"{types}")
+    check(
+        "delta 顺序拼接即最终答案",
+        events[0]["content"] + events[1]["content"] == "你好，2026 数学建模竞赛报名截止 5 月 20 日。",
+        f"{events[0]} {events[1]}",
+    )
+    done = events[-1]
+    check("done 携带完整 answer", done["answer"] == "你好，2026 数学建模竞赛报名截止 5 月 20 日。", f"{done}")
+    check(
+        "done.sources 为 as_source 纯 dict（§5.7 例外在路由层生效）",
+        done["sources"]
+        == [
+            {
+                "notice_id": 1,
+                "title": "2026 数学建模竞赛报名",
+                "url": "http://t1",
+                "notice_type": "competition",
+                "deadline": "2026-05-20",
+            }
+        ],
+        f"{done['sources']}",
+    )
+    check("done.retrieved_chunks=2", done["retrieved_chunks"] == 2, f"{done['retrieved_chunks']}")
+
+    # ---- 12.2 错误路径：流中途抛异常 → 末事件 error ----
+    async def _fail_stream(question):
+        yield ("delta", "部分输出")
+        raise RuntimeError("模拟 LLM 故障")
+
+    with patch("core.qa.QAAgent") as FakeAgent:
+        FakeAgent.return_value.ask_stream = _fail_stream
+        with client.stream(
+            "GET", "/api/v1/qa/ask/stream", params={"question": "会失败的问题"}
+        ) as r:
+            err_events = [
+                json.loads(line[6:])
+                for line in r.iter_lines()
+                if line.startswith("data: ")
+            ]
+    check(
+        "错误路径末事件为 error 且含异常名",
+        err_events[-1]["type"] == "error" and "RuntimeError" in err_events[-1]["message"],
+        f"{err_events[-1]}",
+    )
+
+    # ---- 12.3 空 question → 422 ----
+    r = client.get("/api/v1/qa/ask/stream", params={"question": ""})
+    check("空 question 422", r.status_code == 422, f"status={r.status_code}")
+
+    # ---- 12.4 core 空检索路径：真实 QAAgent + FakeIndex，离线不碰 LLM ----
+    class FakeEmptyIndex:
+        def search(self, query: str, k: int = 6, **kwargs):
+            return []
+
+    async def _collect(agen):
+        return [item async for item in agen]
+
+    items = asyncio.run(_collect(QAAgent(index=FakeEmptyIndex()).ask_stream("测试问题")))
+    check("空索引仅产 done", len(items) == 1 and items[0][0] == "done", f"{items}")
+    check(
+        "空索引兜底回答正确",
+        items[0][1].answer == "根据已抓取的通知，没有找到相关信息。"
+        and items[0][1].retrieved_chunks == 0,
+        f"{items[0][1]}",
+    )
+
+    # ---- 12.5 index-stats（临时库下 chunks=0 + error 信息，宽松断言） ----
+    r = client.get("/api/v1/qa/index-stats")
+    st = r.json()
+    check("index-stats 200 + 字段", r.status_code == 200 and {"chunks", "persist_dir"} <= set(st), f"{st}")
+
     # 真实 config/app.yaml 未被修改
     now_snapshot = real_config_path.read_text(encoding="utf-8") if real_config_path.exists() else None
     check("真实 app.yaml 未修改", now_snapshot == real_config_snapshot)

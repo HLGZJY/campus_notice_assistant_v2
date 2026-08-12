@@ -174,3 +174,57 @@ async def run_agent(
         notice_id=notice_id,
     )
     return result
+
+
+async def run_agent_stream(
+    agent,
+    prompt: str,
+    *,
+    task: str,
+    model: str,
+    attempt: int = 0,
+    notice_id: Optional[int] = None,
+):
+    """统一 LLM 流式调用点：Runner.run_streamed + 逐 delta 产出 + token 计量。
+
+    与 run_agent 对齐：问答链路逐 token 流式输出，成功/失败都自动写入
+    token_usage 计量表（阶段 5 SSE 流式）。Streaming 下无 raw_responses，
+    token 数从 `response.completed` 事件中的 response.usage 采集。
+
+    Args:
+        同 run_agent。
+
+    Yields:
+        str：模型输出的文本增量（response.output_text.delta）。
+        流式完成后正常 return；异常时先写 success=0 计量再抛出。
+    """
+    result = await Runner.run_streamed(agent, prompt)
+    usage = None
+    try:
+        async for event in result.stream_events():
+            if event.type != "raw_response_event":
+                continue
+            data = event.data
+            if data.type == "response.output_text.delta":
+                yield getattr(data, "delta", None) or ""
+            elif data.type == "response.completed":
+                usage = getattr(getattr(data, "response", None), "usage", None) or None
+    except Exception as e:  # noqa: BLE001 —— 失败也要记一次计量
+        record_llm_usage(
+            task=task,
+            model=model,
+            success=False,
+            retry_count=attempt,
+            error=f"{type(e).__name__}: {e}",
+            notice_id=notice_id,
+        )
+        raise
+    record_llm_usage(
+        task=task,
+        model=model,
+        input_tokens=int(getattr(usage, "input_tokens", 0) or 0),
+        output_tokens=int(getattr(usage, "output_tokens", 0) or 0),
+        success=True,
+        retry_count=attempt,
+        notice_id=notice_id,
+    )

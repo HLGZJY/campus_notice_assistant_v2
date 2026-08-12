@@ -19,6 +19,18 @@ def ask(question: str) -> QAResult:
     return ask_question(question)
 
 
+async def ask_stream(question: str):
+    """流式问答（阶段 5 SSE）：转发 QAAgent.ask_stream 产出事件二元组。
+
+    懒导入 QAAgent，使冒烟测试可 patch core.qa.QAAgent 全链路生效。
+    """
+    from core.qa import QAAgent
+
+    agent = QAAgent()
+    async for item in agent.ask_stream(question):
+        yield item
+
+
 def get_index_stats() -> dict:
     """返回向量索引统计信息。导入失败时返回错误信息，避免 UI 崩溃。"""
     try:

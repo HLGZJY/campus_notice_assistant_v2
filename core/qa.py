@@ -21,7 +21,7 @@ from agents import (
 from openai import AsyncOpenAI
 from pydantic import BaseModel, Field
 
-from utils.llm import get_model_for_task, run_agent
+from utils.llm import get_model_for_task, run_agent, run_agent_stream
 
 logger = logging.getLogger(__name__)
 
@@ -197,6 +197,53 @@ class QAAgent:
             answer=answer,
             sources=sources,
             retrieved_chunks=len(docs),
+        )
+
+    async def ask_stream(self, question: str):
+        """流式回答一个问题（阶段 5 SSE）。
+
+        异步生成器，产出 (event_type, payload) 二元组：
+          - ("delta", str)：LLM 输出的文本增量
+          - ("done", QAResult)：完整问答结果（含确定性导出的来源）
+
+        空检索时直接产出 ("done", 兜底 QAResult)，不调用 LLM。
+        """
+        docs = self._retrieve(question)
+        if not docs:
+            yield (
+                "done",
+                QAResult(
+                    answer="根据已抓取的通知，没有找到相关信息。",
+                    sources=[],
+                    retrieved_chunks=0,
+                ),
+            )
+            return
+
+        context, sources = self._build_context(docs)
+        prompt = (
+            f"问题：{question}\n\n"
+            f"参考通知：\n\n{context}\n\n"
+            f"请根据参考通知回答问题，并用 [编号] 引用来源。"
+        )
+
+        agent = self._get_agent()
+        parts: list[str] = []
+        async for delta in run_agent_stream(agent, prompt, task="qa", model=self.model):
+            parts.append(delta)
+            yield ("delta", delta)
+
+        answer = "".join(parts).strip()
+        if not answer:
+            answer = "根据已抓取的通知，没有找到相关信息。"
+
+        yield (
+            "done",
+            QAResult(
+                answer=answer,
+                sources=sources,
+                retrieved_chunks=len(docs),
+            ),
         )
 
 

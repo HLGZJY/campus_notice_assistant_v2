@@ -15,7 +15,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routes import config, notices, reminders, subscriptions, tasks, todos
+from api.routes import config, notices, qa, reminders, subscriptions, tasks, todos
 from api.tasks.manager import TaskManager
 
 logger = logging.getLogger(__name__)
@@ -69,6 +69,7 @@ def create_app() -> FastAPI:
     app.include_router(subscriptions.router, prefix="/api/v1")
     app.include_router(config.router, prefix="/api/v1")
     app.include_router(tasks.router, prefix="/api/v1")
+    app.include_router(qa.router, prefix="/api/v1")
     app.include_router(notices.router, prefix="/api/v1")
 
     @app.get("/api/v1/health", tags=["system"])
