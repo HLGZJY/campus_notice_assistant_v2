@@ -56,11 +56,16 @@ def crawl_source(source_cfg: SourceConfig) -> dict:
     }
 
 
-def crawl_all_sources() -> dict:
-    """按配置文件抓取所有数据源。返回 {source_name: result_dict}。"""
+def crawl_all_sources(progress_cb=None) -> dict:
+    """按配置文件抓取所有数据源。返回 {source_name: result_dict}。
+
+    Args:
+        progress_cb: 可选进度回调 (done:int, total:int) -> None，供任务管理器上报进度。
+    """
     school_config = get_school_config()
     results = {}
-    for source in school_config.sources:
+    total = len(school_config.sources)
+    for i, source in enumerate(school_config.sources, start=1):
         try:
             results[source.name] = crawl_source(source)
         except Exception as e:
@@ -74,7 +79,28 @@ def crawl_all_sources() -> dict:
                 "failed": 0,
                 "errors": [f"{type(e).__name__}: {e}"],
             }
+        if progress_cb is not None:
+            progress_cb(i, total)
     return results
+
+
+def crawl_source_by_name(source_name: str, progress_cb=None) -> dict:
+    """按来源名抓取单个数据源（供异步任务使用）。
+
+    Args:
+        source_name: 数据源名称（对应 config/schools/*.yaml 的 sources[].name）
+        progress_cb: 可选进度回调 (done:int, total:int) -> None
+
+    Returns:
+        成功返回 crawl_source 的结构化结果；来源不存在返回 {"ok": False, "error": ...}。
+    """
+    school_config = get_school_config()
+    for source in school_config.sources:
+        if source.name == source_name:
+            if progress_cb is not None:
+                progress_cb(1, 1)
+            return crawl_source(source)
+    return {"ok": False, "error": f"数据源不存在: {source_name}"}
 
 
 def get_status_counts() -> dict[str, int]:
@@ -252,7 +278,10 @@ def extract_notice(notice_id: int, auto_index: bool = True) -> dict:
 
 
 def extract_batch(
-    limit: int = 50, auto_index: bool = True, extractor: NoticeExtractor | None = None
+    limit: int = 50,
+    auto_index: bool = True,
+    extractor: NoticeExtractor | None = None,
+    progress_cb=None,
 ) -> dict:
     """批量提取所有 status=raw 的通知（断点续跑的提取游标）。
 
@@ -260,6 +289,7 @@ def extract_batch(
         limit: 最大处理条数
         auto_index: 每条提取成功后是否自动加入向量索引
         extractor: 可注入（测试用），默认真实 NoticeExtractor
+        progress_cb: 可选进度回调 (done:int, total:int) -> None，供任务管理器上报进度
     """
     conn = get_connection()
     try:
@@ -271,10 +301,13 @@ def extract_batch(
         return {"processed": 0, "summary": {}}
 
     extractor = extractor or NoticeExtractor()
+    total = len(notices)
 
     async def _run() -> dict:
         summary = {"extracted": 0, "partial": 0, "failed": 0, "details": []}
-        for notice in notices:
+        for i, notice in enumerate(notices, start=1):
+            if progress_cb is not None:
+                progress_cb(i, total)
             try:
                 outcome = await extractor.extract_one(
                     title=notice["title"],

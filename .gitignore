@@ -29,3 +29,5 @@ frontend/.vite/
 .idea/
 .DS_Store
 Thumbs.db
+
+docs-local/assest

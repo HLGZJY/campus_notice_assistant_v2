@@ -144,10 +144,13 @@ def match_notice(notice_id: int) -> dict:
         conn.close()
 
 
-def match_all_notices() -> dict:
+def match_all_notices(progress_cb=None) -> dict:
     """全库回填：对所有通知按当前启用订阅重新匹配。
 
     新增/修改订阅后调用；重复执行幂等（delete-then-insert 语义）。
+
+    Args:
+        progress_cb: 可选进度回调 (done:int, total:int) -> None，供任务管理器上报进度。
     """
     conn = get_connection()
     try:
@@ -157,7 +160,10 @@ def match_all_notices() -> dict:
 
     matched_notices = 0
     total_matches = 0
-    for nid in ids:
+    total = len(ids)
+    for i, nid in enumerate(ids, start=1):
+        if progress_cb is not None:
+            progress_cb(i, total)
         result = match_notice(nid)
         if result.get("ok"):
             total_matches += len(result.get("matched", []))
@@ -181,10 +187,36 @@ def _validate_keyword(keyword: str) -> Optional[str]:
     return None
 
 
+def validate_subscription_input(
+    keyword: Optional[str], notice_type: Optional[str] = None
+) -> Optional[str]:
+    """校验订阅输入（订阅词 + 通知类型），合法返回 None，非法返回错误文案。
+
+    供路由同步校验（400 立即返回，不进入异步任务），语义与 add_subscription /
+    update_subscription_record 内部校验完全一致。
+    keyword 传 None 表示不修改订阅词（更新场景只改类型时跳过关键词校验）。
+    """
+    if keyword is not None:
+        err = _validate_keyword(keyword)
+        if err:
+            return err
+    notice_type = notice_type or None
+    if notice_type and notice_type not in NoticeType.__args__:
+        return f"未知通知类型: {notice_type}"
+    return None
+
+
 def add_subscription(
-    keyword: str, notice_type: Optional[str] = None, enabled: bool = True
+    keyword: str,
+    notice_type: Optional[str] = None,
+    enabled: bool = True,
+    progress_cb=None,
 ) -> dict:
-    """新增订阅并全库回填匹配。"""
+    """新增订阅并全库回填匹配。
+
+    Args:
+        progress_cb: 可选进度回调 (done:int, total:int) -> None，透传给 match_all_notices。
+    """
     err = _validate_keyword(keyword)
     if err:
         return {"ok": False, "error": err}
@@ -198,7 +230,11 @@ def add_subscription(
     finally:
         conn.close()
 
-    backfill = match_all_notices() if enabled else {"ok": True, "notices": 0}
+    backfill = (
+        match_all_notices(progress_cb=progress_cb)
+        if enabled
+        else {"ok": True, "notices": 0}
+    )
     return {
         "ok": True,
         "id": sub_id,
@@ -214,10 +250,14 @@ def update_subscription_record(
     keyword: Optional[str] = None,
     notice_type: object = _UNSET,
     enabled: Optional[bool] = None,
+    progress_cb=None,
 ) -> dict:
     """更新订阅并重算其命中关系。
 
     notice_type 传 _UNSET（默认）表示不修改；传 None 表示清空类型过滤（全部类型）。
+
+    Args:
+        progress_cb: 可选进度回调 (done:int, total:int) -> None，透传给 match_all_notices。
     """
     conn = get_connection()
     try:
@@ -245,7 +285,7 @@ def update_subscription_record(
 
     backfill = None
     if new_enabled:
-        backfill = match_all_notices()
+        backfill = match_all_notices(progress_cb=progress_cb)
     return {"ok": True, "id": subscription_id, "backfill": backfill}
 
 
@@ -285,6 +325,15 @@ def get_subscription_stats_ui() -> dict:
     conn = get_connection()
     try:
         return get_subscription_stats(conn)
+    finally:
+        conn.close()
+
+
+def get_subscription_record(subscription_id: int) -> Optional[dict]:
+    """按 ID 查询订阅（供路由同步校验 404，避免误提交任务）。"""
+    conn = get_connection()
+    try:
+        return get_subscription_by_id(conn, subscription_id)
     finally:
         conn.close()
 

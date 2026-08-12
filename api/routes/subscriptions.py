@@ -2,8 +2,13 @@
 
 两步式平移（原 ui/two_step.py 的 request_action / render_confirmation）：
   - 第一步 `POST /subscriptions/preview`：只读预览影响面（会命中 N 条通知 + 样例标题），不写库；
-  - 第二步 `POST /subscriptions` / `PUT /subscriptions/{id}` / …：前端确认后才写库。
+  - 第二步 `POST /subscriptions` / `PUT /subscriptions/{id}` / …：前端确认后写库。
   - 前端以确认弹窗 + 路由状态替代 Streamlit 的 session_state。
+
+阶段 4（异步任务化）：
+  - 长耗时写操作（新增/编辑回填、全库重匹配）迁入任务模型：路由同步校验
+    （400/404 立即返回），通过后提交任务返回 202 {task_id}，前端轮询
+    GET /tasks/{id} 获取 backfill 结果。任务类型见 api/tasks/workers.py。
 
 注意：`POST /notices/match-map`、`GET /notices/matched-ids`、`GET /notices/count`
 须先于 notices 路由的 `GET /notices/{notice_id}` 注册（否则会被通配段捕获），
@@ -11,11 +16,11 @@
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from api.deps import require_auth
+from api.routes.tasks import get_task_manager
 from api.schemas import (
-    BackfillResult,
     MatchMapRequest,
     MatchMapResult,
     SubscriptionCreateRequest,
@@ -26,19 +31,18 @@ from api.schemas import (
     SubscriptionStats,
     SubscriptionToggleRequest,
     SubscriptionUpdateRequest,
+    TaskCreateResult,
 )
 from services.subscription_service import (
-    add_subscription,
     count_all_notices,
     delete_subscription_record,
     get_matched_notice_ids_set,
     get_match_map,
+    get_subscription_record,
     get_subscription_stats_ui,
     get_subscriptions_for_ui,
-    match_all_notices,
     preview_subscription_matches,
-    toggle_subscription,
-    update_subscription_record,
+    validate_subscription_input,
 )
 
 router = APIRouter(
@@ -79,53 +83,70 @@ def preview_subscription(body: SubscriptionPreviewRequest) -> SubscriptionPrevie
     return SubscriptionPreview(**result)
 
 
-@router.post("", response_model=SubscriptionMutationResult)
+@router.post("", status_code=202, response_model=TaskCreateResult)
 def create_subscription(
-    body: SubscriptionCreateRequest,
-) -> SubscriptionMutationResult:
-    """两步式第二步：确认后新增订阅并全库回填（同步执行，阶段 4 迁入任务模型）。"""
-    result = add_subscription(
-        keyword=body.keyword,
-        notice_type=body.notice_type,
-        enabled=body.enabled,
+    request: Request, body: SubscriptionCreateRequest
+) -> TaskCreateResult:
+    """两步式第二步：确认后新增订阅并全库回填（异步任务，202 返回 task_id 供轮询）。
+
+    路由同步校验（400 立即返回，不进入任务队列），通过后提交 subscription_add。
+    """
+    err = validate_subscription_input(body.keyword, body.notice_type)
+    if err:
+        raise HTTPException(status_code=400, detail=err)
+    task_id = get_task_manager(request).submit(
+        "subscription_add",
+        {
+            "keyword": body.keyword,
+            "notice_type": body.notice_type,
+            "enabled": body.enabled,
+        },
     )
-    if not result.get("ok"):
-        raise HTTPException(status_code=400, detail=result.get("error", "新增订阅失败"))
-    return SubscriptionMutationResult(**result)
+    return TaskCreateResult(task_id=task_id, type="subscription_add", status="queued")
 
 
-@router.put("/{subscription_id}", response_model=SubscriptionMutationResult)
+@router.put("/{subscription_id}", status_code=202, response_model=TaskCreateResult)
 def update_subscription(
-    subscription_id: int, body: SubscriptionUpdateRequest
-) -> SubscriptionMutationResult:
-    """更新订阅并重算命中关系。
+    request: Request, subscription_id: int, body: SubscriptionUpdateRequest
+) -> TaskCreateResult:
+    """更新订阅并重算命中关系（异步任务，202 返回 task_id 供轮询）。
 
     _UNSET 语义：请求体缺失字段 = 不修改；notice_type 显式传 null = 清空类型过滤。
+    路由同步校验 404/400（订阅不存在、输入非法立即返回），通过后提交 subscription_update。
     """
-    kwargs: dict = {}
-    if "keyword" in body.model_fields_set:
-        kwargs["keyword"] = body.keyword
-    if "notice_type" in body.model_fields_set:
-        kwargs["notice_type"] = body.notice_type
-    if "enabled" in body.model_fields_set:
-        kwargs["enabled"] = body.enabled
-    result = update_subscription_record(subscription_id, **kwargs)
-    if not result.get("ok"):
-        if result.get("error") == "订阅不存在":
-            raise HTTPException(status_code=404, detail=f"订阅 {subscription_id} 不存在")
-        raise HTTPException(status_code=400, detail=result.get("error", "更新订阅失败"))
-    return SubscriptionMutationResult(**result)
-
-
-@router.post("/{subscription_id}/toggle", response_model=SubscriptionMutationResult)
-def toggle_subscription_endpoint(
-    subscription_id: int, body: SubscriptionToggleRequest
-) -> SubscriptionMutationResult:
-    """启用/停用订阅：停用清理旧命中，启用后全库回填。"""
-    result = toggle_subscription(subscription_id, body.enabled)
-    if not result.get("ok"):
+    if get_subscription_record(subscription_id) is None:
         raise HTTPException(status_code=404, detail=f"订阅 {subscription_id} 不存在")
-    return SubscriptionMutationResult(**result)
+    params: dict = {"subscription_id": subscription_id}
+    if "keyword" in body.model_fields_set:
+        params["keyword"] = body.keyword
+    if "notice_type" in body.model_fields_set:
+        params["notice_type"] = body.notice_type
+    if "enabled" in body.model_fields_set:
+        params["enabled"] = body.enabled
+    if "keyword" in params or "notice_type" in params:
+        err = validate_subscription_input(params.get("keyword"), params.get("notice_type"))
+        if err:
+            raise HTTPException(status_code=400, detail=err)
+    task_id = get_task_manager(request).submit("subscription_update", params)
+    return TaskCreateResult(task_id=task_id, type="subscription_update", status="queued")
+
+
+@router.post("/{subscription_id}/toggle", status_code=202, response_model=TaskCreateResult)
+def toggle_subscription_endpoint(
+    request: Request, subscription_id: int, body: SubscriptionToggleRequest
+) -> TaskCreateResult:
+    """启用/停用订阅（异步任务，202 返回 task_id 供轮询）。
+
+    停用清理旧命中，启用后全库回填——两者都可能长耗时，统一迁入任务模型。
+    路由同步校验 404（订阅不存在立即返回）。
+    """
+    if get_subscription_record(subscription_id) is None:
+        raise HTTPException(status_code=404, detail=f"订阅 {subscription_id} 不存在")
+    task_id = get_task_manager(request).submit(
+        "subscription_update",
+        {"subscription_id": subscription_id, "enabled": body.enabled},
+    )
+    return TaskCreateResult(task_id=task_id, type="subscription_update", status="queued")
 
 
 @router.delete("/{subscription_id}", response_model=SubscriptionMutationResult)
@@ -137,10 +158,11 @@ def delete_subscription_endpoint(subscription_id: int) -> SubscriptionMutationRe
     return SubscriptionMutationResult(**result)
 
 
-@router.post("/match-all", response_model=BackfillResult)
-def match_all() -> BackfillResult:
-    """全库重匹配（长耗时，同步；阶段 4 迁入任务模型）。"""
-    return BackfillResult(**match_all_notices())
+@router.post("/match-all", status_code=202, response_model=TaskCreateResult)
+def match_all(request: Request) -> TaskCreateResult:
+    """全库重匹配（异步任务，202 返回 task_id 供轮询）。"""
+    task_id = get_task_manager(request).submit("match_all", {})
+    return TaskCreateResult(task_id=task_id, type="match_all", status="queued")
 
 
 # ---------- /notices 下的只读查询（浏览页） ----------

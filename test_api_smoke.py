@@ -15,6 +15,11 @@ from pathlib import Path
 ROOT = Path(__file__).parent
 sys.path.insert(0, str(ROOT))
 
+try:
+    sys.stdout.reconfigure(encoding="utf-8")
+except Exception:
+    pass
+
 os.environ["APP_ENV"] = "test"
 
 failures: list[str] = []
@@ -162,8 +167,36 @@ def main() -> None:
     real_config_path = ROOT / "config" / "app.yaml"
     real_config_snapshot = real_config_path.read_text(encoding="utf-8") if real_config_path.exists() else None
 
-    client = TestClient(create_app())
+    # 阶段 4：TestClient 上下文管理器触发 lifespan（异步任务管理器 worker 后台运行）。
+    # 长耗时写操作改为「提交任务 → 轮询 GET /tasks/{id}」；主流程在 _smoke 中保持原缩进。
+    with TestClient(create_app()) as client:
+        _smoke(client, db_mod, config_dir, tmpdir, real_config_path, real_config_snapshot)
 
+    tmpdir.cleanup()
+    print("=" * 60)
+    if failures:
+        print(f"结果: {len(failures)} 项失败 -> {failures}")
+        sys.exit(1)
+    print("结果: 全部通过")
+
+
+def poll_task(client, task_id: int, timeout: float = 30.0) -> dict | None:
+    """轮询 GET /tasks/{id} 直到 success/failed，超时返回 None（阶段 4 提交→轮询链路）。"""
+    import time
+
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        r = client.get(f"/api/v1/tasks/{task_id}")
+        if r.status_code == 200:
+            rec = r.json()
+            if rec["status"] in ("success", "failed"):
+                return rec
+        time.sleep(0.05)
+    return None
+
+
+def _smoke(client, db_mod, config_dir, tmpdir, real_config_path, real_config_snapshot) -> None:
+    """冒烟主流程：阶段 4 起在 TestClient 上下文内运行（worker 后台已就绪）。"""
     print("== 1. 健康检查 ==")
     r = client.get("/api/v1/health")
     check("health 200", r.status_code == 200, f"status={r.status_code}")
@@ -224,7 +257,6 @@ def main() -> None:
     from unittest.mock import patch
 
     from core.models import TodoItem as CoreTodoItem
-    from core.todo import TodoOutcome
 
     class FakeTodoGenerator:
         """替代 LLM：返回确定性待办项；generate_todos_for_notice 随后真实落库。"""
@@ -238,12 +270,28 @@ def main() -> None:
                 )
             ]
 
+    # 阶段 4：提交生成任务 → 轮询完成。patch 须覆盖 worker 线程执行期间，故轮询也在 with 内。
     with patch("core.todo.TodoGenerator", FakeTodoGenerator):
         r = client.post("/api/v1/notices/1/todos")
-    check("生成待办 200", r.status_code == 200, f"status={r.status_code}")
-    gen = r.json()
-    check("生成 success=true", gen["success"] is True, f"{gen}")
-    check("生成 items 带主键", len(gen["items"]) == 1 and "id" in gen["items"][0], f"{gen}")
+        check("提交生成待办任务 202", r.status_code == 202, f"status={r.status_code}")
+        gen_task = r.json()
+        check(
+            "任务返回 queued + generate_todos",
+            gen_task["status"] == "queued" and gen_task["type"] == "generate_todos",
+            f"{gen_task}",
+        )
+        gen = poll_task(client, gen_task["task_id"])
+        check("生成待办任务 success", gen is not None and gen["status"] == "success", f"{gen}")
+        check(
+            "生成 success=true",
+            gen is not None and gen["result"]["success"] is True,
+            f"{gen}",
+        )
+        check(
+            "生成 items 带主键",
+            gen is not None and len(gen["result"]["items"]) == 1 and "id" in gen["result"]["items"][0],
+            f"{gen}",
+        )
 
     r = client.get("/api/v1/todos")
     todos = r.json()
@@ -320,12 +368,25 @@ def main() -> None:
     conn.close()
     check("preview 后无写库", subs_count == 0 and match_count == 0, f"subs={subs_count} matches={match_count}")
 
-    # 第二步：确认后新增（含回填）
+    # 第二步：确认后新增（异步任务 → 轮询完成 → 断言回填落库）
     r = client.post("/api/v1/subscriptions", json={"keyword": "数学建模"})
-    check("add 200", r.status_code == 200, f"status={r.status_code}")
-    added = r.json()
-    check("add ok + 回填成功", added["ok"] is True and added["backfill"]["ok"] is True, f"{added}")
-    sub_id = added["id"]
+    check("add 202", r.status_code == 202, f"status={r.status_code}")
+    add_task = r.json()
+    check(
+        "add 任务 queued + subscription_add",
+        add_task["status"] == "queued" and add_task["type"] == "subscription_add",
+        f"{add_task}",
+    )
+    added = poll_task(client, add_task["task_id"])
+    check(
+        "add 任务 success + 回填 ok",
+        added is not None
+        and added["status"] == "success"
+        and added["result"]["ok"] is True
+        and added["result"]["backfill"]["ok"] is True,
+        f"{added}",
+    )
+    sub_id = added["result"]["id"]
     conn = db_mod.get_connection()
     match_count = conn.execute("SELECT COUNT(*) FROM notice_subscription_matches").fetchone()[0]
     conn.close()
@@ -352,27 +413,39 @@ def main() -> None:
     r = client.get("/api/v1/notices/count")
     check("notices count=3", r.json() == 3, f"{r.json()}")
 
-    # 全库重匹配（长耗时，同步）
+    # 全库重匹配（异步任务 → 轮询完成）
     r = client.post("/api/v1/subscriptions/match-all")
-    check("match-all ok", r.status_code == 200 and r.json()["ok"] is True, f"{r.json()}")
+    check("match-all 202", r.status_code == 202, f"status={r.status_code}")
+    ma_task = r.json()
+    check("match-all 任务 queued", ma_task["status"] == "queued" and ma_task["type"] == "match_all", f"{ma_task}")
+    ma = poll_task(client, ma_task["task_id"])
+    check("match-all 任务 success + ok", ma is not None and ma["status"] == "success" and ma["result"]["ok"] is True, f"{ma}")
 
-    # 编辑：_UNSET 语义（缺失字段=不改；显式 null=清空类型）
+    # 编辑：_UNSET 语义（缺失字段=不改；显式 null=清空类型），异步任务 + 轮询
     r = client.put(f"/api/v1/subscriptions/{sub_id}", json={"notice_type": "lecture"})
-    check("PUT 限定类型 200", r.status_code == 200, f"status={r.status_code}")
+    check("PUT 限定类型 202", r.status_code == 202, f"status={r.status_code}")
+    up = poll_task(client, r.json()["task_id"])
+    check("PUT 限定类型任务 success", up is not None and up["status"] == "success", f"{up}")
     r = client.get("/api/v1/subscriptions")
     check("限定 lecture 后命中 0", r.json()[0]["match_count"] == 0, f"{r.json()}")
     r = client.put(f"/api/v1/subscriptions/{sub_id}", json={"notice_type": None})
-    check("PUT 清空类型 200", r.status_code == 200, f"status={r.status_code}")
+    check("PUT 清空类型 202", r.status_code == 202, f"status={r.status_code}")
+    up = poll_task(client, r.json()["task_id"])
+    check("PUT 清空类型任务 success", up is not None and up["status"] == "success", f"{up}")
     r = client.get("/api/v1/subscriptions")
     check("清空类型后命中回 1", r.json()[0]["match_count"] == 1, f"{r.json()}")
 
-    # 启停
+    # 启停（异步任务 + 轮询）
     r = client.post(f"/api/v1/subscriptions/{sub_id}/toggle", json={"enabled": False})
-    check("toggle 停用", r.status_code == 200 and r.json()["ok"] is True, f"{r.json()}")
+    check("toggle 停用 202", r.status_code == 202, f"status={r.status_code}")
+    tg = poll_task(client, r.json()["task_id"])
+    check("toggle 停用任务 success", tg is not None and tg["status"] == "success", f"{tg}")
     r = client.get("/api/v1/subscriptions")
     check("停用后命中 0", r.json()[0]["match_count"] == 0, f"{r.json()}")
     r = client.post(f"/api/v1/subscriptions/{sub_id}/toggle", json={"enabled": True})
-    check("toggle 启用", r.status_code == 200 and r.json()["ok"] is True, f"{r.json()}")
+    check("toggle 启用 202", r.status_code == 202, f"status={r.status_code}")
+    tg = poll_task(client, r.json()["task_id"])
+    check("toggle 启用任务 success", tg is not None and tg["status"] == "success", f"{tg}")
     r = client.get("/api/v1/subscriptions")
     check("启用后命中 1", r.json()[0]["match_count"] == 1, f"{r.json()}")
 
@@ -492,16 +565,34 @@ def main() -> None:
     r = client.put("/api/v1/config/models", json={"extraction": {"provider": "opencode-zen", "model": "x"}})
     check("PUT models 缺任务 422", r.status_code == 422, f"status={r.status_code}")
 
+    print("== 11. 通用异步任务链路 ==")
+    # 提交 match_all（离线纯规则）→ 轮询 success → 断言 result 形状
+    r = client.post("/api/v1/tasks", json={"type": "match_all"})
+    check("POST /tasks 202 + queued", r.status_code == 202 and r.json()["status"] == "queued", f"{r.json()}")
+    tid = r.json()["task_id"]
+    rec = poll_task(client, tid)
+    check("match_all 任务 success", rec is not None and rec["status"] == "success", f"{rec}")
+    check(
+        "match_all result 形状",
+        rec is not None
+        and rec["result"]["ok"] is True
+        and {"notices", "matched_notices", "total_matches"} <= set(rec["result"]),
+        f"{rec}",
+    )
+    # 任务列表 / 详情
+    r = client.get("/api/v1/tasks")
+    check("tasks 列表非空", r.status_code == 200 and any(t["id"] == tid for t in r.json()), f"{r.json()}")
+    r = client.get(f"/api/v1/tasks/{tid}")
+    check("tasks/{id} 详情 200", r.status_code == 200 and r.json()["id"] == tid, f"status={r.status_code}")
+    # 未知 type → 400；不存在 → 404
+    r = client.post("/api/v1/tasks", json={"type": "nonexistent"})
+    check("未知 type 400", r.status_code == 400, f"status={r.status_code}")
+    r = client.get("/api/v1/tasks/999999")
+    check("tasks 不存在 404", r.status_code == 404, f"status={r.status_code}")
+
     # 真实 config/app.yaml 未被修改
     now_snapshot = real_config_path.read_text(encoding="utf-8") if real_config_path.exists() else None
     check("真实 app.yaml 未修改", now_snapshot == real_config_snapshot)
-
-    tmpdir.cleanup()
-    print("=" * 60)
-    if failures:
-        print(f"结果: {len(failures)} 项失败 -> {failures}")
-        sys.exit(1)
-    print("结果: 全部通过")
 
 
 if __name__ == "__main__":

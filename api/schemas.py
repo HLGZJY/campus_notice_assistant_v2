@@ -366,3 +366,35 @@ class TestModelResult(BaseModel):
     latency_ms: int = 0
     completion: Optional[str] = None
     error: Optional[str] = None
+
+
+# ---------- 异步任务（阶段 4） ----------
+
+
+class TaskCreateRequest(BaseModel):
+    """任务提交请求体。type 见 api/tasks/workers.py 的 WORKERS 注册表。"""
+
+    type: str
+    params: dict = Field(default_factory=dict)
+
+
+class TaskCreateResult(BaseModel):
+    """任务提交结果（202）：前端据此轮询 GET /tasks/{id}。"""
+
+    task_id: int
+    type: str
+    status: str = "queued"
+
+
+class TaskView(BaseModel):
+    """任务查询视图（轮询点）。"""
+
+    id: int
+    type: str
+    params: Optional[dict] = None
+    status: str  # queued / running / success / failed
+    progress: float = 0
+    result: Optional[dict] = None
+    error: Optional[str] = None
+    created_at: str
+    updated_at: str

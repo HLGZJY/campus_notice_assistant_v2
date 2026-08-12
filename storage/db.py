@@ -132,6 +132,23 @@ CREATE TABLE IF NOT EXISTS events (
 );
 CREATE INDEX IF NOT EXISTS idx_events_type ON events(event_type);
 CREATE INDEX IF NOT EXISTS idx_events_at ON events(event_at);
+
+CREATE TABLE IF NOT EXISTS tasks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    type TEXT NOT NULL,                -- crawl_source / crawl_all / extract_batch /
+                                       -- subscription_add / subscription_update / match_all /
+                                       -- rebuild_index / generate_todos
+    params_json TEXT,                  -- 请求参数 JSON
+    status TEXT NOT NULL DEFAULT 'queued',  -- queued / running / success / failed
+    progress REAL NOT NULL DEFAULT 0,  -- 0.0 ~ 1.0
+    result_json TEXT,
+    error TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
+CREATE INDEX IF NOT EXISTS idx_tasks_type ON tasks(type);
+CREATE INDEX IF NOT EXISTS idx_tasks_created ON tasks(created_at);
 """
 
 # M2 结构化提取新增列（对已存在的库做 ALTER 迁移）
@@ -1290,3 +1307,128 @@ def get_notice_status_snapshot(conn: sqlite3.Connection) -> dict[int, str]:
     """崩溃恢复演练：全部通知的当前状态快照（判断"已处理"集合）。"""
     rows = conn.execute("SELECT id, status FROM notices").fetchall()
     return {r["id"]: r["status"] for r in rows}
+
+
+# ---------- 异步任务（阶段 4） ----------
+
+
+def create_task(conn: sqlite3.Connection, task_type: str, params: Optional[dict] = None) -> int:
+    """写入一条 queued 任务，返回新 id。"""
+    now = datetime.now().isoformat()
+    cur = conn.execute(
+        """INSERT INTO tasks (type, params_json, status, progress, created_at, updated_at)
+           VALUES (?, ?, 'queued', 0, ?, ?)""",
+        (task_type, json.dumps(params, ensure_ascii=False) if params else None, now, now),
+    )
+    conn.commit()
+    return cur.lastrowid
+
+
+def claim_next_task(conn: sqlite3.Connection) -> Optional[dict]:
+    """取出最早一条 queued 任务并置为 running（原子认领）。
+
+    用 `UPDATE ... WHERE status='queued'` 的 rowcount 保证同一任务只被认领一次；
+    无任务返回 None。
+    """
+    row = conn.execute(
+        "SELECT * FROM tasks WHERE status = 'queued' ORDER BY id LIMIT 1"
+    ).fetchone()
+    if row is None:
+        return None
+    cur = conn.execute(
+        "UPDATE tasks SET status = 'running', updated_at = ? WHERE id = ? AND status = 'queued'",
+        (datetime.now().isoformat(), row["id"]),
+    )
+    conn.commit()
+    if cur.rowcount == 0:
+        return claim_next_task(conn)
+    task = dict(row)
+    task["params"] = _load_task_json(task.get("params_json"))
+    return task
+
+
+def update_task_progress(conn: sqlite3.Connection, task_id: int, progress: float) -> None:
+    """更新任务进度（0.0 ~ 1.0）。"""
+    conn.execute(
+        "UPDATE tasks SET progress = ?, updated_at = ? WHERE id = ?",
+        (max(0.0, min(1.0, progress)), datetime.now().isoformat(), task_id),
+    )
+    conn.commit()
+
+
+def complete_task(conn: sqlite3.Connection, task_id: int, result: dict) -> None:
+    """标记任务成功并写入结果。"""
+    conn.execute(
+        """UPDATE tasks SET status = 'success', progress = 1.0, result_json = ?, updated_at = ?
+           WHERE id = ?""",
+        (json.dumps(result, ensure_ascii=False), datetime.now().isoformat(), task_id),
+    )
+    conn.commit()
+
+
+def fail_task(conn: sqlite3.Connection, task_id: int, error: str) -> None:
+    """标记任务失败并写入错误。"""
+    conn.execute(
+        "UPDATE tasks SET status = 'failed', error = ?, updated_at = ? WHERE id = ?",
+        (error, datetime.now().isoformat(), task_id),
+    )
+    conn.commit()
+
+
+def recover_interrupted_tasks(conn: sqlite3.Connection) -> int:
+    """进程重启恢复：把遗留的 queued / running 任务标记为 failed。
+
+    任务记录保留（结果可查），底层操作幂等，用户可重新提交；
+    error 用固定文案标记为"进程重启中断"。
+    """
+    cur = conn.execute(
+        """UPDATE tasks SET status = 'failed',
+               error = '进程重启中断，任务未完成，请重新提交',
+               updated_at = ?
+           WHERE status IN ('queued', 'running')""",
+        (datetime.now().isoformat(),),
+    )
+    conn.commit()
+    return cur.rowcount
+
+
+def get_task(conn: sqlite3.Connection, task_id: int) -> Optional[dict]:
+    """按 ID 查询任务，返回 dict（含解析后的 params / result）或 None。"""
+    row = conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
+    if row is None:
+        return None
+    task = dict(row)
+    task["params"] = _load_task_json(task.get("params_json"))
+    task["result"] = _load_task_json(task.get("result_json"))
+    return task
+
+
+def list_tasks(
+    conn: sqlite3.Connection, limit: int = 50, status: Optional[str] = None
+) -> list[dict]:
+    """查询最近 N 条任务（可按状态过滤），按 id 倒序。"""
+    sql = "SELECT * FROM tasks"
+    params: list = []
+    if status:
+        sql += " WHERE status = ?"
+        params.append(status)
+    sql += " ORDER BY id DESC LIMIT ?"
+    params.append(limit)
+    rows = conn.execute(sql, params).fetchall()
+    tasks = []
+    for r in rows:
+        task = dict(r)
+        task["params"] = _load_task_json(task.get("params_json"))
+        task["result"] = _load_task_json(task.get("result_json"))
+        tasks.append(task)
+    return tasks
+
+
+def _load_task_json(raw: Optional[str]) -> Optional[dict]:
+    """解析任务表的 JSON 列；损坏时返回 None（不抛出，保持查询可用）。"""
+    if not raw:
+        return None
+    try:
+        return json.loads(raw)
+    except (ValueError, TypeError):
+        return None

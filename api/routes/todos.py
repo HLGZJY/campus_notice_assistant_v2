@@ -1,18 +1,19 @@
 """待办模块：列表 / 统计 / 生成 / 状态变更（盘点 §5.6 待办映射表）。
 
-generate_todos 为 LLM 同步调用（阻塞，阶段 2 保持同步，前端 loading 态；
-阶段 4 迁入任务模型后改为「提交任务 + 返回 task_id」）。
+阶段 4 迁入任务模型：generate_todos 为 LLM 长耗时调用，改为「提交任务 + 返回 202
+task_id」，前端轮询 GET /tasks/{id}；通知不存在的 404 在路由同步校验立即返回。
 """
 from __future__ import annotations
 
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from api.deps import require_auth
-from api.schemas import TodoGenerateResult, TodoItem, TodoStats, TodoStatusUpdate
+from api.routes.tasks import get_task_manager
+from api.schemas import TaskCreateResult, TodoItem, TodoStats, TodoStatusUpdate
+from storage.db import get_connection, get_notice_by_id
 from services.todo_service import (
-    generate_todos,
     get_todo_stats,
     get_todos,
     get_todos_by_notice,
@@ -62,22 +63,19 @@ def list_notice_todos(notice_id: int) -> list[TodoItem]:
     return [TodoItem(**r) for r in get_todos_by_notice(notice_id)]
 
 
-@notice_router.post("/{notice_id}/todos", response_model=TodoGenerateResult)
-def generate_notice_todos(notice_id: int) -> TodoGenerateResult:
-    """为指定通知生成待办（LLM 同步调用，替换旧 pending；失败由模板兜底）。"""
-    result = generate_todos(notice_id)
-    items: list[dict] = []
-    if result["success"] and result["items"]:
-        # 生成即落库（replace 语义），回填主键使响应符合 TodoItem 契约
-        rows = {
-            r["action"]: r
-            for r in get_todos_by_notice(notice_id)
-            if r.get("status") == "pending"
-        }
-        items = [rows[it["action"]] for it in result["items"] if it["action"] in rows]
-    return TodoGenerateResult(
-        success=result["success"],
-        status=result["status"],
-        items=[TodoItem(**it) for it in items],
-        error=result["error"],
-    )
+@notice_router.post("/{notice_id}/todos", status_code=202, response_model=TaskCreateResult)
+def generate_notice_todos(request: Request, notice_id: int) -> TaskCreateResult:
+    """为指定通知生成待办（异步任务，202 返回 task_id 供轮询）。
+
+    通知不存在的 404 路由同步校验立即返回；LLM 调用在 worker 线程执行，
+    完成后经 GET /tasks/{id} 获取 TodoGenerateResult 形状的结果。
+    """
+    conn = get_connection()
+    try:
+        notice = get_notice_by_id(conn, notice_id)
+    finally:
+        conn.close()
+    if notice is None:
+        raise HTTPException(status_code=404, detail=f"通知 {notice_id} 不存在")
+    task_id = get_task_manager(request).submit("generate_todos", {"notice_id": notice_id})
+    return TaskCreateResult(task_id=task_id, type="generate_todos", status="queued")
