@@ -16,7 +16,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routes import config, notices, qa, reminders, scheduler, subscriptions, tasks, todos
+from api.routes import config, events, notices, qa, reminders, scheduler, subscriptions, tasks, todos
 from api.tasks.manager import TaskManager
 from scheduler import start_scheduler
 
@@ -85,6 +85,7 @@ def create_app() -> FastAPI:
     app.include_router(tasks.router, prefix="/api/v1")
     app.include_router(qa.router, prefix="/api/v1")
     app.include_router(notices.router, prefix="/api/v1")
+    app.include_router(events.router, prefix="/api/v1")
 
     @app.get("/api/v1/health", tags=["system"])
     def health() -> dict:
@@ -99,9 +100,24 @@ def create_app() -> FastAPI:
             "notices": sum(counts.values()),
         }
 
-    # 阶段 7 接入：挂载前端构建产物
-    # from fastapi.staticfiles import StaticFiles
-    # app.mount("/static", StaticFiles(directory="frontend/dist"), name="static")
+    # 阶段 7 接入：挂载前端构建产物（Phase 8 收尾：启用前端静态文件）
+    # 如果 frontend/dist 存在，则挂载为 /static 并添加 SPA fallback
+    from fastapi.staticfiles import StaticFiles
+    from fastapi.responses import FileResponse
+    import pathlib
+
+    dist_path = pathlib.Path(__file__).resolve().parents[1] / "frontend" / "dist"
+    if dist_path.exists():
+        app.mount("/static", StaticFiles(directory=str(dist_path)), name="static")
+
+        @app.get("/{full_path:path}")
+        async def spa_fallback(full_path: str):
+            # 返回静态文件（如果存在），否则返回 index.html
+            possible = dist_path / full_path
+            index = dist_path / "index.html"
+            if possible.exists() and possible.is_file():
+                return FileResponse(possible)
+            return FileResponse(index)
 
     return app
 
