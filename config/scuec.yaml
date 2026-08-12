@@ -1,0 +1,4 @@
+# 已迁移：该文件已废弃，学校配置已移动到 config/schools/scuec.yaml
+# 请直接编辑 config/schools/scuec.yaml 或在系统配置页面中修改数据源。
+# 本文件保留仅用于防止旧代码引用出错，后续将删除。
+

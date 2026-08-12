@@ -1,0 +1,31 @@
+# ---------- 运行时数据 ----------
+data/notices.db
+data/chroma/
+data/logs/
+data/health/
+data/eval/
+data/*.db
+data/*.db-*
+*.tmp
+*.bak
+
+# ---------- 密钥与环境 ----------
+.env
+
+# ---------- Python ----------
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# ---------- 前端 ----------
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# ---------- 编辑器/系统 ----------
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

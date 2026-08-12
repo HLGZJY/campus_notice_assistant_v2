@@ -1,0 +1,33 @@
+name: 中南民族大学
+code: scuec
+sources:
+- name: 创新创业学院-竞赛通知
+  type: web
+  list_url: https://www.scuec.edu.cn/cxcy/scss/jstz.htm
+  url_pattern: null
+  max_pages: 5
+- name: 创新创业学院-结果公示
+  type: web
+  list_url: https://www.scuec.edu.cn/cxcy/scss/jggs.htm
+  url_pattern: null
+  max_pages: 5
+- name: 教务处-管理文件
+  type: web
+  list_url: https://www.scuec.edu.cn/jwc/glwj.htm
+  url_pattern: null
+  max_pages: 5
+- name: 教务处-办事指南
+  type: web
+  list_url: https://www.scuec.edu.cn/jwc/bszn.htm
+  url_pattern: null
+  max_pages: 5
+- name: 教务处-通知公告
+  type: web
+  list_url: https://www.scuec.edu.cn/jwc/tzgg.htm
+  url_pattern: null
+  max_pages: 5
+- name: 研究生院-通知公告
+  type: web
+  list_url: https://www.scuec.edu.cn/yjsy/yjspy/tzgg.htm
+  url_pattern: null
+  max_pages: 5

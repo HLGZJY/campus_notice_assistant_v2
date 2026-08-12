@@ -1,0 +1,32 @@
+# 抓取（M1）
+newspaper4k>=0.9.6
+requests>=2.31
+beautifulsoup4>=4.12
+lxml>=5.0
+PyYAML>=6.0
+
+# LLM 结构化提取（M2）
+openai-agents>=0.19
+pydantic>=2.8
+dateparser>=1.2
+python-dotenv>=1.0
+
+# 调度器（W1 模块 1.1）
+apscheduler>=3.10
+
+# 前端（M3 Demo / M5）
+streamlit>=1.40
+
+# 向量索引 + RAG 问答（M4）
+chromadb>=0.6
+langchain>=0.3
+langchain-chroma>=0.2
+langchain_community>=0.3
+langchain_huggingface>=0.1
+langchain_openai>=0.3
+langchain_text_splitters>=0.3
+sentence-transformers>=3.0
+
+# 混合检索 BM25 + RRF（W2 模块 2.4）
+rank_bm25>=0.2
+jieba>=0.42
