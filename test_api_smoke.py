@@ -158,6 +158,182 @@ def main() -> None:
     r = client.get("/api/v1/nonexistent")
     check("未知路由 404", r.status_code == 404)
 
+    print("== 7. 待办模块 ==")
+    from unittest.mock import patch
+
+    from core.models import TodoItem as CoreTodoItem
+    from core.todo import TodoOutcome
+
+    class FakeTodoGenerator:
+        """替代 LLM：返回确定性待办项；generate_todos_for_notice 随后真实落库。"""
+
+        async def generate_one(self, notice):
+            return [
+                CoreTodoItem(
+                    action="在 2026-05-20 前完成竞赛报名",
+                    due_at="2026-05-20",
+                    priority="high",
+                )
+            ]
+
+    with patch("core.todo.TodoGenerator", FakeTodoGenerator):
+        r = client.post("/api/v1/notices/1/todos")
+    check("生成待办 200", r.status_code == 200, f"status={r.status_code}")
+    gen = r.json()
+    check("生成 success=true", gen["success"] is True, f"{gen}")
+    check("生成 items 带主键", len(gen["items"]) == 1 and "id" in gen["items"][0], f"{gen}")
+
+    r = client.get("/api/v1/todos")
+    todos = r.json()
+    check("todos 列表 1 条", len(todos) == 1, f"len={len(todos)}")
+    todo0 = todos[0]
+    check(
+        "todo 关联通知字段",
+        todo0["notice_id"] == 1 and todo0["notice_title"] == "2026 数学建模竞赛报名",
+        f"{todo0}",
+    )
+    r = client.get("/api/v1/todos", params={"status": "pending"})
+    check("todos status=pending 过滤 1 条", len(r.json()) == 1, f"len={len(r.json())}")
+    r = client.get("/api/v1/todos/stats")
+    check("todos stats pending=1", r.json()["pending"] == 1, f"{r.json()}")
+    r = client.get("/api/v1/notices/1/todos")
+    check("按通知查待办 1 条", len(r.json()) == 1)
+    r = client.post(f"/api/v1/todos/{todo0['id']}/status", json={"status": "done"})
+    check("标记 done 200", r.status_code == 200 and r.json()["ok"] is True, f"{r.json()}")
+    r = client.get("/api/v1/todos", params={"status": "done"})
+    check("todos status=done 1 条", len(r.json()) == 1)
+    r = client.post(f"/api/v1/todos/{todo0['id']}/status", json={"status": "bogus"})
+    check("非法状态 400", r.status_code == 400, f"status={r.status_code}")
+    r = client.post("/api/v1/todos/999/status", json={"status": "done"})
+    check("不存在待办 404", r.status_code == 404, f"status={r.status_code}")
+
+    print("== 8. 提醒模块 ==")
+    today = datetime.now().date().isoformat()
+    conn = db_mod.get_connection()
+    conn.execute(
+        """INSERT INTO reminders (notice_id, todo_id, due_at, tier, remind_on, status, created_at)
+           VALUES (?, ?, ?, ?, ?, 'pending', ?)""",
+        (2, None, "2026-05-03", "1d", today, datetime.now().isoformat()),
+    )
+    conn.commit()
+    conn.close()
+
+    r = client.get("/api/v1/reminders")
+    rems = r.json()
+    check("reminders 列表 1 条", len(rems) == 1, f"len={len(rems)}")
+    rem = rems[0]
+    check(
+        "reminder 增强字段 tier_label/is_today",
+        rem["tier_label"] == "⏳ 距截止 1 天" and rem["is_today"] is True,
+        f"{rem}",
+    )
+    check("reminder 带通知标题", rem["notice_title"] == "AI 讲座", f"{rem.get('notice_title')}")
+    r = client.get("/api/v1/reminders", params={"status": "pending"})
+    check("reminders status=pending 1 条", len(r.json()) == 1)
+    r = client.get("/api/v1/reminders", params={"limit": 1})
+    check("reminders limit=1", len(r.json()) == 1)
+    r = client.get("/api/v1/reminders/stats")
+    check("reminder stats pending=1", r.json()["pending"] == 1, f"{r.json()}")
+    r = client.get("/api/v1/reminders/pending-count")
+    check("pending-count=1", r.json() == 1, f"{r.json()}")
+    r = client.post(f"/api/v1/reminders/{rem['id']}/status", json={"status": "read"})
+    check("标记 read 200", r.status_code == 200 and r.json()["ok"] is True, f"{r.json()}")
+    r = client.post(f"/api/v1/reminders/{rem['id']}/status", json={"status": "bogus"})
+    check("非法状态 400", r.status_code == 400, f"status={r.status_code}")
+    r = client.post("/api/v1/reminders/999/status", json={"status": "read"})
+    check("不存在提醒 404", r.status_code == 404, f"status={r.status_code}")
+    r = client.get("/api/v1/reminders/pending-count")
+    check("pending-count=0（已读）", r.json() == 0, f"{r.json()}")
+
+    print("== 9. 订阅两步式 ==")
+    # 第一步：preview 只读（断言不写库）
+    r = client.post("/api/v1/subscriptions/preview", json={"keyword": "数学建模", "sample_limit": 5})
+    check("preview 200", r.status_code == 200, f"status={r.status_code}")
+    prev = r.json()
+    check("preview matched=1 total=3", prev["matched"] == 1 and prev["total"] == 3, f"{prev}")
+    check("preview 样例含标题", "2026 数学建模竞赛报名" in prev["samples"], f"{prev['samples']}")
+    conn = db_mod.get_connection()
+    subs_count = conn.execute("SELECT COUNT(*) FROM subscriptions").fetchone()[0]
+    match_count = conn.execute("SELECT COUNT(*) FROM notice_subscription_matches").fetchone()[0]
+    conn.close()
+    check("preview 后无写库", subs_count == 0 and match_count == 0, f"subs={subs_count} matches={match_count}")
+
+    # 第二步：确认后新增（含回填）
+    r = client.post("/api/v1/subscriptions", json={"keyword": "数学建模"})
+    check("add 200", r.status_code == 200, f"status={r.status_code}")
+    added = r.json()
+    check("add ok + 回填成功", added["ok"] is True and added["backfill"]["ok"] is True, f"{added}")
+    sub_id = added["id"]
+    conn = db_mod.get_connection()
+    match_count = conn.execute("SELECT COUNT(*) FROM notice_subscription_matches").fetchone()[0]
+    conn.close()
+    check("add 后命中写库 1 条", match_count == 1, f"matches={match_count}")
+
+    r = client.get("/api/v1/subscriptions")
+    subs = r.json()
+    check("subscriptions 列表 1 条", len(subs) == 1, f"len={len(subs)}")
+    check(
+        "list 含 match_count/type_label",
+        subs[0]["match_count"] == 1 and subs[0]["type_label"] == "",
+        f"{subs[0]}",
+    )
+    r = client.get("/api/v1/subscriptions/stats")
+    st = r.json()
+    check("stats total/enabled/matches=1", st["total"] == 1 and st["enabled"] == 1 and st["matches"] == 1, f"{st}")
+
+    # 浏览页只读查询
+    r = client.post("/api/v1/notices/match-map", json={"notice_ids": [1, 2]})
+    mm = r.json()
+    check("match-map 返回 {1:[数学建模]}", mm.get("1") == ["数学建模"] and "2" not in mm, f"{mm}")
+    r = client.get("/api/v1/notices/matched-ids")
+    check("matched-ids=[1]", r.json() == [1], f"{r.json()}")
+    r = client.get("/api/v1/notices/count")
+    check("notices count=3", r.json() == 3, f"{r.json()}")
+
+    # 全库重匹配（长耗时，同步）
+    r = client.post("/api/v1/subscriptions/match-all")
+    check("match-all ok", r.status_code == 200 and r.json()["ok"] is True, f"{r.json()}")
+
+    # 编辑：_UNSET 语义（缺失字段=不改；显式 null=清空类型）
+    r = client.put(f"/api/v1/subscriptions/{sub_id}", json={"notice_type": "lecture"})
+    check("PUT 限定类型 200", r.status_code == 200, f"status={r.status_code}")
+    r = client.get("/api/v1/subscriptions")
+    check("限定 lecture 后命中 0", r.json()[0]["match_count"] == 0, f"{r.json()}")
+    r = client.put(f"/api/v1/subscriptions/{sub_id}", json={"notice_type": None})
+    check("PUT 清空类型 200", r.status_code == 200, f"status={r.status_code}")
+    r = client.get("/api/v1/subscriptions")
+    check("清空类型后命中回 1", r.json()[0]["match_count"] == 1, f"{r.json()}")
+
+    # 启停
+    r = client.post(f"/api/v1/subscriptions/{sub_id}/toggle", json={"enabled": False})
+    check("toggle 停用", r.status_code == 200 and r.json()["ok"] is True, f"{r.json()}")
+    r = client.get("/api/v1/subscriptions")
+    check("停用后命中 0", r.json()[0]["match_count"] == 0, f"{r.json()}")
+    r = client.post(f"/api/v1/subscriptions/{sub_id}/toggle", json={"enabled": True})
+    check("toggle 启用", r.status_code == 200 and r.json()["ok"] is True, f"{r.json()}")
+    r = client.get("/api/v1/subscriptions")
+    check("启用后命中 1", r.json()[0]["match_count"] == 1, f"{r.json()}")
+
+    # 异常路径
+    r = client.put("/api/v1/subscriptions/999", json={"keyword": "x"})
+    check("PUT 不存在 404", r.status_code == 404, f"status={r.status_code}")
+    r = client.post("/api/v1/subscriptions/999/toggle", json={"enabled": True})
+    check("toggle 不存在 404", r.status_code == 404, f"status={r.status_code}")
+    r = client.delete("/api/v1/subscriptions/999")
+    check("DELETE 不存在 404", r.status_code == 404, f"status={r.status_code}")
+    r = client.post("/api/v1/subscriptions", json={"keyword": "   "})
+    check("add 空订阅词 400", r.status_code == 400, f"status={r.status_code}")
+
+    # 删除
+    r = client.delete(f"/api/v1/subscriptions/{sub_id}")
+    check("DELETE ok", r.status_code == 200 and r.json()["ok"] is True, f"{r.json()}")
+    r = client.get("/api/v1/subscriptions")
+    check("delete 后列表空", len(r.json()) == 0, f"len={len(r.json())}")
+    r = client.get("/api/v1/subscriptions/stats")
+    check("delete 后 stats total=0", r.json()["total"] == 0, f"{r.json()}")
+    r = client.get("/api/v1/notices/matched-ids")
+    check("delete 后 matched-ids 空", r.json() == [], f"{r.json()}")
+
     tmpdir.cleanup()
     print("=" * 60)
     if failures:
