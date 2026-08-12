@@ -1,7 +1,11 @@
-# 后端（FastAPI）额外依赖：在 requirements.txt（引擎）之上追加
-fastapi>=0.141
-uvicorn[standard]>=0.52
-python-multipart>=0.0.9
+# 后端运行时依赖（给生产/运行镜像使用）
+# 仅包含后端运行所需的最小包；引擎/开发依赖仍保留在 requirements.txt
+fastapi>=0.95
+uvicorn[standard]>=0.22
+python-multipart>=0.0.6
+pydantic>=2.8
+requests>=2.31
+PyYAML>=6.0
 
-# 测试
+# 可选（测试/小工具）
 httpx>=0.27
