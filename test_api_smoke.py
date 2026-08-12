@@ -98,6 +98,8 @@ providers:
     api_key_env: ""
 crawl:
   interval_minutes: 60
+scheduler:
+  enabled: false # 测试不拉起调度器（离线、不碰网络/真实库）
 """,
         encoding="utf-8",
     )
@@ -703,6 +705,18 @@ def _smoke(client, db_mod, config_dir, tmpdir, real_config_path, real_config_sna
     r = client.get("/api/v1/qa/index-stats")
     st = r.json()
     check("index-stats 200 + 字段", r.status_code == 200 and {"chunks", "persist_dir"} <= set(st), f"{st}")
+
+    print("== 13. 调度器状态（test 模式不拉起，app.state.scheduler=None） ==")
+    r = client.get("/api/v1/scheduler/status")
+    check("scheduler/status 200", r.status_code == 200, f"status={r.status_code}")
+    s = r.json()
+    check("status enabled=false（测试不拉起调度器）", s["enabled"] is False, f"{s}")
+    check("status running=false + jobs 空", s["running"] is False and s["jobs"] == [], f"{s}")
+    check("status recent_runs 为 list", isinstance(s["recent_runs"], list), f"{s}")
+    conn = db_mod.get_connection()
+    sched_rows = conn.execute("SELECT COUNT(*) FROM scheduler_log").fetchone()[0]
+    conn.close()
+    check("测试全程 scheduler_log 无写入（调度器确未启动）", sched_rows == 0, f"rows={sched_rows}")
 
     # 真实 config/app.yaml 未被修改
     now_snapshot = real_config_path.read_text(encoding="utf-8") if real_config_path.exists() else None
