@@ -15,7 +15,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routes import notices
+from api.routes import notices, todos
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +53,8 @@ def create_app() -> FastAPI:
     )
 
     # 业务路由（统一 /api/v1 前缀）
+    app.include_router(todos.notice_router, prefix="/api/v1")
+    app.include_router(todos.router, prefix="/api/v1")
     app.include_router(notices.router, prefix="/api/v1")
 
     @app.get("/api/v1/health", tags=["system"])

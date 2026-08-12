@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, RootModel
 
 
 class HealthResponse(BaseModel):
@@ -69,3 +69,177 @@ class NoticeDetail(BaseModel):
     summary: Optional[str] = None
     extracted_at: Optional[str] = None
     keywords: list[str] = []
+
+
+# ---------- 待办（阶段 2，盘点 §5.6 待办映射表） ----------
+
+
+class TodoItem(BaseModel):
+    """待办列表项（含关联通知标题）。"""
+
+    id: int
+    notice_id: int
+    notice_title: Optional[str] = None
+    action: str
+    due_at: Optional[str] = None
+    priority: str = "normal"
+    status: str = "pending"
+    created_at: str
+    completed_at: Optional[str] = None
+
+
+class TodoStats(BaseModel):
+    """待办状态统计。"""
+
+    pending: int = 0
+    done: int = 0
+    skipped: int = 0
+    total: int = 0
+
+
+class TodoStatusUpdate(BaseModel):
+    """待办状态变更请求体（pending / done / skipped）。"""
+
+    status: str
+
+
+class TodoGenerateResult(BaseModel):
+    """待办生成结果（生成即落库，items 带主键）。"""
+
+    success: bool
+    status: str
+    items: list[TodoItem] = Field(default_factory=list)
+    error: Optional[str] = None
+
+
+# ---------- 提醒（阶段 2，盘点 §5.6 提醒映射表） ----------
+
+
+class ReminderItem(BaseModel):
+    """提醒列表项（含 tier_label / is_today 增强字段）。"""
+
+    id: int
+    notice_id: int
+    todo_id: Optional[int] = None
+    due_at: str
+    tier: str
+    remind_on: str
+    status: str = "pending"
+    created_at: str
+    read_at: Optional[str] = None
+    notice_title: Optional[str] = None
+    notice_source: Optional[str] = None
+    todo_action: Optional[str] = None
+    tier_label: str = ""
+    is_today: bool = False
+
+
+class ReminderStats(BaseModel):
+    """提醒状态统计。"""
+
+    pending: int = 0
+    read: int = 0
+    ignored: int = 0
+    total: int = 0
+
+
+class ReminderStatusUpdate(BaseModel):
+    """提醒状态变更请求体（pending / read / ignored）。"""
+
+    status: str
+
+
+# ---------- 订阅（阶段 2，盘点 §5.6 订阅映射表） ----------
+
+
+class SubscriptionItem(BaseModel):
+    """订阅列表项（含 match_count / type_label）。"""
+
+    id: int
+    keyword: str
+    notice_type: Optional[str] = None
+    enabled: int = 1
+    created_at: str
+    match_count: int = 0
+    type_label: str = ""
+
+
+class SubscriptionStats(BaseModel):
+    """订阅统计。"""
+
+    total: int = 0
+    enabled: int = 0
+    matches: int = 0
+
+
+class SubscriptionPreview(BaseModel):
+    """两步式第一步：订阅命中影响面（只读预览）。"""
+
+    matched: int = 0
+    total: int = 0
+    samples: list[str] = Field(default_factory=list)
+
+
+class SubscriptionPreviewRequest(BaseModel):
+    """preview 请求体。"""
+
+    keyword: str
+    notice_type: Optional[str] = None
+    enabled: bool = True
+    sample_limit: int = Field(default=5, ge=0, le=50)
+
+
+class SubscriptionCreateRequest(BaseModel):
+    """新增订阅请求体（两步式第二步确认后调用）。"""
+
+    keyword: str
+    notice_type: Optional[str] = None
+    enabled: bool = True
+
+
+class SubscriptionUpdateRequest(BaseModel):
+    """更新订阅请求体：缺失字段 = 不修改；notice_type 显式 null = 清空类型。"""
+
+    keyword: Optional[str] = None
+    notice_type: Optional[str] = None
+    enabled: Optional[bool] = None
+
+
+class SubscriptionToggleRequest(BaseModel):
+    """启用/停用订阅请求体。"""
+
+    enabled: bool
+
+
+class MatchMapRequest(BaseModel):
+    """批量查询命中订阅词请求体。"""
+
+    notice_ids: list[int]
+
+
+class BackfillResult(BaseModel):
+    """全库回填 / 重匹配结果。"""
+
+    ok: bool
+    notices: int = 0
+    matched_notices: int = 0
+    total_matches: int = 0
+
+
+class SubscriptionMutationResult(BaseModel):
+    """订阅写操作结果（新增/更新/启停/删除共用）。"""
+
+    ok: bool
+    error: Optional[str] = None
+    id: Optional[int] = None
+    keyword: Optional[str] = None
+    notice_type: Optional[str] = None
+    enabled: Optional[bool] = None
+    backfill: Optional[dict] = None
+    deleted: Optional[int] = None
+
+
+class MatchMapResult(RootModel):
+    """通知 ID → 命中订阅词列表（JSON 对象键自动字符串化）。"""
+
+    root: dict[int, list[str]]
