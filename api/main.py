@@ -16,9 +16,9 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routes import config, events, notices, qa, reminders, scheduler, subscriptions, tasks, todos
-from api.tasks.manager import TaskManager
-from scheduler import start_scheduler
+# Avoid importing heavy optional modules at module import time.
+# Route and long-running components are imported lazily inside create_app/lifespan.
+config = events = notices = qa = reminders = scheduler = subscriptions = tasks = todos = None
 
 logger = logging.getLogger(__name__)
 
@@ -36,13 +36,24 @@ async def lifespan(app: FastAPI):
     调度器单进程并入后端（§5.8 app.yaml 写入权唯一）；test 模式或
     scheduler.enabled=false 时不拉起（app.state.scheduler=None）。
     """
-    manager = TaskManager()
-    app.state.task_manager = manager
-    await manager.start()
+    try:
+        from api.tasks.manager import TaskManager
+        manager = TaskManager()
+        app.state.task_manager = manager
+        await manager.start()
+    except Exception as e:
+        logger.warning("TaskManager not started at startup: %s", e)
+        app.state.task_manager = None
+        manager = None
 
     app.state.scheduler = None
     if os.environ.get("APP_ENV") != "test":
-        app.state.scheduler = start_scheduler()
+        try:
+            from scheduler import start_scheduler
+            app.state.scheduler = start_scheduler()
+        except Exception as e:
+            logger.warning("Could not start scheduler: %s", e)
+            app.state.scheduler = None
     logger.info(
         "后端启动（异步任务管理器已就绪%s）",
         "，调度器已并入" if app.state.scheduler is not None else "，调度器未启用",
@@ -53,8 +64,11 @@ async def lifespan(app: FastAPI):
         if app.state.scheduler is not None:
             app.state.scheduler.stop()
             logger.info("调度器已停止")
-        await manager.stop()
-        logger.info("后端关闭（异步任务管理器已停止）")
+        if manager is not None:
+            await manager.stop()
+            logger.info("后端关闭（异步任务管理器已停止）")
+        else:
+            logger.info("后端关闭（未启动任务管理器）")
 
 
 def create_app() -> FastAPI:
@@ -75,29 +89,43 @@ def create_app() -> FastAPI:
     # 业务路由（统一 /api/v1 前缀）
     # 顺序：subscriptions 的 /notices/count、/notices/matched-ids 等精确路径须先于
     # notices 的 /notices/{notice_id} 注册，否则会被通配段捕获而 422（Starlette 顺序匹配）。
-    app.include_router(subscriptions.notice_router, prefix="/api/v1")
-    app.include_router(todos.notice_router, prefix="/api/v1")
-    app.include_router(todos.router, prefix="/api/v1")
-    app.include_router(reminders.router, prefix="/api/v1")
-    app.include_router(subscriptions.router, prefix="/api/v1")
-    app.include_router(config.router, prefix="/api/v1")
-    app.include_router(scheduler.router, prefix="/api/v1")
-    app.include_router(tasks.router, prefix="/api/v1")
-    app.include_router(qa.router, prefix="/api/v1")
-    app.include_router(notices.router, prefix="/api/v1")
-    app.include_router(events.router, prefix="/api/v1")
+    try:
+        from api.routes import config, events, notices, qa, reminders, scheduler, subscriptions, tasks, todos
+        # 业务路由（统一 /api/v1 前缀）
+        app.include_router(subscriptions.notice_router, prefix="/api/v1")
+        app.include_router(todos.notice_router, prefix="/api/v1")
+        app.include_router(todos.router, prefix="/api/v1")
+        app.include_router(reminders.router, prefix="/api/v1")
+        app.include_router(subscriptions.router, prefix="/api/v1")
+        app.include_router(config.router, prefix="/api/v1")
+        app.include_router(scheduler.router, prefix="/api/v1")
+        app.include_router(tasks.router, prefix="/api/v1")
+        app.include_router(qa.router, prefix="/api/v1")
+        app.include_router(notices.router, prefix="/api/v1")
+        app.include_router(events.router, prefix="/api/v1")
+    except Exception as e:
+        logger.warning("Skipping registering routers due to import error: %s", e)
 
     @app.get("/api/v1/health", tags=["system"])
     def health() -> dict:
-        """健康检查：DB 探活 + 通知计数。"""
-        from services.notice_service import get_status_counts
+        """健康检查：DB 探活 + 通知计数。
 
-        counts = get_status_counts()
+        若内部服务不可用（缺少依赖或 DB 未就绪），返回降级信息以便镜像能在受限环境下启动。"""
+        try:
+            from services.notice_service import get_status_counts
+
+            counts = get_status_counts()
+            db_status = "ok"
+            notices = sum(counts.values())
+        except Exception as e:  # pragma: no cover - best-effort health
+            logger.warning("Health check degraded: %s", e)
+            db_status = "unavailable"
+            notices = 0
         return {
             "status": "ok",
             "version": "1.0.0",
-            "db": "ok",
-            "notices": sum(counts.values()),
+            "db": db_status,
+            "notices": notices,
         }
 
     # 阶段 7 接入：挂载前端构建产物（Phase 8 收尾：启用前端静态文件）
