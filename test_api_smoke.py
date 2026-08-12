@@ -60,6 +60,55 @@ def _seed_notice(
     conn.commit()
 
 
+def _seed_config(config_dir: Path) -> None:
+    """写入最小合法配置（app.yaml + schools/scuec.yaml），供配置 API 离线测试。
+
+    与 test_api_smoke.py 的「不碰真实数据」原则一致：配置写操作全部落在临时目录。
+    """
+    schools = config_dir / "schools"
+    schools.mkdir(parents=True, exist_ok=True)
+    (config_dir / "app.yaml").write_text(
+        """active_school: scuec
+models:
+  extraction:
+    provider: opencode-zen
+    model: model-a
+  qa:
+    provider: opencode-zen
+    model: model-a
+  todo:
+    provider: opencode-zen
+    model: model-a
+  embedding:
+    provider: local
+    model: emb-model
+providers:
+  opencode-zen:
+    name: opencode-zen
+    base_url: https://example.com/v1
+    api_key_env: OPENCODE_API_KEY
+  local:
+    name: local
+    base_url: ""
+    api_key_env: ""
+crawl:
+  interval_minutes: 60
+""",
+        encoding="utf-8",
+    )
+    (schools / "scuec.yaml").write_text(
+        """name: 中南民族大学
+code: scuec
+sources:
+- name: 教务处-通知公告
+  type: web
+  list_url: http://example.com/tzgg.htm
+  max_pages: 3
+""",
+        encoding="utf-8",
+    )
+
+
 def main() -> None:
     from fastapi.testclient import TestClient
 
@@ -99,6 +148,19 @@ def main() -> None:
     )
     _seed_notice(conn, url="http://t3", source="教务处", title="待提取公告", raw_content="...", status="raw")
     conn.close()
+
+    # 临时配置隔离：ConfigStore 单例指向临时目录（含最小 app.yaml + 学校数据源），
+    # 后续所有配置读写走临时目录，不碰真实 config/app.yaml。
+    from config.store import ConfigStore
+
+    config_dir = Path(tmpdir.name) / "config"
+    _seed_config(config_dir)
+    ConfigStore.reset_instance()
+    ConfigStore.get_instance(config_dir)
+
+    # 真实配置快照：section 10 结束后断言未被修改
+    real_config_path = ROOT / "config" / "app.yaml"
+    real_config_snapshot = real_config_path.read_text(encoding="utf-8") if real_config_path.exists() else None
 
     client = TestClient(create_app())
 
@@ -333,6 +395,106 @@ def main() -> None:
     check("delete 后 stats total=0", r.json()["total"] == 0, f"{r.json()}")
     r = client.get("/api/v1/notices/matched-ids")
     check("delete 后 matched-ids 空", r.json() == [], f"{r.json()}")
+
+    print("== 10. 配置模块 ==")
+    # 读取
+    r = client.get("/api/v1/config")
+    cfg = r.json()
+    check("config 200 + active_school", r.status_code == 200 and cfg["active_school"] == "scuec", f"status={r.status_code}")
+    check("config 含 models/providers/crawl", {"models", "providers", "crawl"} <= set(cfg), f"{list(cfg)}")
+    r = client.get("/api/v1/config/models")
+    check("models 含 4 任务", set(r.json()) == {"extraction", "qa", "todo", "embedding"}, f"{r.json()}")
+    r = client.get("/api/v1/config/providers")
+    prov = r.json()
+    check("providers 含 local/opencode-zen", set(prov) == {"local", "opencode-zen"}, f"{list(prov)}")
+    check("providers 含 api_key_status", "api_key_status" in prov["local"], f"{prov['local']}")
+    r = client.get("/api/v1/config/sources")
+    check("sources code=scuec 1 条", r.json()["code"] == "scuec" and len(r.json()["sources"]) == 1, f"{r.json()}")
+    r = client.get("/api/v1/config/disk")
+    check("disk exists=true", r.status_code == 200 and r.json()["exists"] is True, f"{r.json()}")
+
+    # PUT models → GET 验证（验收点）
+    r = client.put(
+        "/api/v1/config/models",
+        json={
+            "extraction": {"provider": "opencode-zen", "model": "model-b"},
+            "qa": {"provider": "opencode-zen", "model": "model-a"},
+            "todo": {"provider": "opencode-zen", "model": "model-a"},
+            "embedding": {"provider": "local", "model": "emb-model"},
+        },
+    )
+    check(
+        "PUT models ok+changed",
+        r.status_code == 200 and r.json()["ok"] is True and r.json()["changed"] is True,
+        f"{r.json()}",
+    )
+    r = client.get("/api/v1/config/models")
+    check("PUT models 后 GET 反映", r.json()["extraction"]["model"] == "model-b", f"{r.json()}")
+    # 引用不存在的 provider → ok=false（AppConfig 交叉校验兜底）
+    r = client.put(
+        "/api/v1/config/models",
+        json={
+            "extraction": {"provider": "ghost", "model": "x"},
+            "qa": {"provider": "opencode-zen", "model": "model-a"},
+            "todo": {"provider": "opencode-zen", "model": "model-a"},
+            "embedding": {"provider": "local", "model": "emb-model"},
+        },
+    )
+    check("PUT models 非法 provider ok=false", r.status_code == 200 and r.json()["ok"] is False, f"{r.json()}")
+
+    # PUT providers → GET 验证
+    r = client.put(
+        "/api/v1/config/providers",
+        json={
+            "opencode-zen": {
+                "name": "opencode-zen",
+                "base_url": "https://new.example.com/v1",
+                "api_key_env": "OPENCODE_API_KEY",
+            },
+            "local": {"name": "local", "base_url": "", "api_key_env": ""},
+        },
+    )
+    check("PUT providers ok", r.status_code == 200 and r.json()["ok"] is True, f"{r.json()}")
+    r = client.get("/api/v1/config/providers")
+    check(
+        "PUT providers 后 GET 反映",
+        r.json()["opencode-zen"]["base_url"] == "https://new.example.com/v1",
+        f"{r.json()}",
+    )
+
+    # PUT sources → GET 验证
+    r = client.put(
+        "/api/v1/config/sources",
+        json=[
+            {"name": "教务处-通知公告", "type": "web", "list_url": "http://example.com/tzgg.htm", "max_pages": 3},
+            {"name": "教务处-办事指南", "type": "web", "list_url": "http://example.com/bszn.htm", "max_pages": 2},
+        ],
+    )
+    check("PUT sources ok", r.status_code == 200 and r.json()["ok"] is True, f"{r.json()}")
+    r = client.get("/api/v1/config/sources")
+    check("PUT sources 后 GET 2 条", len(r.json()["sources"]) == 2, f"{r.json()}")
+
+    # .bak 生成（验收点）
+    check("app.yaml.bak 生成", (config_dir / "app.yaml.bak").exists(), f"bak={config_dir / 'app.yaml.bak'}")
+    check("scuec.yaml.bak 生成", (config_dir / "schools" / "scuec.yaml.bak").exists())
+
+    # reload（version：PUT models=1 + PUT providers=2 + reload=3）
+    r = client.post("/api/v1/config/reload")
+    check("reload ok + version=3", r.status_code == 200 and r.json()["ok"] is True and r.json()["version"] == 3, f"{r.json()}")
+
+    # 离线失败路径
+    r = client.post("/api/v1/config/test-source", json={"url": ""})
+    check("test-source 空 URL ok=false", r.status_code == 200 and r.json()["ok"] is False, f"{r.json()}")
+    r = client.post("/api/v1/config/test-model", json={"provider": "ghost", "model": "x"})
+    check("test-model 未知 provider ok=false", r.status_code == 200 and r.json()["ok"] is False, f"{r.json()}")
+
+    # 422：schema 校验失败（body 缺 qa/todo/embedding 任务）
+    r = client.put("/api/v1/config/models", json={"extraction": {"provider": "opencode-zen", "model": "x"}})
+    check("PUT models 缺任务 422", r.status_code == 422, f"status={r.status_code}")
+
+    # 真实 config/app.yaml 未被修改
+    now_snapshot = real_config_path.read_text(encoding="utf-8") if real_config_path.exists() else None
+    check("真实 app.yaml 未修改", now_snapshot == real_config_snapshot)
 
     tmpdir.cleanup()
     print("=" * 60)

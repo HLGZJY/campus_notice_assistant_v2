@@ -243,3 +243,126 @@ class MatchMapResult(RootModel):
     """通知 ID → 命中订阅词列表（JSON 对象键自动字符串化）。"""
 
     root: dict[int, list[str]]
+
+
+# ---------- 配置（阶段 3，盘点 §5.6 配置映射表） ----------
+#
+# 约定：
+#   - GET 返回 service 的 dict，此处声明响应契约（extra="allow" 防字段漂移）；
+#   - PUT 请求体直接复用 config/schema.py 的 ModelsConfig / ProviderConfig / SourceConfig，
+#     不在此重复定义，避免契约漂移（stage 7 的 openapi-typescript 基于 /openapi.json 生成类型）；
+#   - PUT 失败语义保持 config_service 统一结构：HTTP 200 + {"ok": false, "error": ...}
+#     （schema 级错误由 FastAPI 自动 422）。
+
+
+class ProviderView(BaseModel):
+    """供应商视图（api_key 以状态标记代替，不泄露）。"""
+
+    model_config = ConfigDict(extra="allow")
+
+    name: str
+    base_url: str = ""
+    api_key_env: str = ""
+    api_key_status: bool = False
+
+
+class ModelProfileView(BaseModel):
+    """任务-模型映射视图。"""
+
+    model_config = ConfigDict(extra="allow")
+
+    provider: str
+    model: str
+
+
+class ModelsView(BaseModel):
+    """各任务模型配置视图。"""
+
+    model_config = ConfigDict(extra="allow")
+
+    extraction: ModelProfileView
+    qa: ModelProfileView
+    todo: ModelProfileView
+    embedding: ModelProfileView
+
+
+class ConfigView(BaseModel):
+    """完整配置视图（GET /config）。"""
+
+    model_config = ConfigDict(extra="allow")
+
+    active_school: str
+    models: ModelsView
+    providers: dict[str, ProviderView]
+    crawl: dict
+
+
+class ConfigMutationResult(BaseModel):
+    """配置写操作结果（models/providers/sources PUT 共用）。"""
+
+    model_config = ConfigDict(extra="allow")
+
+    ok: bool
+    error: Optional[str] = None
+    changed: Optional[bool] = None
+    version: Optional[int] = None
+    message: Optional[str] = None
+    path: Optional[str] = None
+
+
+class ReloadResult(BaseModel):
+    """强制重载结果。"""
+
+    model_config = ConfigDict(extra="allow")
+
+    ok: bool
+    version: Optional[int] = None
+    error: Optional[str] = None
+
+
+class DiskInfo(BaseModel):
+    """配置文件磁盘信息。"""
+
+    model_config = ConfigDict(extra="allow")
+
+    path: str
+    exists: bool
+    last_modified: Optional[str] = None
+
+
+class TestSourceRequest(BaseModel):
+    """测试数据源 URL 请求体。"""
+
+    url: str
+    timeout: int = Field(default=15, ge=1, le=120)
+
+
+class TestSourceResult(BaseModel):
+    """数据源 URL 测试结果。"""
+
+    model_config = ConfigDict(extra="allow")
+
+    ok: bool
+    status_code: Optional[int] = None
+    latency_ms: int = 0
+    link_count: int = 0
+    error: Optional[str] = None
+
+
+class TestModelRequest(BaseModel):
+    """测试模型连接请求体。"""
+
+    provider: str
+    model: str
+    timeout: int = Field(default=30, ge=1, le=300)
+
+
+class TestModelResult(BaseModel):
+    """模型连接测试结果。"""
+
+    model_config = ConfigDict(extra="allow")
+
+    ok: bool
+    latency_ms: int = 0
+    completion: Optional[str] = None
+    error: Optional[str] = None

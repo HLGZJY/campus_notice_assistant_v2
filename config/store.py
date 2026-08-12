@@ -68,6 +68,9 @@ class ConfigStore:
         self._version = 0
         self._data: AppConfig = self._load_app_config()
         self._load_dotenv()
+        # 写串行化（§5.8）：FastAPI 线程池下多个写请求可能并发，锁保证「读-改-写」原子；
+        # _backup_and_write 的 .tmp/.bak/os.replace 原子写机制本身不变
+        self._write_lock = threading.Lock()
 
     # ---------- 读取 API ----------
 
@@ -170,45 +173,50 @@ class ConfigStore:
 
     def save_models(self, models: ModelsConfig) -> dict:
         """保存模型配置。"""
-        new_data = AppConfig(
-            active_school=self._data.active_school,
-            models=models,
-            providers=self._data.providers,
-            crawl=self._data.crawl,
-        )
-        return self._save_app_config(new_data)
+        with self._write_lock:
+            new_data = AppConfig(
+                active_school=self._data.active_school,
+                models=models,
+                providers=self._data.providers,
+                crawl=self._data.crawl,
+            )
+            return self._save_app_config(new_data)
 
     def save_providers(self, providers: dict[str, ProviderConfig]) -> dict:
         """保存供应商配置。"""
-        new_data = AppConfig(
-            active_school=self._data.active_school,
-            models=self._data.models,
-            providers=providers,
-            crawl=self._data.crawl,
-        )
-        return self._save_app_config(new_data)
+        with self._write_lock:
+            new_data = AppConfig(
+                active_school=self._data.active_school,
+                models=self._data.models,
+                providers=providers,
+                crawl=self._data.crawl,
+            )
+            return self._save_app_config(new_data)
 
     def save_crawl(self, crawl: CrawlConfig) -> dict:
         """保存全局抓取参数。"""
-        new_data = AppConfig(
-            active_school=self._data.active_school,
-            models=self._data.models,
-            providers=self._data.providers,
-            crawl=crawl,
-        )
-        return self._save_app_config(new_data)
+        with self._write_lock:
+            new_data = AppConfig(
+                active_school=self._data.active_school,
+                models=self._data.models,
+                providers=self._data.providers,
+                crawl=crawl,
+            )
+            return self._save_app_config(new_data)
 
     def save_sources(self, school_code: str, school_config: SchoolConfig) -> dict:
         """保存学校数据源配置。"""
-        path = self._schools_dir / f"{school_code}.yaml"
-        self._backup_and_write(path, school_config.model_dump())
-        return {"ok": True, "path": str(path)}
+        with self._write_lock:
+            path = self._schools_dir / f"{school_code}.yaml"
+            self._backup_and_write(path, school_config.model_dump())
+            return {"ok": True, "path": str(path)}
 
     def force_reload(self) -> dict:
         """强制从磁盘重新加载 app.yaml。"""
-        self._data = self._load_app_config()
-        self._version += 1
-        return {"ok": True, "version": self._version}
+        with self._write_lock:
+            self._data = self._load_app_config()
+            self._version += 1
+            return {"ok": True, "version": self._version}
 
     # ---------- 内部加载 / 保存 ----------
 
