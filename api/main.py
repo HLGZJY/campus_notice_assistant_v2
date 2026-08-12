@@ -2,7 +2,7 @@
 
 - 路由统一挂载于 /api/v1（盘点 §5.6 映射表）
 - CORS 白名单（本地开发默认放行，生产收紧）
-- lifespan 拉起异步任务管理器（阶段 4）；阶段 6 再并入 scheduler
+- lifespan 拉起异步任务管理器（阶段 4）+ 调度器（阶段 6）
 - 挂载前端静态产物（阶段 7 接入）
 
 启动：uvicorn api.main:app --reload
@@ -10,13 +10,15 @@
 from __future__ import annotations
 
 import logging
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routes import config, notices, qa, reminders, subscriptions, tasks, todos
+from api.routes import config, notices, qa, reminders, scheduler, subscriptions, tasks, todos
 from api.tasks.manager import TaskManager
+from scheduler import start_scheduler
 
 logger = logging.getLogger(__name__)
 
@@ -29,17 +31,28 @@ CORS_ORIGINS = [
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """应用生命周期：拉起异步任务管理器（阶段 4）。
+    """应用生命周期：拉起异步任务管理器（阶段 4）+ 调度器（阶段 6）。
 
-    阶段 6 在此并入 scheduler（单进程运行，app.yaml 写入权唯一归后端进程）。
+    调度器单进程并入后端（§5.8 app.yaml 写入权唯一）；test 模式或
+    scheduler.enabled=false 时不拉起（app.state.scheduler=None）。
     """
     manager = TaskManager()
     app.state.task_manager = manager
     await manager.start()
-    logger.info("后端启动（异步任务管理器已就绪）")
+
+    app.state.scheduler = None
+    if os.environ.get("APP_ENV") != "test":
+        app.state.scheduler = start_scheduler()
+    logger.info(
+        "后端启动（异步任务管理器已就绪%s）",
+        "，调度器已并入" if app.state.scheduler is not None else "，调度器未启用",
+    )
     try:
         yield
     finally:
+        if app.state.scheduler is not None:
+            app.state.scheduler.stop()
+            logger.info("调度器已停止")
         await manager.stop()
         logger.info("后端关闭（异步任务管理器已停止）")
 
@@ -68,6 +81,7 @@ def create_app() -> FastAPI:
     app.include_router(reminders.router, prefix="/api/v1")
     app.include_router(subscriptions.router, prefix="/api/v1")
     app.include_router(config.router, prefix="/api/v1")
+    app.include_router(scheduler.router, prefix="/api/v1")
     app.include_router(tasks.router, prefix="/api/v1")
     app.include_router(qa.router, prefix="/api/v1")
     app.include_router(notices.router, prefix="/api/v1")

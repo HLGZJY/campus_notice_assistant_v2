@@ -30,6 +30,7 @@ from config.schema import (
     ModelProfile,
     ModelsConfig,
     ProviderConfig,
+    SchedulerConfig,
     SchoolConfig,
     SourceConfig,
 )
@@ -125,6 +126,9 @@ class ConfigStore:
     def get_crawl(self) -> CrawlConfig:
         return self._data.crawl
 
+    def get_scheduler(self) -> SchedulerConfig:
+        return self._data.scheduler
+
     def get_active_school_code(self) -> str:
         return self._data.active_school
 
@@ -154,6 +158,7 @@ class ConfigStore:
             "models": self._data.models.model_dump(),
             "providers": providers,
             "crawl": self._data.crawl.model_dump(),
+            "scheduler": self._data.scheduler.model_dump(),
         }
 
     def get_disk_info(self) -> dict:
@@ -179,6 +184,7 @@ class ConfigStore:
                 models=models,
                 providers=self._data.providers,
                 crawl=self._data.crawl,
+                scheduler=self._data.scheduler,
             )
             return self._save_app_config(new_data)
 
@@ -190,6 +196,7 @@ class ConfigStore:
                 models=self._data.models,
                 providers=providers,
                 crawl=self._data.crawl,
+                scheduler=self._data.scheduler,
             )
             return self._save_app_config(new_data)
 
@@ -201,6 +208,7 @@ class ConfigStore:
                 models=self._data.models,
                 providers=self._data.providers,
                 crawl=crawl,
+                scheduler=self._data.scheduler,
             )
             return self._save_app_config(new_data)
 

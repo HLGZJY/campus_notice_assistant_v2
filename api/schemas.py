@@ -433,3 +433,26 @@ class IndexStatsView(BaseModel):
     chunks: int = 0
     persist_dir: str = ""
     error: Optional[str] = None
+
+
+# ---------- 调度器（阶段 6） ----------
+
+
+class SchedulerJobView(BaseModel):
+    """已注册的调度 job（只读状态用）。"""
+
+    id: str
+    name: Optional[str] = None
+    next_run_time: Optional[str] = None
+
+
+class SchedulerStatus(BaseModel):
+    """调度器状态（GET /scheduler/status）。"""
+
+    model_config = ConfigDict(extra="allow")
+
+    enabled: bool
+    running: bool = False
+    interval_minutes: Optional[int] = None
+    jobs: list[SchedulerJobView] = Field(default_factory=list)
+    recent_runs: list[dict] = Field(default_factory=list)

@@ -1,8 +1,11 @@
-"""W1 模块 1.1：调度器独立进程（APScheduler）。
+"""W1 模块 1.1：调度器（APScheduler）。
 
-独立于 Streamlit 与 CLI 运行，负责无人值守地跑"抓取→提取→每日体检"闭环。
+阶段 6 起由 FastAPI 后端进程常驻运行（单进程，符合 §5.8 app.yaml 写入权唯一）；
+CLI 保留用于运维/调试（crash_drill.py 依赖其子进程调用方式）。
 
-用法：
+API 集成：`start_scheduler(config)` 由 api/main.py lifespan 拉起，stop 由 lifespan 统一处理；
+        `scheduler.enabled=false` 或 APP_ENV=test 时 API 不启动调度器。
+CLI 用法：
     python scheduler.py                # 前台运行三个定时 job
     python scheduler.py --once         # 只跑一轮完整闭环（抓取→提取→每日体检）后退出
     python scheduler.py --interval 1   # 覆盖抓取间隔（分钟），便于快速验证
@@ -11,6 +14,9 @@
     python scheduler.py --no-reminder  # 跳过每日截止提醒扫描 job
     python scheduler.py --no-health    # 跳过每日体检（模块 4.2）
     python scheduler.py --log logs/x.log  # 自定义日志文件路径
+
+--no-* 开关在阶段 6 起映射为 config/app.yaml 的 scheduler 段配置项：配置项是默认值，
+CLI 开关只能再关不能开（enable_daily = config.enable_daily and not --no-daily）。
 
 四个业务 job + 一个内部 job：
   crawl       : 定时抓取。间隔读取 config/app.yaml -> crawl.interval_minutes，
@@ -22,7 +28,7 @@
                 每日体检只读计算抓取成功率/提取失败率/token 消耗/异常日志并落盘
                 data/health/daily/（7 天自运行终检的证据，--no-health 可关）。
   reminder    : 每日 03:00 截止提醒扫描（模块 3.2）：对截止前 3 天 / 1 天的通知
-                生成提醒，幂等（同一天同一对象不重复）；独立进程生成，UI 只读。
+                 生成提醒，幂等（同一天同一对象不重复）；后端进程生成，UI 只读。
   config-watch: 每 60s 检查一次配置，让 crawl.interval_minutes 的修改在 1 分钟内生效。
 
 失败语义：job 抛出的异常不吞掉——写日志 + 写入 scheduler_log 表（含连续失败计数），
@@ -48,6 +54,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
+from config.schema import SchedulerConfig
 from config.store import ConfigStore
 from services.notice_service import crawl_all_sources, extract_batch
 from services.reminder_service import scan_reminders
@@ -86,6 +93,33 @@ def setup_logging(log_file: Optional[str]) -> Path:
         handlers=handlers,
     )
     logging.getLogger("apscheduler").setLevel(logging.WARNING)
+    return log_path
+
+
+def setup_api_logging(log_file: Optional[str]) -> Path:
+    """API 集成模式的日志：只给 scheduler/apscheduler 挂文件句柄，不接管 root。
+
+    阶段 6：调度器并入后端进程后，不能再像 CLI 那样 basicConfig 接管 root，
+    否则 uvicorn / FastAPI 日志会混入 scheduler.log 且根 logger 行为被改变。
+    """
+    log_path = Path(log_file) if log_file else DEFAULT_LOG_FILE
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    file_handler = RotatingFileHandler(
+        str(log_path), maxBytes=5_000_000, backupCount=3, encoding="utf-8"
+    )
+    file_handler.set_name("scheduler-api-file")
+    console_handler = logging.StreamHandler()
+    console_handler.set_name("scheduler-api-console")
+    fmt = logging.Formatter("%(asctime)s [%(levelname)s] %(name)s %(message)s")
+    for h in (file_handler, console_handler):
+        h.setFormatter(fmt)
+    for name in ("scheduler", "apscheduler"):
+        lg = logging.getLogger(name)
+        lg.setLevel(logging.INFO)
+        if not any(h.get_name() == "scheduler-api-file" for h in lg.handlers):
+            lg.addHandler(file_handler)
+            lg.addHandler(console_handler)
+        lg.propagate = False  # 避免冒泡到 root 重复输出
     return log_path
 
 
@@ -225,6 +259,26 @@ class NoticeScheduler:
         logger.info(
             "已抓 URL 不会重复抓取（notices.url UNIQUE 去重），崩溃重启安全"
         )
+
+    def get_status(self) -> dict:
+        """只读状态（GET /api/v1/scheduler/status 用）：运行标记 + 已注册 job + 当前间隔。"""
+        jobs = []
+        if self._scheduler.running:
+            for job in self._scheduler.get_jobs():
+                jobs.append(
+                    {
+                        "id": job.id,
+                        "name": job.name,
+                        "next_run_time": job.next_run_time.isoformat()
+                        if job.next_run_time
+                        else None,
+                    }
+                )
+        return {
+            "running": self._scheduler.running,
+            "interval_minutes": self._current_interval,
+            "jobs": jobs,
+        }
 
     # ---------- 内部：job 包装 ----------
 
@@ -479,6 +533,40 @@ class NoticeScheduler:
             logger.warning("删除向量 chunk 失败 notice_id=%s: %s", notice_id, e)
 
 
+def start_scheduler(config: Optional[SchedulerConfig] = None) -> Optional[NoticeScheduler]:
+    """API 进程集成入口（阶段 6）：创建并启动调度器，返回实例供 lifespan 关闭时 stop()。
+
+    与 CLI 的差异：
+      - 间隔不覆盖（interval_override=None），由 config-watch job 热更新 crawl.interval_minutes；
+      - 日志用专用 logger（setup_api_logging），不接管 root，避免污染 uvicorn / API 日志；
+      - config.enabled=false 时记日志并返回 None（不启动）。
+
+    Args:
+        config: SchedulerConfig；未传时从 ConfigStore 单例读取（app.yaml scheduler 段）。
+    """
+    if config is None:
+        config = ConfigStore.get_instance().get_scheduler()
+    if not config.enabled:
+        logger.info("调度器已禁用（scheduler.enabled=false），跳过启动")
+        return None
+
+    log_path = setup_api_logging(config.log_file)
+    logger.info("=" * 60)
+    logger.info("调度器并入后端进程启动（日志: %s）", log_path)
+    logger.info("=" * 60)
+
+    scheduler = NoticeScheduler(
+        enable_daily=config.enable_daily,
+        enable_extract=config.enable_extract,
+        enable_reminder=config.enable_reminder,
+        enable_health=config.enable_health,
+    )
+    scheduler.print_recovery_info()
+    scheduler.start()
+    logger.info("调度器已并入后端进程（stop 由 API lifespan 统一处理）")
+    return scheduler
+
+
 def main():
     parser = argparse.ArgumentParser(description="校园通知定时调度器（W1 模块 1.1）")
     parser.add_argument(
@@ -520,17 +608,25 @@ def main():
     )
     args = parser.parse_args()
 
-    log_path = setup_logging(args.log)
+    # --no-* 开关映射为配置项（阶段 6）：app.yaml scheduler 段是默认值，CLI 开关只能再关不能开
+    scfg = ConfigStore.get_instance().get_scheduler()
+    enable_daily = scfg.enable_daily and not args.no_daily
+    enable_extract = scfg.enable_extract and not args.no_extract
+    enable_reminder = scfg.enable_reminder and not args.no_reminder
+    enable_health = scfg.enable_health and not args.no_health
+    log_file = args.log or scfg.log_file
+
+    log_path = setup_logging(log_file)
     logger.info("=" * 60)
     logger.info("校园通知调度器启动（日志: %s）", log_path)
     logger.info("=" * 60)
 
     scheduler = NoticeScheduler(
         interval_override=args.interval,
-        enable_daily=not args.no_daily,
-        enable_extract=not args.no_extract,
-        enable_reminder=not args.no_reminder,
-        enable_health=not args.no_health,
+        enable_daily=enable_daily,
+        enable_extract=enable_extract,
+        enable_reminder=enable_reminder,
+        enable_health=enable_health,
     )
     scheduler.print_recovery_info()
 

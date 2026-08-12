@@ -53,3 +53,11 @@ crawl:
   max_pages: 5
   expire_days: 90 # 无 deadline 通知的默认有效期（天），调度器每日体检用
   cleanup_enabled: false # 过期清理默认只报告不删除（分类/时间线归档见 issue #3）
+
+scheduler:
+  enabled: true # API 进程是否随 lifespan 拉起调度器（CLI 显式启动不受此开关限制）
+  enable_daily: true # 每日过期清理 + 向量一致性检查
+  enable_extract: true # 抓取后提取
+  enable_reminder: true # 每日截止提醒扫描
+  enable_health: true # 每日体检（模块 4.2）
+  log_file: data/logs/scheduler.log

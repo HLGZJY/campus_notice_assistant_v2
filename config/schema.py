@@ -121,6 +121,21 @@ class CrawlConfig(BaseModel):
         return v
 
 
+class SchedulerConfig(BaseModel):
+    """调度器配置（阶段 6：并入后端进程后，CLI --no-* 开关映射为配置项）。
+
+    写入权语义（§5.8）：本段只被调度器读取，app.yaml 写入唯一归后端 API 进程。
+    `enabled=false` 只约束 API lifespan 集成，不影响显式 CLI 启动。
+    """
+
+    enabled: bool = True  # API 进程是否随 lifespan 拉起调度器
+    enable_daily: bool = True  # 每日过期清理 + 向量一致性检查（对应 --no-daily）
+    enable_extract: bool = True  # 抓取后提取（对应 --no-extract）
+    enable_reminder: bool = True  # 每日截止提醒扫描（对应 --no-reminder）
+    enable_health: bool = True  # 每日体检，模块 4.2（对应 --no-health）
+    log_file: str = "data/logs/scheduler.log"
+
+
 class AppConfig(BaseModel):
     """应用主配置。"""
 
@@ -128,6 +143,7 @@ class AppConfig(BaseModel):
     models: ModelsConfig
     providers: dict[str, ProviderConfig]
     crawl: CrawlConfig = Field(default_factory=CrawlConfig)
+    scheduler: SchedulerConfig = Field(default_factory=SchedulerConfig)
 
     @field_validator("active_school")
     @classmethod
