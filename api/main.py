@@ -15,7 +15,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routes import notices, reminders, todos
+from api.routes import notices, reminders, subscriptions, todos
 
 logger = logging.getLogger(__name__)
 
@@ -53,9 +53,13 @@ def create_app() -> FastAPI:
     )
 
     # 业务路由（统一 /api/v1 前缀）
+    # 顺序：subscriptions 的 /notices/count、/notices/matched-ids 等精确路径须先于
+    # notices 的 /notices/{notice_id} 注册，否则会被通配段捕获而 422（Starlette 顺序匹配）。
+    app.include_router(subscriptions.notice_router, prefix="/api/v1")
     app.include_router(todos.notice_router, prefix="/api/v1")
     app.include_router(todos.router, prefix="/api/v1")
     app.include_router(reminders.router, prefix="/api/v1")
+    app.include_router(subscriptions.router, prefix="/api/v1")
     app.include_router(notices.router, prefix="/api/v1")
 
     @app.get("/api/v1/health", tags=["system"])
