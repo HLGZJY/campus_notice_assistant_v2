@@ -1,0 +1,56 @@
+export const API_BASE = '/api/v1'
+
+export const endpoints = {
+  health: `${API_BASE}/health`,
+  notices: {
+    list: `${API_BASE}/notices`,
+    detail: (id: number) => `${API_BASE}/notices/${id}`,
+    sources: `${API_BASE}/notices/sources`,
+    types: `${API_BASE}/notices/types`,
+    statusCounts: `${API_BASE}/notices/status-counts`,
+    matchedIds: `${API_BASE}/notices/matched-ids`,
+    matchMap: `${API_BASE}/notices/match-map`,
+    todos: (id: number) => `${API_BASE}/notices/${id}/todos`,
+  },
+  todos: {
+    list: `${API_BASE}/todos`,
+    stats: `${API_BASE}/todos/stats`,
+    status: (id: number) => `${API_BASE}/todos/${id}/status`,
+  },
+  reminders: {
+    list: `${API_BASE}/reminders`,
+    stats: `${API_BASE}/reminders/stats`,
+    pendingCount: `${API_BASE}/reminders/pending-count`,
+    status: (id: number) => `${API_BASE}/reminders/${id}/status`,
+  },
+  subscriptions: {
+    list: `${API_BASE}/subscriptions`,
+    stats: `${API_BASE}/subscriptions/stats`,
+    preview: `${API_BASE}/subscriptions/preview`,
+    matchAll: `${API_BASE}/subscriptions/match-all`,
+    detail: (id: number) => `${API_BASE}/subscriptions/${id}`,
+    toggle: (id: number) => `${API_BASE}/subscriptions/${id}/toggle`,
+  },
+  qa: {
+    stream: `${API_BASE}/qa/ask/stream`,
+    indexStats: `${API_BASE}/qa/index-stats`,
+  },
+  config: {
+    get: `${API_BASE}/config`,
+    models: `${API_BASE}/config/models`,
+    providers: `${API_BASE}/config/providers`,
+    sources: `${API_BASE}/config/sources`,
+    disk: `${API_BASE}/config/disk`,
+    reload: `${API_BASE}/config/reload`,
+    testSource: `${API_BASE}/config/test-source`,
+    testModel: `${API_BASE}/config/test-model`,
+  },
+  tasks: {
+    list: `${API_BASE}/tasks`,
+    detail: (id: number) => `${API_BASE}/tasks/${id}`,
+  },
+  events: `${API_BASE}/events`,
+  scheduler: {
+    status: `${API_BASE}/scheduler/status`,
+  },
+}
