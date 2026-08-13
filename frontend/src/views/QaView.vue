@@ -75,7 +75,6 @@ function cancel() {
         :autosize="{ minRows: 2, maxRows: 4 }"
         placeholder="输入问题，回车发送"
         @keydown.enter.exact.prevent="ask"
-        @keydown.enter.exact="ask"
       />
       <n-space style="margin-top: 12px">
         <n-button type="primary" :loading="qa.streaming" :disabled="!question.trim()" @click="ask">
