@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
@@ -26,7 +27,10 @@ from utils.llm import get_model_for_task, run_agent, run_agent_stream
 logger = logging.getLogger(__name__)
 
 DEFAULT_TOP_K = 6
-DEFAULT_MAX_SOURCES = 5
+DEFAULT_MAX_SOURCES = 4
+
+# 答案中的引用编号匹配 [1]~[n]
+_CITATION_RE = re.compile(r"\[(\d+)\]")
 
 QA_INSTRUCTIONS = """你是校园通知智能问答助手。请严格根据下面提供的【参考通知】内容回答用户问题。
 
@@ -69,7 +73,7 @@ class QAAgent:
         max_sources: int = DEFAULT_MAX_SOURCES,
         strategy: str = "none",
         expire_days: Optional[int] = None,
-        search_mode: str = "vector",
+        search_mode: str = "hybrid",
         **search_kwargs,
     ):
         if index is None:
@@ -170,6 +174,20 @@ class QAAgent:
 
         return "\n\n".join(context_parts), sources
 
+    def _filter_cited_sources(self, answer: str, sources: list[SourceRef]) -> list[SourceRef]:
+        """只保留答案中实际 [n] 引用的来源（1-based 编号，按答案出现顺序去重）。
+
+        答案未引用任何编号时兜底保留 top-1，避免面板空置；引用不存在的编号则丢弃。
+        """
+        cited: list[SourceRef] = []
+        seen: set[int] = set()
+        for m in _CITATION_RE.finditer(answer or ""):
+            idx = int(m.group(1))
+            if 1 <= idx <= len(sources) and idx - 1 not in seen:
+                seen.add(idx - 1)
+                cited.append(sources[idx - 1])
+        return cited if cited else sources[:1]
+
     async def ask(self, question: str) -> QAResult:
         """回答一个问题。"""
         docs = self._retrieve(question)
@@ -193,10 +211,11 @@ class QAAgent:
         if not answer:
             answer = "根据已抓取的通知，没有找到相关信息。"
 
+        cited = self._filter_cited_sources(answer, sources)
         return QAResult(
             answer=answer,
-            sources=sources,
-            retrieved_chunks=len(docs),
+            sources=cited,
+            retrieved_chunks=len(cited),
         )
 
     async def ask_stream(self, question: str):
@@ -237,12 +256,13 @@ class QAAgent:
         if not answer:
             answer = "根据已抓取的通知，没有找到相关信息。"
 
+        cited = self._filter_cited_sources(answer, sources)
         yield (
             "done",
             QAResult(
                 answer=answer,
-                sources=sources,
-                retrieved_chunks=len(docs),
+                sources=cited,
+                retrieved_chunks=len(cited),
             ),
         )
 
