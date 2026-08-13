@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import logging
 import os
+from pathlib import Path
 from typing import Optional
 
 from config.store import ConfigStore
@@ -172,13 +173,22 @@ def create_embeddings(provider_name: Optional[str] = None, model_name: Optional[
     # 1. 未配置 base_url 或明确本地 provider → 直接用本地模型
     if not provider.base_url:
         local_model = model_name if model_name else DEFAULT_LOCAL_EMBEDDING_MODEL
-        # 兼容简写：all-MiniLM-L6-v2 → sentence-transformers/all-MiniLM-L6-v2
-        if local_model and "/" not in local_model:
+        # 兼容简写：all-MiniLM-L6-v2 → sentence-transformers/all-MiniLM-L6-v2；
+        # 本地目录路径（含 / 或 \）保持原样，直接按路径加载
+        if local_model and "/" not in local_model and "\\" not in local_model:
             local_model = f"sentence-transformers/{local_model}"
         logger.info(f"使用本地 embedding 模型: {local_model}")
+        # 相对路径（如 models/bge-small-zh-v1.5）按项目根目录解析为绝对路径，
+        # 避免依赖进程 cwd（scheduler/api/CLI 各自启动目录不同）
+        resolved_model = local_model
+        if ("/" in local_model or "\\" in local_model) and not os.path.isabs(local_model):
+            resolved_model = str(
+                Path(__file__).resolve().parent.parent / local_model
+            )
+            logger.info(f"本地模型解析为绝对路径: {resolved_model}")
         return _CountingEmbeddings(
             HuggingFaceEmbeddings(
-                model_name=local_model,
+                model_name=resolved_model,
                 model_kwargs={"local_files_only": True},
             ),
             local_model,

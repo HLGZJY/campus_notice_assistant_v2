@@ -171,6 +171,7 @@ class HybridIndex:
         expire_days: Optional[int] = None,
         decay_strength: float = DEFAULT_DECAY_STRENGTH,
         candidate_factor: int = DEFAULT_CANDIDATE_FACTOR,
+        min_score: Optional[float] = None,
     ) -> list[Document]:
         """混合检索 Top-K chunk（RRF 融合向量路与 BM25 路）。"""
         candidate_k = max(self.candidate_k, k)
@@ -184,6 +185,7 @@ class HybridIndex:
             expire_days=expire_days,
             decay_strength=decay_strength,
             candidate_factor=candidate_factor,
+            min_score=min_score,
         )
 
         # BM25 路（过期策略与向量路对齐）

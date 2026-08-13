@@ -320,6 +320,12 @@ def main():
         action="store_true",
         help="用测试集 corpus 的 27 条通知重建向量索引（默认只读现有索引）",
     )
+    parser.add_argument(
+        "--min-score",
+        type=float,
+        default=None,
+        help="相似度下限（0~1），透传给 index.search 过滤低相关结果（模块 2.4 阈值实验）",
+    )
     args = parser.parse_args()
 
     if not TESTSET_PATH.exists():
@@ -347,7 +353,8 @@ def main():
     else:
         index = get_vector_index()
 
-    result = evaluate(testset, index, top_k=args.top_k)
+    search_kwargs = {"min_score": args.min_score} if args.min_score is not None else None
+    result = evaluate(testset, index, top_k=args.top_k, search_kwargs=search_kwargs)
 
     json_path, md_path = write_results(result, args.output_dir, write_report=not args.no_report)
     report(result)

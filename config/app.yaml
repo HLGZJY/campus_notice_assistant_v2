@@ -33,7 +33,7 @@ models:
     model: qwen3.7-max
   embedding:
     provider: local
-    model: sentence-transformers/all-MiniLM-L6-v2
+    model: models/bge-small-zh-v1.5
 providers:
   opencode-zen:
     name: opencode-zen

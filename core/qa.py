@@ -73,7 +73,7 @@ class QAAgent:
         max_sources: int = DEFAULT_MAX_SOURCES,
         strategy: str = "none",
         expire_days: Optional[int] = None,
-        search_mode: str = "hybrid",
+        search_mode: str = "vector",
         **search_kwargs,
     ):
         if index is None:

@@ -257,6 +257,7 @@ class VectorIndex:
         expire_days: Optional[int] = None,
         decay_strength: float = DEFAULT_DECAY_STRENGTH,
         candidate_factor: int = DEFAULT_CANDIDATE_FACTOR,
+        min_score: Optional[float] = None,
     ) -> list[Document]:
         """语义检索 Top-K 文档块。
 
@@ -271,24 +272,42 @@ class VectorIndex:
             expire_days: 无 deadline 通知的默认有效期（默认读配置，兜底 90）
             decay_strength: 降权系数，decay = 1 / (1 + strength * overdue_days)
             candidate_factor: "decay" 档候选池倍率（k * factor）
+            min_score: 相似度下限（cosine 相似度，0~1）；低于阈值的 chunk 不返回，
+                用于过滤低相关噪声。None 表示不过滤（基线行为）。
         """
         ref = reference_date or date.today()
         days = expire_days if expire_days is not None else _default_expire_days()
         store = self._get_store()
 
         if strategy == "filter":
-            return self._search_filter_expired(query, k, ref, days)
+            return self._search_filter_expired(query, k, ref, days, min_score)
         if strategy == "decay":
-            return self._search_decay(query, k, ref, days, decay_strength, candidate_factor)
-        return store.similarity_search(query, k=k)
+            return self._search_decay(
+                query, k, ref, days, decay_strength, candidate_factor, min_score
+            )
+        return self._search_vector(query, k, min_score)
+
+    def _search_vector(
+        self, query: str, k: int, min_score: Optional[float] = None
+    ) -> list[Document]:
+        """纯向量检索；min_score 非 None 时用 with_score 过滤低相似度。"""
+        if min_score is None:
+            return self._get_store().similarity_search(query, k=k)
+        scored = self._get_store().similarity_search_with_score(query, k=k)
+        return [doc for doc, dist in scored if 1.0 - dist >= min_score]
 
     def _search_filter_expired(
-        self, query: str, k: int, reference_date: date, expire_days: int
+        self,
+        query: str,
+        k: int,
+        reference_date: date,
+        expire_days: int,
+        min_score: Optional[float] = None,
     ) -> list[Document]:
         """策略 C：检索前过滤过期通知（Chroma where $nin，真正的检索前过滤）。"""
         expired_ids = self.get_expired_notice_ids(reference_date, expire_days)
         if not expired_ids:
-            return self._get_store().similarity_search(query, k=k)
+            return self._search_vector(query, k, min_score)
         if len(expired_ids) >= self.count():
             logger.warning("策略 filter：全部通知过期，检索结果为空")
             return []
@@ -302,16 +321,19 @@ class VectorIndex:
                 query_embeddings=[query_embeddings],
                 n_results=k,
                 where={"notice_id": {"$nin": sorted(expired_ids)}},
-                include=["metadatas", "documents"],
+                include=["metadatas", "documents", "distances"],
             )
         except Exception as e:  # noqa: BLE001
             logger.warning("策略 filter 检索失败，回退普通检索: %s", e)
-            return self._get_store().similarity_search(query, k=k)
+            return self._search_vector(query, k, min_score)
 
         docs = []
         metas = res.get("metadatas") or [[]]
         texts = res.get("documents") or [[]]
-        for meta, text in zip(metas[0], texts[0]):
+        dists = res.get("distances") or [[]]
+        for meta, text, dist in zip(metas[0], texts[0], dists[0]):
+            if min_score is not None and 1.0 - dist < min_score:
+                continue
             docs.append(Document(page_content=text, metadata=meta or {}))
         return docs
 
@@ -323,6 +345,7 @@ class VectorIndex:
         expire_days: int,
         decay_strength: float,
         candidate_factor: int,
+        min_score: Optional[float] = None,
     ) -> list[Document]:
         """策略 B：过期降权重排——不剔除过期通知，只是按过期天数时间衰减后重排取 top-k。"""
         candidates = max(k * candidate_factor, k)
@@ -331,6 +354,8 @@ class VectorIndex:
         ranked = []
         for doc, dist in scored:
             sim = 1.0 - dist
+            if min_score is not None and sim < min_score:
+                continue
             overdue = _days_expired(doc.metadata, reference_date, expire_days)
             decay = 1.0 / (1.0 + decay_strength * overdue) if overdue > 0 else 1.0
             ranked.append((sim * decay, doc))

@@ -8,6 +8,7 @@ data/*.db
 data/*.db-*
 *.tmp
 *.bak
+models/
 
 # ---------- 密钥与环境 ----------
 .env
