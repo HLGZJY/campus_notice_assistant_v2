@@ -456,3 +456,23 @@ class SchedulerStatus(BaseModel):
     interval_minutes: Optional[int] = None
     jobs: list[SchedulerJobView] = Field(default_factory=list)
     recent_runs: list[dict] = Field(default_factory=list)
+
+
+# ---------- 埋点（阶段 7，前端 fire-and-forget 上报） ----------
+#
+# 约定：写入逻辑归 tracking_service.track_event（独立短连接、整体 try/except，
+# 绝不上抛、不阻塞主流程）；路由只做转发，返回 ok 布尔。
+
+
+class EventCreateRequest(BaseModel):
+    """埋点事件上报请求体。"""
+
+    event_type: str
+    ref_id: Optional[int] = None
+    note: Optional[str] = None
+
+
+class EventCreateResult(BaseModel):
+    """埋点上报结果（写入失败仅 ok=false，不报错）。"""
+
+    ok: bool
