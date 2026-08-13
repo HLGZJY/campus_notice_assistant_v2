@@ -7,30 +7,66 @@ const notices = useNoticesStore()
 const reminders = useRemindersStore()
 
 onMounted(async () => {
-  await notices.fetchFilters().catch(() => {})
-  await notices.fetchNotices({ limit: 10 }).catch(() => {})
-  await reminders.fetchPendingCount().catch(() => {})
+  await Promise.all([
+    notices.fetchFilters().catch(() => {}),
+    notices.fetchNotices({ limit: 10 }).catch(() => {}),
+    notices.fetchStatusCounts().catch(() => {}),
+    reminders.fetchPendingCount().catch(() => {}),
+  ])
 })
 </script>
 
 <template>
   <n-space vertical size="large">
-    <n-card title="欢迎">
-      <div>欢迎使用 Campus Notice Assistant — 首页概览待完成功能的占位视图。</div>
+    <n-card title="数据概览">
+      <n-grid :cols="5" :x-gap="12">
+        <n-grid-item>
+          <n-statistic label="未提取 (raw)">
+            <template #default>{{ notices.statusCounts.raw }}</template>
+          </n-statistic>
+        </n-grid-item>
+        <n-grid-item>
+          <n-statistic label="已提取 (extracted)">
+            <template #default>{{ notices.statusCounts.extracted }}</template>
+          </n-statistic>
+        </n-grid-item>
+        <n-grid-item>
+          <n-statistic label="部分提取 (partial)">
+            <template #default>{{ notices.statusCounts.partial }}</template>
+          </n-statistic>
+        </n-grid-item>
+        <n-grid-item>
+          <n-statistic label="提取失败 (failed)">
+            <template #default>{{ notices.statusCounts.failed }}</template>
+          </n-statistic>
+        </n-grid-item>
+        <n-grid-item>
+          <n-statistic label="待处理提醒">
+            <template #default>
+              <span :style="{ color: reminders.pendingCount > 0 ? '#d03050' : undefined }">
+                {{ reminders.pendingCount }}
+              </span>
+            </template>
+          </n-statistic>
+        </n-grid-item>
+      </n-grid>
     </n-card>
 
     <n-card title="近期通知">
       <div v-if="notices.list.length === 0">暂无通知</div>
       <n-list v-else>
         <n-list-item v-for="item in notices.list" :key="item.id">
-          <template #title>{{ item.title }}</template>
-          <template #desc>{{ item.source }} · {{ item.published_at ?? item.crawled_at }}</template>
+          <template #title>
+            <n-space align="center" size="small">
+              <n-tag size="small" :bordered="false" type="info">{{ item.notice_type || '未分类' }}</n-tag>
+              <span>{{ item.title }}</span>
+            </n-space>
+          </template>
+          <template #desc>
+            {{ item.source }} · {{ item.published_at ?? item.crawled_at }}
+          </template>
         </n-list-item>
       </n-list>
-    </n-card>
-
-    <n-card title="提醒（待处理）">
-      <div>待处理提醒：{{ reminders.pendingCount }}</div>
     </n-card>
   </n-space>
 </template>
