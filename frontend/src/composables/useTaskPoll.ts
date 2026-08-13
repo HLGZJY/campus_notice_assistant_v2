@@ -1,7 +1,7 @@
 import { ref } from 'vue'
 import { endpoints } from '../api/endpoints'
 import { get, post } from '../api/http'
-import type { TaskView } from '../api/tasks'
+import type { TaskCreateResult, TaskView } from '../api/schema'
 
 export function useTaskPoll() {
   const polling = ref(false)
@@ -34,8 +34,8 @@ export function useTaskPoll() {
 
   async function submitAndPoll(type: string, params?: Record<string, unknown>, onProgress?: (task: TaskView) => void, signal?: AbortSignal) {
     // Use shared post helper so signal/other options can be passed
-    const task = await post<TaskView>(endpoints.tasks.list, { type, params: params ?? {} }, { signal })
-    return poll(task.id, onProgress, signal)
+    const task = await post<TaskCreateResult>(endpoints.tasks.list, { type, params: params ?? {} }, { signal })
+    return poll(task.task_id, onProgress, signal)
   }
 
   return { polling, poll, submitAndPoll }

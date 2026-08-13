@@ -1,32 +1,27 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { endpoints } from '../api/endpoints'
-import { get, post } from '../api/http'
-
-export interface SubscriptionItem {
-  id: number
-  name: string
-  filter?: Record<string, unknown>
-  active: boolean
-  last_matched?: number
-  preview?: unknown
-}
-
-export interface SubscriptionStats {
-  total: number
-  active: number
-  matched_last_hour?: number
-}
+import { del, get, post, put } from '../api/http'
+import type {
+  SubscriptionCreateRequest,
+  SubscriptionItem,
+  SubscriptionMutationResult,
+  SubscriptionPreview,
+  SubscriptionPreviewRequest,
+  SubscriptionStats,
+  SubscriptionUpdateRequest,
+  TaskCreateResult,
+} from '../api/schema'
 
 export const useSubscriptionsStore = defineStore('subscriptions', () => {
   const list = ref<SubscriptionItem[]>([])
-  const stats = ref<SubscriptionStats>({ total: 0, active: 0 })
+  const stats = ref<SubscriptionStats>({ total: 0, enabled: 0, matches: 0 })
   const loading = ref(false)
 
-  async function fetchList(params?: Record<string, unknown>) {
+  async function fetchList() {
     loading.value = true
     try {
-      list.value = await get<SubscriptionItem[]>(endpoints.subscriptions.list, params)
+      list.value = await get<SubscriptionItem[]>(endpoints.subscriptions.list)
     } finally {
       loading.value = false
     }
@@ -36,18 +31,41 @@ export const useSubscriptionsStore = defineStore('subscriptions', () => {
     stats.value = await get<SubscriptionStats>(endpoints.subscriptions.stats)
   }
 
-  async function preview(params: Record<string, unknown>) {
-    // preview likely accepts the subscription filter and returns a small result set
-    return await post<unknown>(endpoints.subscriptions.preview, params)
+  async function preview(body: SubscriptionPreviewRequest) {
+    return await post<SubscriptionPreview>(endpoints.subscriptions.preview, body)
   }
 
-  async function toggle(id: number) {
-    return await post(endpoints.subscriptions.toggle(id))
+  async function create(body: SubscriptionCreateRequest) {
+    return await post<TaskCreateResult>(endpoints.subscriptions.list, body)
   }
 
-  async function fetchDetail(id: number) {
-    return await get<SubscriptionItem>(endpoints.subscriptions.detail(id))
+  async function update(id: number, body: SubscriptionUpdateRequest) {
+    return await put<TaskCreateResult>(endpoints.subscriptions.detail(id), body)
   }
 
-  return { list, stats, loading, fetchList, fetchStats, preview, toggle, fetchDetail }
+  async function toggle(id: number, enabled: boolean) {
+    return await post<TaskCreateResult>(endpoints.subscriptions.toggle(id), { enabled })
+  }
+
+  async function remove(id: number) {
+    return await del<SubscriptionMutationResult>(endpoints.subscriptions.detail(id))
+  }
+
+  async function matchAll() {
+    return await post<TaskCreateResult>(endpoints.subscriptions.matchAll)
+  }
+
+  return {
+    list,
+    stats,
+    loading,
+    fetchList,
+    fetchStats,
+    preview,
+    create,
+    update,
+    toggle,
+    remove,
+    matchAll,
+  }
 })
