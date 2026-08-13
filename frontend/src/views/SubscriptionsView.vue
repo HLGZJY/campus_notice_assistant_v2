@@ -175,17 +175,19 @@ async function matchAll() {
         <div v-if="subs.list.length === 0">暂无订阅，点击「新增订阅」开始。</div>
         <n-list v-else>
           <n-list-item v-for="s in subs.list" :key="s.id">
-            <template #title>
-              <n-space align="center" size="small">
-                <n-tag :bordered="false" :type="s.enabled === 1 ? 'success' : 'default'" size="small">
-                  {{ s.enabled === 1 ? '已启用' : '已停用' }}
-                </n-tag>
-                <span>{{ s.keyword }}</span>
-                <n-tag v-if="s.type_label" :bordered="false" type="info" size="small">{{ s.type_label }}</n-tag>
+            <template #default>
+              <n-space vertical size="small">
+                <n-space align="center" size="small">
+                  <n-tag :bordered="false" :type="s.enabled === 1 ? 'success' : 'default'" size="small">
+                    {{ s.enabled === 1 ? '已启用' : '已停用' }}
+                  </n-tag>
+                  <span>{{ s.keyword }}</span>
+                  <n-tag v-if="s.type_label" :bordered="false" type="info" size="small">{{ s.type_label }}</n-tag>
+                </n-space>
+                <div>命中 {{ s.match_count }} 条通知</div>
               </n-space>
             </template>
-            <template #desc>命中 {{ s.match_count }} 条通知</template>
-            <template #extra>
+            <template #suffix>
               <n-space>
                 <n-button size="small" secondary @click="toggleSubscription(s)">
                   {{ s.enabled === 1 ? '停用' : '启用' }}

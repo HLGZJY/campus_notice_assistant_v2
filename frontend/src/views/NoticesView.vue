@@ -217,23 +217,25 @@ function keyDatesText(d: NoticeDetail): string {
         <div v-if="notices.list.length === 0">暂无通知</div>
         <n-list v-else>
           <n-list-item v-for="item in notices.list" :key="item.id">
-            <template #title>
-              <n-space align="center" size="small">
-                <n-tag size="small" :bordered="false" :type="statusTagType[item.status] ?? 'default'">
-                  {{ item.status }}
-                </n-tag>
-                <n-tag size="small" :bordered="false" type="info">{{ item.notice_type || '未分类' }}</n-tag>
-                <a href="#" @click.prevent="openDetail(item)">{{ item.title }}</a>
-                <template v-for="kw in matchedKeywords(item.id)" :key="`${item.id}-${kw}`">
-                  <n-tag size="small" :bordered="false" type="warning" round>订阅命中 · {{ kw }}</n-tag>
-                </template>
+            <template #default>
+              <n-space vertical size="small">
+                <n-space align="center" size="small">
+                  <n-tag size="small" :bordered="false" :type="statusTagType[item.status] ?? 'default'">
+                    {{ item.status }}
+                  </n-tag>
+                  <n-tag size="small" :bordered="false" type="info">{{ item.notice_type || '未分类' }}</n-tag>
+                  <a href="#" @click.prevent="openDetail(item)">{{ item.title }}</a>
+                  <template v-for="kw in matchedKeywords(item.id)" :key="`${item.id}-${kw}`">
+                    <n-tag size="small" :bordered="false" type="warning" round>订阅命中 · {{ kw }}</n-tag>
+                  </template>
+                </n-space>
+                <div>
+                  {{ item.source }} · {{ fmtDate(item.published_at ?? item.crawled_at) }}
+                  <span v-if="item.deadline">，截止 {{ fmtDate(item.deadline) }}</span>
+                </div>
               </n-space>
             </template>
-            <template #desc>
-              {{ item.source }} · {{ fmtDate(item.published_at ?? item.crawled_at) }}
-              <span v-if="item.deadline">，截止 {{ fmtDate(item.deadline) }}</span>
-            </template>
-            <template #extra>
+            <template #suffix>
               <n-button size="small" :loading="generating === item.id" @click="generateTodos(item)">
                 生成待办
               </n-button>

@@ -52,22 +52,22 @@ function fmtDate(iso?: string | null): string {
       <div v-if="reminders.reminders.length === 0" style="margin-top: 12px">暂无待处理提醒</div>
       <n-list v-else style="margin-top: 12px">
         <n-list-item v-for="r in reminders.reminders" :key="r.id">
-          <template #title>
-            <n-space align="center" size="small">
-              <n-tag
-                size="small"
-                :bordered="false"
-                :type="r.is_today ? 'error' : 'warning'"
-              >
-                {{ r.is_today ? '今天截止' : r.tier_label || r.tier }}
-              </n-tag>
-              <span>{{ r.notice_title || `通知 #${r.notice_id}` }}</span>
+          <template #default>
+            <n-space vertical size="small">
+              <n-space align="center" size="small">
+                <n-tag
+                  size="small"
+                  :bordered="false"
+                  :type="r.is_today ? 'error' : 'warning'"
+                >
+                  {{ r.is_today ? '今天截止' : r.tier_label || r.tier }}
+                </n-tag>
+                <span>{{ r.notice_title || `通知 #${r.notice_id}` }}</span>
+              </n-space>
+              <div>截止 {{ fmtDate(r.due_at) }}<span v-if="r.todo_action"> · {{ r.todo_action }}</span></div>
             </n-space>
           </template>
-          <template #desc>
-            截止 {{ fmtDate(r.due_at) }}<span v-if="r.todo_action"> · {{ r.todo_action }}</span>
-          </template>
-          <template #extra>
+          <template #suffix>
             <n-button size="small" quaternary type="error" @click="ignoreReminder(r.id)">忽略</n-button>
           </template>
         </n-list-item>
@@ -88,22 +88,22 @@ function fmtDate(iso?: string | null): string {
       <div v-if="todos.list.length === 0">暂无待办</div>
       <n-list v-else>
         <n-list-item v-for="t in todos.list" :key="t.id">
-          <template #title>
-            <n-space align="center" size="small">
-              <n-tag
-                size="small"
-                :bordered="false"
-                :type="t.status === 'done' ? 'success' : t.status === 'skipped' ? 'default' : t.due_at && t.due_at <= new Date().toISOString() ? 'error' : 'warning'"
-              >
-                {{ t.status }}
-              </n-tag>
-              <span :style="{ textDecoration: t.status === 'done' ? 'line-through' : undefined }">{{ t.action }}</span>
+          <template #default>
+            <n-space vertical size="small">
+              <n-space align="center" size="small">
+                <n-tag
+                  size="small"
+                  :bordered="false"
+                  :type="t.status === 'done' ? 'success' : t.status === 'skipped' ? 'default' : t.due_at && t.due_at <= new Date().toISOString() ? 'error' : 'warning'"
+                >
+                  {{ t.status }}
+                </n-tag>
+                <span :style="{ textDecoration: t.status === 'done' ? 'line-through' : undefined }">{{ t.action }}</span>
+              </n-space>
+              <div>{{ t.notice_title }} · 截止 {{ fmtDate(t.due_at) }}</div>
             </n-space>
           </template>
-          <template #desc>
-            {{ t.notice_title }} · 截止 {{ fmtDate(t.due_at) }}
-          </template>
-          <template #extra>
+          <template #suffix>
             <n-space>
               <n-button
                 v-if="t.status !== 'done'"

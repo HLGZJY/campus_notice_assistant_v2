@@ -56,14 +56,14 @@ onMounted(async () => {
       <div v-if="notices.list.length === 0">暂无通知</div>
       <n-list v-else>
         <n-list-item v-for="item in notices.list" :key="item.id">
-          <template #title>
-            <n-space align="center" size="small">
-              <n-tag size="small" :bordered="false" type="info">{{ item.notice_type || '未分类' }}</n-tag>
-              <span>{{ item.title }}</span>
+          <template #default>
+            <n-space vertical size="small">
+              <n-space align="center" size="small">
+                <n-tag size="small" :bordered="false" type="info">{{ item.notice_type || '未分类' }}</n-tag>
+                <span>{{ item.title }}</span>
+              </n-space>
+              <div>{{ item.source }} · {{ item.published_at ?? item.crawled_at }}</div>
             </n-space>
-          </template>
-          <template #desc>
-            {{ item.source }} · {{ item.published_at ?? item.crawled_at }}
           </template>
         </n-list-item>
       </n-list>

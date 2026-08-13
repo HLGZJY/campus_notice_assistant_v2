@@ -5,7 +5,7 @@ sources:
   type: web
   list_url: https://www.scuec.edu.cn/cxcy/scss/jstz.htm
   url_pattern: null
-  max_pages: 5
+  max_pages: 8
 - name: 创新创业学院-结果公示
   type: web
   list_url: https://www.scuec.edu.cn/cxcy/scss/jggs.htm
@@ -30,4 +30,4 @@ sources:
   type: web
   list_url: https://www.scuec.edu.cn/yjsy/yjspy/tzgg.htm
   url_pattern: null
-  max_pages: 5
+  max_pages: 6
