@@ -198,7 +198,7 @@ async def run_agent_stream(
         str：模型输出的文本增量（response.output_text.delta）。
         流式完成后正常 return；异常时先写 success=0 计量再抛出。
     """
-    result = await Runner.run_streamed(agent, prompt)
+    result = Runner.run_streamed(agent, prompt)
     usage = None
     try:
         async for event in result.stream_events():

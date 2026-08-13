@@ -12,7 +12,7 @@ beautifulsoup4>=4.12.2
 # Engine deps to enable full extractor/crawler/agents behavior (names match requirements.txt)
 # jieba 为 newspaper4k 中文分词必需（不含则中文页面提取失败）
 jieba>=0.42
-openai-agents>=0.19
+openai-agents>=0.19,<0.20
 newspaper4k>=0.9.6
 
 # 可选（测试/小工具）
