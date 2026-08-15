@@ -1,0 +1,3 @@
+# 开发/评估专用依赖（不入生产镜像 requirements-backend.txt）
+# Phase B：dspy.MIPROv2 待办 prompt few-shot 优化（tools/optimize_todo_prompt.py）
+dspy-ai>=2.6
