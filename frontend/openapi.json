@@ -481,6 +481,75 @@
         }
       }
     },
+    "/api/v1/todos/{todo_id}": {
+      "patch": {
+        "tags": [
+          "todos"
+        ],
+        "summary": "Update Todo Fields",
+        "description": "更新待办字段（action / due_at / notes）。\n\n缺失字段 = 不修改；显式 null = 清空。due_at 变更时旧临期提醒自动收敛为已读。",
+        "operationId": "update_todo_fields_api_v1_todos__todo_id__patch",
+        "parameters": [
+          {
+            "name": "todo_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Todo Id"
+            }
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TodoUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TodoItem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/reminders": {
       "get": {
         "tags": [
@@ -5073,6 +5142,17 @@
             "title": "Status",
             "default": "pending"
           },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
           "created_at": {
             "type": "string",
             "title": "Created At"
@@ -5139,6 +5219,46 @@
         ],
         "title": "TodoStatusUpdate",
         "description": "待办状态变更请求体（pending / done / skipped）。"
+      },
+      "TodoUpdateRequest": {
+        "properties": {
+          "action": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Action"
+          },
+          "due_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due At"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          }
+        },
+        "type": "object",
+        "title": "TodoUpdateRequest",
+        "description": "待办更新请求体（PATCH）：缺失字段 = 不修改；显式 null = 清空。"
       },
       "ValidationError": {
         "properties": {

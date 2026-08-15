@@ -56,6 +56,17 @@ export async function put<T = unknown>(url: string, body?: unknown, options?: Re
   return (await res.json()) as T
 }
 
+export async function patch<T = unknown>(url: string, body?: unknown, options?: RequestInit): Promise<T> {
+  const init: RequestInit = Object.assign({
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: body ? JSON.stringify(body) : undefined,
+  }, options || {})
+  const res = await fetch(url, init)
+  if (!res.ok) await handle(res)
+  return (await res.json()) as T
+}
+
 export async function del<T = unknown>(url: string, options?: RequestInit): Promise<T> {
   const init: RequestInit = Object.assign({ method: 'DELETE' }, options || {})
   const res = await fetch(url, init)

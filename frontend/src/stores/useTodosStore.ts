@@ -1,16 +1,22 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { endpoints } from '../api/endpoints'
-import { get, post } from '../api/http'
+import { get, patch, post } from '../api/http'
 import { pollTask } from '../api/tasks'
-import type { TaskCreateResult, TaskView, TodoItem, TodoStats } from '../api/schema'
+import type { TaskCreateResult, TaskView, TodoItem, TodoStats, TodoUpdateRequest } from '../api/schema'
 
 export const useTodosStore = defineStore('todos', () => {
   const list = ref<TodoItem[]>([])
   const stats = ref<TodoStats>({ pending: 0, done: 0, skipped: 0, total: 0 })
+  const loading = ref(false)
 
   async function fetchTodos(status?: string) {
-    list.value = await get<TodoItem[]>(endpoints.todos.list, { status })
+    loading.value = true
+    try {
+      list.value = await get<TodoItem[]>(endpoints.todos.list, { status })
+    } finally {
+      loading.value = false
+    }
   }
 
   async function fetchStats() {
@@ -23,10 +29,16 @@ export const useTodosStore = defineStore('todos', () => {
     await fetchStats()
   }
 
+  async function update(id: number, payload: TodoUpdateRequest) {
+    await patch<TodoItem>(endpoints.todos.update(id), payload)
+    await fetchTodos()
+    await fetchStats()
+  }
+
   async function generate(noticeId: number, onProgress?: (task: TaskView) => void) {
     const result = await post<TaskCreateResult>(endpoints.notices.todos(noticeId))
     return await pollTask(result.task_id, onProgress)
   }
 
-  return { list, stats, fetchTodos, fetchStats, mark, generate }
+  return { list, stats, loading, fetchTodos, fetchStats, mark, update, generate }
 })

@@ -22,6 +22,7 @@ export const endpoints = {
     list: `${API_BASE}/todos`,
     stats: `${API_BASE}/todos/stats`,
     status: (id: number) => `${API_BASE}/todos/${id}/status`,
+    update: (id: number) => `${API_BASE}/todos/${id}`,
   },
   reminders: {
     list: `${API_BASE}/reminders`,

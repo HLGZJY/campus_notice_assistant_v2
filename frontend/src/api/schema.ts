@@ -21,6 +21,7 @@ export type NoticeMutationResult = components['schemas']['NoticeMutationResult']
 export type TodoItem = components['schemas']['TodoItem']
 export type TodoStats = components['schemas']['TodoStats']
 export type TodoStatusUpdate = components['schemas']['TodoStatusUpdate']
+export type TodoUpdateRequest = components['schemas']['TodoUpdateRequest']
 
 export type ReminderItem = components['schemas']['ReminderItem']
 export type ReminderStats = components['schemas']['ReminderStats']

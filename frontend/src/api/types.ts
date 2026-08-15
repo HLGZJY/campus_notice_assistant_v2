@@ -151,6 +151,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/todos/{todo_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Todo Fields
+         * @description 更新待办字段（action / due_at / notes）。
+         *
+         *     缺失字段 = 不修改；显式 null = 清空。due_at 变更时旧临期提醒自动收敛为已读。
+         */
+        patch: operations["update_todo_fields_api_v1_todos__todo_id__patch"];
+        trace?: never;
+    };
     "/api/v1/reminders": {
         parameters: {
             query?: never;
@@ -1809,6 +1831,8 @@ export interface components {
              * @default pending
              */
             status: string;
+            /** Notes */
+            notes?: string | null;
             /** Created At */
             created_at: string;
             /** Completed At */
@@ -1847,6 +1871,18 @@ export interface components {
         TodoStatusUpdate: {
             /** Status */
             status: string;
+        };
+        /**
+         * TodoUpdateRequest
+         * @description 待办更新请求体（PATCH）：缺失字段 = 不修改；显式 null = 清空。
+         */
+        TodoUpdateRequest: {
+            /** Action */
+            action?: string | null;
+            /** Due At */
+            due_at?: string | null;
+            /** Notes */
+            notes?: string | null;
         };
         /** ValidationError */
         ValidationError: {
@@ -2123,6 +2159,43 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_todo_fields_api_v1_todos__todo_id__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path: {
+                todo_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TodoUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TodoItem"];
                 };
             };
             /** @description Validation Error */
