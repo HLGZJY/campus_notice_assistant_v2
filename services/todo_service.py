@@ -1,10 +1,33 @@
 """待办相关服务：封装 M3 待办功能。"""
 from __future__ import annotations
 
+from datetime import date, datetime
 from typing import Optional
 
 from core.todo import generate_todos_for_notice as _generate_todos_for_notice
-from storage.db import get_connection, get_todos as _get_todos, set_todo_status
+from storage.db import (
+    _UNSET,
+    get_connection,
+    get_todo_by_id,
+    get_todos as _get_todos,
+    resolve_reminders_for_todo,
+    set_todo_status,
+    update_todo as _update_todo,
+)
+
+
+def _valid_due_at(s: str) -> bool:
+    """截止时间可解析即合法（兼容带/不带时刻的 ISO）。"""
+    try:
+        datetime.fromisoformat(s)
+        return True
+    except ValueError:
+        pass
+    try:
+        date.fromisoformat(s)
+        return True
+    except ValueError:
+        return False
 
 
 def get_todos(status: Optional[str] = None) -> list[dict]:
@@ -43,6 +66,42 @@ def mark_todo(todo_id: int, status: str) -> bool:
     conn = get_connection()
     try:
         return set_todo_status(conn, todo_id, status)
+    finally:
+        conn.close()
+
+
+def update_todo(
+    todo_id: int,
+    action: Optional[str] = None,
+    due_at: object = _UNSET,
+    notes: object = _UNSET,
+) -> Optional[dict]:
+    """更新待办部分字段（action / due_at / notes）。
+
+    语义：action 传 None 表示不修改；due_at / notes 传 _UNSET 表示不修改，
+    显式传 None 表示清空为 NULL。due_at 变更时将该待办旧的待处理提醒收敛为
+    已读，避免与新截止时间矛盾的临期提醒滞留。
+    返回更新后的待办 dict；待办不存在返回 None。
+    """
+    if action is not None and not action.strip():
+        raise ValueError("待办内容不能为空")
+    conn = get_connection()
+    try:
+        if get_todo_by_id(conn, todo_id) is None:
+            return None
+        kw: dict = {}
+        if action is not None:
+            kw["action"] = action.strip()
+        if due_at is not _UNSET:
+            if due_at is not None and not _valid_due_at(due_at):
+                raise ValueError(f"无效截止时间: {due_at}")
+            kw["due_at"] = due_at
+        if notes is not _UNSET:
+            kw["notes"] = notes
+        _update_todo(conn, todo_id, **kw)
+        if "due_at" in kw:
+            resolve_reminders_for_todo(conn, todo_id, status="read")
+        return get_todo_by_id(conn, todo_id)
     finally:
         conn.close()
 

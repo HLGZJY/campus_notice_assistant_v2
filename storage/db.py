@@ -167,6 +167,8 @@ _MIGRATIONS = [
     # 模块 1.2 内容指纹变更检测
     "ALTER TABLE notices ADD COLUMN content_hash TEXT",
     "ALTER TABLE crawl_log ADD COLUMN total_changed INTEGER",
+    # 待办中心：备注列（编辑/延期后记进展）
+    "ALTER TABLE todos ADD COLUMN notes TEXT",
 ]
 
 
@@ -188,10 +190,16 @@ def _migrate(conn: sqlite3.Connection) -> None:
 
     notices_cols = _table_cols("notices")
     crawl_log_cols = _table_cols("crawl_log")
+    todos_cols = _table_cols("todos")
+    cols_by_table = {
+        "notices": notices_cols,
+        "crawl_log": crawl_log_cols,
+        "todos": todos_cols,
+    }
     for stmt in _MIGRATIONS:
         table = stmt.split("ALTER TABLE ")[1].split(" ")[0]
         col = stmt.split("ADD COLUMN ")[1].split(" ")[0]
-        cols = notices_cols if table == "notices" else crawl_log_cols
+        cols = cols_by_table.get(table, set())
         if col not in cols:
             conn.execute(stmt)
 
@@ -616,6 +624,50 @@ def set_todo_status(conn: sqlite3.Connection, todo_id: int, status: str) -> bool
         resolve_reminders_for_todo(conn, todo_id, status="read")
     conn.commit()
     return cur.rowcount > 0
+
+
+def get_todo_by_id(conn: sqlite3.Connection, todo_id: int) -> Optional[dict]:
+    """按 id 查询待办（带通知标题），返回 dict 或 None。"""
+    row = conn.execute(
+        """SELECT t.*, n.title AS notice_title, n.notice_type
+           FROM todos t
+           LEFT JOIN notices n ON n.id = t.notice_id
+           WHERE t.id = ?""",
+        (todo_id,),
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def update_todo(
+    conn: sqlite3.Connection,
+    todo_id: int,
+    action: object = _UNSET,
+    due_at: object = _UNSET,
+    notes: object = _UNSET,
+) -> int:
+    """更新待办部分字段（action / due_at / notes）。
+
+    _UNSET（默认）表示不修改；显式 None 表示清空为 NULL。
+    """
+    sets: list[str] = []
+    params: list = []
+    if action is not _UNSET:
+        sets.append("action = ?")
+        params.append(action)
+    if due_at is not _UNSET:
+        sets.append("due_at = ?")
+        params.append(due_at)
+    if notes is not _UNSET:
+        sets.append("notes = ?")
+        params.append(notes)
+    if not sets:
+        return 0
+    params.append(todo_id)
+    cur = conn.execute(
+        f"UPDATE todos SET {', '.join(sets)} WHERE id = ?", params
+    )
+    conn.commit()
+    return cur.rowcount
 
 
 def delete_todos_for_notice(

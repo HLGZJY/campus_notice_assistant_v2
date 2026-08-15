@@ -9,8 +9,9 @@
 
 设计要点：
   - 以通知为对象粒度：每条有截止时间的通知只生成一条提醒；若存在待处理待办则
-    同时挂上 todo_id（UI 可展示待办动作文案）。因待办 due_at 生成时被强制等于
-    通知 deadline，同一截止时间不会重复提醒。
+    同时挂上 todo_id（UI 可展示待办动作文案），且截止时间优先采用待办 due_at
+    （用户可延期，提醒跟随）。因待办生成时 due_at 被强制等于通知 deadline，
+    同一截止时间不会重复提醒。
   - 提醒链路不依赖 Streamlit：扫描由调度器独立进程（scheduler.py 的 reminder
     job）触发，UI 只读表。
   - 纯规则，不消耗 LLM。
@@ -51,7 +52,11 @@ def _days_until(due_at: Optional[str], today: date) -> Optional[int]:
 
 
 def _scan_notices(conn, today: date) -> tuple[int, int, int]:
-    """通知路：有截止时间的通知，命中 3/1 天时生成提醒（有待办则挂 todo_id）。"""
+    """通知路：有截止时间的通知，命中 3/1 天时生成提醒。
+
+    有待办的通知优先采用待办 due_at（用户可延期，提醒跟随），
+    无待办才回退通知 deadline；提醒行挂上 todo_id 便于 UI 显示动作。
+    """
     rows = conn.execute(
         """SELECT id, title, deadline FROM notices
            WHERE deadline IS NOT NULL AND deadline != ''"""
@@ -59,23 +64,24 @@ def _scan_notices(conn, today: date) -> tuple[int, int, int]:
     created = 0
     skipped = 0
     for r in rows:
-        days = _days_until(r["deadline"], today)
-        if days is None or days not in REMINDER_TIERS:
-            continue
-        tier = REMINDER_TIERS[days]
-        # 找该通知的待处理待办（限 1 条），提醒行挂上 todo_id 便于 UI 显示动作
+        # 找该通知的待处理待办（限 1 条）
         todo = conn.execute(
-            """SELECT id FROM todos
+            """SELECT id, due_at FROM todos
                WHERE notice_id = ? AND status = 'pending'
                ORDER BY id ASC LIMIT 1""",
             (r["id"],),
         ).fetchone()
         todo_id = todo["id"] if todo else None
+        due_at = todo["due_at"] if (todo and todo["due_at"]) else r["deadline"]
+        days = _days_until(due_at, today)
+        if days is None or days not in REMINDER_TIERS:
+            continue
+        tier = REMINDER_TIERS[days]
         ok = insert_reminder(
             conn,
             notice_id=r["id"],
             todo_id=todo_id,
-            due_at=r["deadline"],
+            due_at=due_at,
             tier=tier,
             remind_on=today.isoformat(),
         )

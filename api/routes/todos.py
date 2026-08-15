@@ -11,13 +11,20 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from api.deps import require_auth
 from api.routes.tasks import get_task_manager
-from api.schemas import TaskCreateResult, TodoItem, TodoStats, TodoStatusUpdate
+from api.schemas import (
+    TaskCreateResult,
+    TodoItem,
+    TodoStats,
+    TodoStatusUpdate,
+    TodoUpdateRequest,
+)
 from storage.db import get_connection, get_notice_by_id
 from services.todo_service import (
     get_todo_stats,
     get_todos,
     get_todos_by_notice,
     mark_todo,
+    update_todo,
 )
 
 router = APIRouter(
@@ -55,6 +62,22 @@ def update_todo_status(todo_id: int, body: TodoStatusUpdate) -> dict:
     if not ok:
         raise HTTPException(status_code=404, detail=f"待办 {todo_id} 不存在")
     return {"ok": ok, "id": todo_id, "status": body.status}
+
+
+@router.patch("/{todo_id}", response_model=TodoItem)
+def update_todo_fields(todo_id: int, body: TodoUpdateRequest) -> TodoItem:
+    """更新待办字段（action / due_at / notes）。
+
+    缺失字段 = 不修改；显式 null = 清空。due_at 变更时旧临期提醒自动收敛为已读。
+    """
+    changes = body.model_dump(exclude_unset=True)
+    try:
+        row = update_todo(todo_id, **changes)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"待办 {todo_id} 不存在")
+    return TodoItem(**row)
 
 
 @notice_router.get("/{notice_id}/todos", response_model=list[TodoItem])

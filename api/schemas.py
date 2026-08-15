@@ -159,6 +159,7 @@ class TodoItem(BaseModel):
     due_at: Optional[str] = None
     priority: str = "normal"
     status: str = "pending"
+    notes: Optional[str] = None
     created_at: str
     completed_at: Optional[str] = None
 
@@ -176,6 +177,14 @@ class TodoStatusUpdate(BaseModel):
     """待办状态变更请求体（pending / done / skipped）。"""
 
     status: str
+
+
+class TodoUpdateRequest(BaseModel):
+    """待办更新请求体（PATCH）：缺失字段 = 不修改；显式 null = 清空。"""
+
+    action: Optional[str] = None
+    due_at: Optional[str] = None
+    notes: Optional[str] = None
 
 
 class TodoGenerateResult(BaseModel):
