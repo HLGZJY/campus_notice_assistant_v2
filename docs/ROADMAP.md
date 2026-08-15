@@ -1,204 +1,208 @@
 # 开发路线图
 
+> 维护说明：本文档按开发阶段记录已完成里程碑；每个阶段都有对应的详细实现文档（见各节引用）。
+> 当前状态：**MVP（M1–M6）+ 短线开发（W1–W4）+ 前后端分离重构（Phase 0–8）均已完成**。
+
 ## 里程碑总览
 
-| 里程碑 | 内容               | 预计耗时 | 依赖   |
-| ------ | ------------------ | -------- | ------ |
-| M1     | 抓取 + 存储        | 1 天     | 无     |
-| M2     | 结构化提取         | 2 天     | M1     |
-| M3     | 待办生成 + 列表    | 1 天     | M2     |
-| M4     | RAG 问答           | 1 天     | M2     |
-| M5     | Streamlit 界面整合 | 2 天     | M3, M4 |
-| M6     | 学校配置 + 文档    | 1 天     | M5     |
-
-> MVP 总计约 8 天（全职学习 20+ 小时/周，约 1.5 周）
-> M1 因采用 newspaper4k，从 2 天降到 1 天
+| 阶段 | 内容 | 状态 |
+| ---- | ---- | ---- |
+| M1–M6 | MVP：抓取 / 提取 / 待办 / RAG 问答 / Streamlit 界面 / 配置 | ✅ 已完成 |
+| W1 | 调度运维：调度器、内容指纹、断点续跑、token 计量、Tool Calling | ✅ 已完成 |
+| W2 | 检索质量：测试集、纯向量基线、过期三档、混合检索、RAG 污染 | ✅ 已完成 |
+| W3 | 订阅 + 提醒：规则引擎、截止提醒、两步式交互 + 全链路演示 | ✅ 已完成 |
+| W4 | 埋点 + 终检：events 表、每日体检、7 天自运行终检 | ✅ 已完成 |
+| Phase 0–8 | 前后端分离：FastAPI 后端 + Vue3 前端 + 异步任务 + SSE + Docker | ✅ 已完成 |
 
 ---
 
-## M1：抓取 + 存储 ✅
+## MVP（M1–M6） ✅
+
+> 详细现状：`docs-local/长线开发/现状盘点与前后端分离前置.md`
+
+### M1：抓取 + 存储 ✅
 
 **目标**：用 newspaper4k 抓取学校通知网站，存入 SQLite
 
-**技术方案**：`newspaper4k` 库（Source 发现链接 + Article 提取内容）
-
-**任务**：
-
 - [x] 安装 newspaper4k，验证对 scuec 网站的提取效果
 - [x] 设计 SQLite 表结构（`storage/db.py`）
-- [x] 封装 newspaper4k 爬虫（`crawler/base.py`）
+- [x] 封装 newspaper4k 爬虫（`crawler/base.py`）：
   - [x] `Source.build()` 发现列表页文章链接
   - [x] `Article.download().parse()` 提取详情页
   - [x] 配置中文语言支持（`language='zh'`）
-- [x] 实现网页爬虫（`crawler/web_crawler.py`）
-  - [x] 从配置读取 list_url
-  - [x] 调用 newspaper4k 抓取
-  - [x] URL 去重（newspaper4k `memoize_articles` + SQLite UNIQUE）
-- [x] 抓取日志记录
+- [x] 实现网页爬虫（`crawler/web_crawler.py`）：从配置读取 list_url、URL 去重、抓取日志记录
 
-**验收**：
+**验收**：能抓取 scuec.edu.cn 多个栏目通知；通知存入 SQLite `status=raw`；重复运行不重复抓取。
 
-- [x] 能抓取 scuec.edu.cn 至少 2 个栏目的通知（已验证 3 个栏目：竞赛通知、结果公示、教务处管理文件）
-- [x] newspaper4k 能正确提取标题、正文（发布日期部分页面无法提取，M2 补充）
-- [x] 通知存入 SQLite，`status=raw`
-- [x] 重复运行不会重复抓取
-
-**已验证数据源**：
-
-| 数据源                | 列表页               | 抓取数 |
-| --------------------- | -------------------- | ------ |
-| 创新创业学院-竞赛通知 | `cxcy/scss/jstz.htm` | ✅     |
-| 创新创业学院-结果公示 | `cxcy/scss/jggs.htm` | ✅     |
-| 教务处-管理文件       | `jwc/glwj.htm`       | 42 条  |
-
-**风险**：学校网站结构可能非标准新闻站，newspaper4k 启发式提取效果需实测验证（已验证通过）
-
----
-
-## M2：结构化提取 ✅
+### M2：结构化提取 ✅
 
 **目标**：用 LLM 从通知正文提取结构化字段
 
-**任务**：
-
-- [x] 定义 `NoticeExtraction` Pydantic 模型（`core/models.py`）
-- [x] 实现提取 Agent（`core/extractor.py`）
-- [x] 用 OpenAI Agents SDK 的 `output_type` 约束输出
-- [x] 批量处理 `status=raw` 的通知（`extract.py`）
-- [x] 更新 SQLite 中的结构化字段（schema 迁移 + `update_extraction`）
-- [x] 处理提取失败的情况（extracted/partial/failed 三态）
-- [x] 截止时间双字段：`deadline_raw`（原文）+ `deadline`（ISO，`core/date_utils.py` 重算）
-- [x] 校验失败自动重试（错误回传 LLM，最多 2 次）
+- [x] `NoticeExtraction` Pydantic 模型（`core/models.py`）
+- [x] 提取 Agent（`core/extractor.py`，`output_type` + 校验重试 ≤2 次）
+- [x] 批量处理 `status=raw`（`extract.py`）+ schema 迁移
+- [x] 截止时间双字段 `deadline_raw`（原文）+ `deadline`（ISO，`core/date_utils.py` 重算）
 - [x] 黄金集评估（`data/golden_extraction.json` + `evaluate_extraction.py`）
 
-**验收**：
+**验收**：黄金集 24/24 满分；截止时间解析准确率 100%；通知类型分类正确。
 
-- [x] 对 6 条黄金集真实通知，总体准确率 100%（24/24），关键字段 > 80% 达标
-- [x] 截止时间解析为 ISO 8601 准确率 100%，无年份时间按发布日推断年份正确
-- [x] 通知类型分类正确（竞赛/报名/政策/新闻等）
+### M3：待办生成 + 列表 ✅
 
-> **注意**：本地包用 `core/` 而非 `agents/`，因为 opencode-go 的 LLM 调用依赖
-> OpenAI Agents SDK（其包名就是 `agents`），避免重名冲突。`agents/extractor.py`
-> 对应 `core/extractor.py`。
+- [x] `TodoItem` / `TodoList` 模型（`core/models.py`）
+- [x] 待办生成 Agent（`core/todo.py`，按需生成 + `template_fallback` 兜底）
+- [x] `todos` 表 + 按截止排序 + 状态管理（pending/done/skipped）
+- [x] 小界面验证闭环（`ui/todo_app.py`，Streamlit，M5 后被替换）
 
----
+> **MVP 形态决策**：待办采用"**用户点开通知才生成**"的按需模式（省 LLM 成本、避免过期噪声）。
 
-## M3：待办生成 + 列表 ✅
+### M4：RAG 问答 ✅
 
-**目标**：从结构化通知生成待办，按截止时间排序展示
+- [x] 向量索引（`storage/vectorstore.py`，Chroma + langchain 中文切分器）
+- [x] 问答 Agent（`core/qa.py`，检索元数据确定性导出来源防引用幻觉）
+- [x] 复用 fallback embedding（OpenAIEmbeddings → HuggingFaceEmbeddings）
 
-**任务**：
+### M5：Streamlit 界面整合 ✅
 
-- [x] 定义 `TodoItem` / `TodoList` 模型（`core/models.py`）
-- [x] 实现待办生成 Agent（`core/todo.py`，输入 M2 结构化结果）
-- [x] 待办存入 `todos` 表（`storage/db.py`）
-- [x] 实现按截止时间排序查询（无截止的排在最后）
-- [x] 实现待办状态管理（pending/done/skipped）
-- [x] 按需生成：`generate_todos_for_notice(notice_id)`，重复点击先删旧 pending 再插入
-- [x] 小界面验证闭环（`ui/todo_app.py`，Streamlit）
+- [x] `services/` 服务层封装 M1–M4 能力供 UI 调用
+- [x] `app.py` 仪表盘 + `pages/` 多页面（通知浏览 / 待办清单 / 智能问答）
+- [x] 提取成功后自动增量更新 Chroma 索引
 
-**验收**：
+> 注：M5 的 Streamlit 界面在 Phase 0–8 重构中已由 Vue3 前端（`frontend/`）替换。
 
-- [x] 报名类通知能生成"在 X 时间前完成报名"待办（实测 id=2 → "在 2026-09-30 17:00 前完成校赛报名"）
-- [x] 待办列表按截止时间升序（过期 pending 标记 `[过期]`）
-- [x] 可标记完成（--done / --skip，done 记录 completed_at）
-- [x] 政策/新闻/结果公示类通知点击不生成待办（返回 none）
+### M6：学校配置 + 模型配置 + CRUD 管理 ✅
 
-> **MVP 形态决策**：待办采用"**用户点开通知才生成**"的按需模式，而非批量自动生成。
-> 理由：现有 19 条真实通知中仅 1 条截止时间在未来，批量生成会产生大量过期噪声；
-> 且按需生成省 LLM 成本、把主动权交给用户。`batch_generate()` 保留为可选后门。
-> 每条通知最多 1 条主待办（key_dates 多阶段待办后续再扩）；过期待办照常生成、
-> 由前端灰显。
+- [x] YAML 配置体系（`config/schema.py` + `app.yaml` + `schools/*.yaml`），三层 fallback 加载
+- [x] 模型按任务独立配置（extraction/qa/todo/embedding）
+- [x] `utils/llm.py` / `utils/embedding.py` 从 ConfigStore 读取
+- [x] 系统配置页 + 通知 CRUD（删除 / 重新提取 / 批量删除 / 索引重建）
 
 ---
 
-## M4：RAG 问答 ✅
+## 短线开发（W1–W4） ✅
 
-**目标**：基于已抓取通知回答自然语言问题
+> 详细实现：`docs-local/短线开发/` 下各阶段文档。
 
-**任务**：
+### W1：调度运维
 
-- [x] 实现向量索引（`storage/vectorstore.py`）
-- [x] 把已提取通知切分并索引到 Chroma
-- [x] 实现问答 Agent（`core/qa.py`，沿用 `agents/`→`core/` 重命名约定）
-- [x] 检索 Top-K 片段，拼接 Prompt
-- [x] 回答时引用来源通知
+- [x] APScheduler 独立进程（`scheduler.py`）：crawl / extract / daily / reminder / config-watch 五个 job
+- [x] 失败语义：不吞异常，落 `scheduler_log` 表（含连续失败计数）
+- [x] 崩溃恢复：从库中恢复运行状态，URL UNIQUE 防重复
+- [x] 内容指纹变更检测（`storage/db.py:compute_content_hash`，SHA-256 折叠空白）
+- [x] 断点续跑（`extract.py:run_batch` + status 游标 + source 参数）
+- [x] token 计量表（`utils/llm.py:record_llm_usage`，四条链路统一记账）
+- [x] Tool Calling 演练（`tool_call_drill.py`：max_turns 守卫 + tool_call_id 去重）
 
-**验收**：
+### W2：检索质量
 
-- [x] 能回答"最近有哪些比赛？"
-- [x] 回答包含来源通知标题
-- [x] 复用 RAG 项目的 fallback embedding 逻辑（`OpenAIEmbeddings` → `HuggingFaceEmbeddings(all-MiniLM-L6-v2)`）
+- [x] 20 题测试集（`data/`，retrieval eval testset：20 questions / 27 corpus notices）
+- [x] 纯向量基线 + 过期三档实验（none/decay/filter，生产默认 none）
+- [x] 混合检索（`storage/hybrid.py`：BM25+RRF k=60，jieba 分词，`search_mode="hybrid"`）
+- [x] RAG 污染专项（见 `docs/RAG-POLLUTION.md`）
 
-> 实测：索引 27 条已提取通知，生成 110 个 chunk；问答可正确返回比赛列表并引用来源通知标题。
+### W3：订阅 + 提醒
 
----
+- [x] 订阅规则引擎（`services/subscription_service.py`，纯规则子串匹配非 LLM）
+- [x] 命中关系表 + 抓取/提取后增量维护 + 全库回填
+- [x] 截止提醒（`services/reminder_service.py`：3d/1d 档位，幂等扫描）
+- [x] 两步式交互（W3 时代为 `ui/two_step.py`，Phase 0–8 已平移为「后端 preview/confirm API + 前端确认弹窗」）
+- [x] 造数工具 + 全链路演示（`tools/seed_demo_data.py` / `tools/demo_reminder.py`，见 `docs/DEMO.md`）
 
-## M5：Streamlit 界面整合 ✅
+### W4：埋点 + 终检
 
-**目标**：完整的 Web 界面，整合所有功能
-
-**任务**：
-
-- [x] 通知列表页（按类型/时间筛选）
-- [x] 通知详情卡片（结构化展示）
-- [x] 待办清单页（按截止时间排序）
-- [x] 问答页（对话框形式）
-- [x] 抓取触发按钮（手动触发）
-- [x] 错误提示和加载状态
-
-**实现**：
-
-- 新增 `services/` 服务层，将 M1-M4 脚本能力封装为可复用接口
-- 新增 `app.py` 仪表盘首页 + `pages/` 多页面目录
-  - `1_📋_通知浏览.py`：筛选、爬取、提取、详情卡片
-  - `2_✅_待办清单.py`：待办列表、状态管理、生成入口
-  - `3_💬_智能问答.py`：对话式 RAG 问答
-- 提取成功后自动增量更新 Chroma 索引
-
-**验收**：
-
-- 界面美观，操作流畅
-- 四个核心页面可用
-- 手动触发抓取能正常工作
+- [x] events 事件表（`services/tracking_service.py`：5 类事件，写库失败不阻塞主流程）
+- [x] 每日体检自动化（`services/health_service.py` + scheduler daily job）
+- [x] 7 天自运行终检（`check_db.py --summary` / `data/health/`）已积累完成
 
 ---
 
-## M6：学校配置 + 模型配置 + CRUD 管理 ✅
+## 长线开发：前后端分离重构（Phase 0–8） ✅
 
-**目标**：
-  1. 通过配置文件适配不同学校信息来源
-  2. 模型/供应商可配置，支持前后端修改
-  3. 已有通知记录的简单 CRUD 管理
-  4. 完善文档
+> 执行依据：`docs-local/长线开发/现状盘点与前后端分离前置.md`（§5.6 映射表 / §5.7 序列化 / §5.8 并发语义）
+> 执行计划：`docs-local/长线开发/重构计划.md`
 
-**任务**：
+**目标**：将现有功能平移至前后端分离工程（零新增功能），架构为后续新功能 + APP 端预留拓展位。
 
-- [x] 设计 YAML 配置格式（`config/schema.py` + `config/app.yaml` + `config/schools/*.yaml`）
-- [x] 实现统一配置加载器（`config/store.py`），含三层 fallback 与版本号缓存失效
-- [x] 编写 scuec 学校配置文件（`config/schools/scuec.yaml`）
-- [x] 模型按任务独立配置（extraction / qa / todo / embedding）
-- [x] 重构 `utils/llm.py`、`utils/embedding.py` 从 ConfigStore 读取
-- [x] 各 Agent 适配任务级模型配置
-- [x] 系统配置页面（模型/数据源/供应商/数据管理）
-- [x] 通知删除 + 重新提取 + 批量删除 + 索引重建
-- [x] 更新使用与开发文档
+| 阶段 | 内容 | 状态 |
+| ---- | ---- | ---- |
+| Phase 0 | 仓库初始化（`campus_notice_assistant_v2`，legacy 历史只读引用） | ✅ |
+| Phase 1 | FastAPI 脚手架 + 通知只读模块（`api/`） | ✅ |
+| Phase 2 | 待办 / 提醒 / 订阅模块 + 两步式 preview/confirm API | ✅ |
+| Phase 3 | 配置模块（`app.yaml` 写入权唯一归后端 API 进程） | ✅ |
+| Phase 4 | 异步任务化（tasks 表 + TaskManager，202 → 轮询） | ✅ |
+| Phase 5 | 问答 SSE 流式（`GET /api/v1/qa/ask/stream`） | ✅ |
+| Phase 6 | scheduler 并入后端进程（lifespan 拉起 + CLI 兼容） | ✅ |
+| Phase 7 | 前端（Vue3 + Vite + Naive UI，7 路由平移） | ✅ |
+| Phase 8 | 收尾（静态挂载 + SPA fallback + Docker + README） | ✅ |
 
-**验收**：
+### Phase 0：仓库初始化 ✅
 
-- [x] 修改配置文件即可切换中南民族大学的其它官方网页通知
-- [x] 通过「系统配置」页面可修改模型、数据源、供应商，保存后二次确认生效
-- [x] 通知浏览页支持删除和重新提取
-- [x] 文档完整，新人能上手
+- 新仓库 `campus_notice_assistant_v2`；旧仓库封存只读（`legacy/main`）。
+- 挑选拷贝引擎代码 + 数据，`.gitignore` 排除 `.env` / `data/notices.db` / `data/chroma/` 等。
+
+### Phase 1–3：后端模块 ✅
+
+- `api/main.py`：应用工厂、`include_router(prefix="/api/v1")`、lifespan 拉起 TaskManager + scheduler、CORS 白名单。
+- `api/deps.py`：鉴权占位（`CAMPUS_API_KEY` 环境变量，默认关闭；未来 JWT 替换点）。
+- `api/schemas.py`：pydantic 响应模型，services 返回 dict 直接 `model_validate`（§5.7 无转换器）。
+- 路由模块：`notices` / `todos` / `reminders` / `subscriptions` / `config` / `qa` / `events` / `tasks` / `scheduler`。
+
+### Phase 4：异步任务化 ✅
+
+- `tasks` 表（queued/running/success/failed + progress）+ `api/tasks/manager.py`（单 worker 串行，规避 SQLite 单写者 / Chroma 单 collection 并发冲突）。
+- 长耗时操作全部走「提交任务 → 202 task_id → 轮询」：单源/全部抓取、批量提取、订阅新增/编辑回填、全库重匹配、索引重建、待办生成、单条重提取、批量删除/重置。
+- 重启恢复：遗留 queued/running 标记 failed（可重新提交）。
+
+### Phase 5：问答 SSE 流式 ✅
+
+- `GET /api/v1/qa/ask/stream?question=`：`StreamingResponse`，事件负载 `delta` / `done`（含 sources / retrieved_chunks）/ `error`。
+- `core/qa.py` 的 `QAResult` 是 services 返回 dict 约定的唯一例外，路由层做 `as_source` 序列化（§5.7）。
+
+### Phase 6：scheduler 并入 ✅
+
+- `scheduler.py` 抽出 `start_scheduler(config)` 可导入函数，`api/main.py` lifespan 拉起（单进程，符合 §5.8 写入权唯一）。
+- `--no-*` 开关 → `config/app.yaml` 的 `scheduler.enabled / enable_daily / enable_extract / enable_reminder / enable_health`。
+
+### Phase 7：前端 Vue3 ✅
+
+> 详细落地：`docs-local/短线开发/阶段7进度.md`
+
+- 技术栈：Vue 3 + Vite + Naive UI + vue-router + pinia + openapi-typescript（Node 20 兼容版本：Vite 5.4 / TS 5.6 / vue-tsc 2.2）。
+- 契约对齐：`frontend/openapi.json` → `npm run gen:api` → `src/api/types.ts`；`src/api/schema.ts` 集中 `export type … = components['schemas'][…]` 别名。
+- 7 路由：`/`（首页）、`/notices`、`/todos`、`/qa`、`/config`、`/subscriptions`、`/market`。
+- 埋点：前端只发 `POST /api/v1/events`，逻辑留后端 tracking_service。
+
+### Phase 8：收尾 ✅
+
+- 后端静态挂载 `frontend/dist` + SPA fallback（所有非 API 路由返回 index.html）。
+- Multi-stage Dockerfile（Node 构建 frontend → Python 运行环境拷贝 dist）。
+- 依赖拆分：`requirements-backend.txt`（运行镜像最小包）/ `requirements-dev.txt` / `requirements.txt`（引擎/开发）。
+
+---
+
+## 当前架构速览
+
+```
+frontend/   Vue3 + Naive UI（7 路由）──▶ POST /api/v1/events（埋点）
+   │
+   │ HTTP /api/v1（openapi.json 契约对齐）
+   ▼
+api/        FastAPI 应用工厂 + 9 个路由模块 + deps 鉴权占位
+   ├── tasks/    TaskManager（asyncio 单 worker + 202 轮询 + 重启恢复）
+   ├── lifespan  拉起 scheduler（APScheduler，5 job）与 TaskManager
+   ▼
+services/   业务编排层（notice / todo / qa / subscription / reminder /
+            config / admin / tracking / health / usage）
+   ▼
+core/ + storage/ + crawler/ + config/ + utils/   引擎层（不变）
+```
 
 ---
 
 ## 后期规划（P1）
 
-| 功能     | 描述                 | 预计 |
-| -------- | -------------------- | ---- |
-| 定时抓取 | APScheduler 定时任务 | 1 天 |
-| 主动提醒 | 即将截止时推送       | 2 天 |
-| 用户偏好 | 专业/兴趣订阅        | 2 天 |
-| 多学校   | 同时支持多所学校     | 1 天 |
-| Docker   | 容器化部署           | 1 天 |
+| 功能 | 描述 | 预计 |
+| ---- | ---- | ---- |
+| 多学校适配 | 同时支持多所学校 | 1 天 |
+| 站外主动推送 | 邮件 / 微信 / 桌面通知 | 2 天 |
+| 多用户 + 鉴权 | 账号系统、个人待办（deps.py 预留替换点） | — |
+| APP 端 | 复用同一 services/API 层 | — |

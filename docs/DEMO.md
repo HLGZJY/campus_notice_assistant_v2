@@ -4,7 +4,8 @@
 
 ## 前置条件
 
-- 依赖模块 3.1（订阅）、3.2（截止提醒），数据库已初始化（`python -m campus_assistant.init_db`）。
+- 依赖模块 3.1（订阅）、3.2（截止提醒）。数据库无需手动初始化：`storage/db.py:get_connection`
+  首次连接即 `executescript(SCHEMA)` 自动建表并迁移。
 - Python 环境已就绪（本项目 `.venv`）。
 
 ## 演示流程（5 分钟）
@@ -42,18 +43,34 @@ python tools/demo_reminder.py --demo
 
 结束时输出 PASS/FAIL 汇总（失败则退出码非 0），演示数据默认**保留**供第 3 步在 UI 中查看。
 
-### 第 3 步：在 Streamlit 中查看效果
+### 第 3 步：在 Web 界面中查看效果
+
+前后端分离后需分别启动后端与前端：
 
 ```bash
-streamlit run app.py
+# 终端 1：后端（FastAPI，含调度器与静态挂载）
+.venv\Scripts\python.exe -m uvicorn api.main:app --host 0.0.0.0 --port 8000
+
+# 终端 2：前端（Vue3 开发服务器，/api 代理到 8000）
+cd frontend
+npm run dev   # http://localhost:5173
 ```
 
-| 页面 | 观察点 |
-| --- | --- |
-| 🏠 首页 | 顶部红点「🔔 待处理提醒 2 条」（演示数据生成） |
-| 📋 通知浏览 | 演示通知带「🔔 演示竞赛」命中徽标；筛选「仅看命中订阅」可见 |
-| 🔔 订阅管理 | 列表出现「演示竞赛」订阅及其命中数 |
-| ✅ 待办清单 | 「截止提醒」区显示 2 条提醒；**「忽略」为两步式**：点击后出现确认面板，需再点「确认忽略」才执行 |
+也可以构建前端产物后由后端直接提供静态页面：
+
+```bash
+cd frontend && npm run build
+.venv\Scripts\python.exe -m uvicorn api.main:app --port 8000
+# 访问 http://localhost:8000（SPA fallback 返回 index.html）
+```
+
+| 页面 | 路由 | 观察点 |
+| --- | --- | --- |
+| 🏠 首页 | `/` | 顶部提醒红点「待处理提醒 2 条」（演示数据生成）+ 状态统计卡 |
+| 📋 通知浏览 | `/notices` | 演示通知带「🔔 演示竞赛」命中徽标；订阅命中筛选可见 |
+| 🔔 订阅管理 | `/subscriptions` | 列表出现「演示竞赛」订阅及其命中数 |
+| ✅ 待办中心 | `/todos` | 「截止提醒」区显示 2 条提醒；**「忽略」为两步式**：点击后弹确认框，再点「确认忽略」才执行 |
+| 💬 智能问答 | `/qa` | 可对演示通知提问（SSE 流式回答 + 来源引用卡片） |
 
 ### 第 4 步：清理演示数据
 
@@ -78,7 +95,7 @@ python tools/demo_reminder.py --clean
 | 按演示脚本执行 5 分钟可完整演示全链路 | `tools/demo_reminder.py --demo` 一条命令跑完并自验证 |
 | 造数工具可重复执行不污染真实数据 | seed 幂等 + `--clean` 只清演示标记数据 |
 | 幂等有自动化测试或脚本验证 | `test_demo.py` + `test_reminder.py` + 演示内置幂等校验 |
-| 演示不依赖手工改库 | 全部走脚本 / CLI |
+| 演示不依赖手工改库 | 全部走脚本 / CLI / API |
 
 ## 常见问题
 

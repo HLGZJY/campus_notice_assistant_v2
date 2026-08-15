@@ -1,5 +1,8 @@
 # RAG 污染专项处理策略（模块 2.5）
 
+> 维护说明：本策略在前后端分离重构后保持不变——`storage/vectorstore.py` 的
+> `check_consistency` / `remove_notice` / `rebuild` 是唯一数据入口，API 层与 CLI 层都复用它。
+
 ## 问题定义：幽灵结果
 
 通知从 SQLite 删除后，如果其向量 chunk 仍残留在 Chroma，问答检索仍会召回该通知，
@@ -30,13 +33,17 @@ python check_vector_consistency.py --persist-dir data/chroma
 1. **删除通知 → 级联删向量（第一道防线）**
    - `services/admin_service.py:delete_notice` 删除 SQLite 通知时调用
      `VectorIndex.remove_notice(notice_id)` 同步删除其全部 chunk；
-   - 批量删除（按来源 / 按状态）同样级联清理。
+   - 批量删除（按来源 / 按状态 / 按筛选条件）同样级联清理；
+   - 前后端分离后删除入口为 API：单条 `DELETE /api/v1/notices/{id}`，
+     批量 `POST /api/v1/notices/batch-delete`（异步任务 → `admin_service.batch_delete_by_filter`），
+     均复用同一 `remove_notice`。
    - `remove_notice` 按 `notice_id` 元数据过滤拿到真实 chunk id 后按 id 删除并返回实际数量，
      避免"where delete 语义不确定导致删了但没删掉"。
 
 2. **重建索引 → 自动清残留（第二道防线）**
-   - `python index.py`（`--rebuild`）与 `qa_service.rebuild_index` 先 `delete_collection()`
-     再从 SQLite 全量重建，任何历史残留自然被清空。
+   - `python index.py --rebuild` 与 `qa_service.rebuild_index` 先 `delete_collection()`
+     再从 SQLite 全量重建，任何历史残留自然被清空；
+   - API 侧 `POST /api/v1/tasks {type: rebuild_index}` 异步执行同一逻辑。
 
 3. **每日体检 → 自动清理（兜底）**
    - 调度器 daily job 运行一致性检查（`scheduler._check_vector_consistency`，复用
