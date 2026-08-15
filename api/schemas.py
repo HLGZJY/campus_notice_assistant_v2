@@ -71,6 +71,81 @@ class NoticeDetail(BaseModel):
     keywords: list[str] = []
 
 
+# ---------- 通知列表分页 / 元信息 / 管理（新增数据管理能力） ----------
+
+
+class NoticePage(BaseModel):
+    """通知列表分页信封（items + 总数，供分页条）。"""
+
+    items: list[NoticeSummary]
+    total: int = 0
+    page: int = 1
+    page_size: int = 20
+
+
+class NoticeMetaItem(BaseModel):
+    """元信息条目：存储值 + 中文标签。"""
+
+    value: str
+    label: str
+
+
+class NoticeMeta(BaseModel):
+    """通知元信息（状态/类型中文标签，翻译单一事实源在 core/models.py）。"""
+
+    statuses: list[NoticeMetaItem] = Field(default_factory=list)
+    notice_types: list[NoticeMetaItem] = Field(default_factory=list)
+    action_notice_types: list[str] = Field(default_factory=list)
+
+
+class NoticeBatchFilter(BaseModel):
+    """通知筛选条件（列表时间筛选 / 批量操作共用）。"""
+
+    status: Optional[str] = None
+    source: Optional[str] = None
+    notice_type: Optional[str] = None
+    published_from: Optional[str] = None
+    published_to: Optional[str] = None
+    published_before: Optional[str] = None
+    crawled_from: Optional[str] = None
+    crawled_to: Optional[str] = None
+
+
+class NoticeBatchRequest(NoticeBatchFilter):
+    """批量重置请求体：筛选条件 + 重置目标状态。"""
+
+    target_status: str = "raw"
+
+
+class NoticeBatchResult(BaseModel):
+    """批量操作结果（删除/重置共用，按操作填充对应字段）。"""
+
+    model_config = ConfigDict(extra="allow")
+
+    ok: bool
+    error: Optional[str] = None
+    deleted_notices: int = 0
+    deleted_ids: list[int] = Field(default_factory=list)
+    reset_notices: int = 0
+    reset_ids: list[int] = Field(default_factory=list)
+    chunk_warnings: Optional[list] = None
+
+
+class NoticeResetRequest(BaseModel):
+    """单条重置状态请求体。"""
+
+    status: str = "raw"
+
+
+class NoticeMutationResult(BaseModel):
+    """单条管理操作结果（删除/重置共用）。"""
+
+    ok: bool
+    error: Optional[str] = None
+    id: Optional[int] = None
+    deleted_notices: int = 0
+
+
 # ---------- 待办（阶段 2，盘点 §5.6 待办映射表） ----------
 
 

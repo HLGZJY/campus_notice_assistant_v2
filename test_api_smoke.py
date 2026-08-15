@@ -209,8 +209,10 @@ def _smoke(client, db_mod, config_dir, tmpdir, real_config_path, real_config_sna
     print("== 2. 通知列表 ==")
     r = client.get("/api/v1/notices")
     check("notices 200", r.status_code == 200, f"status={r.status_code}")
-    items = r.json()
-    check("notices 返回 3 条", len(items) == 3, f"len={len(items)}")
+    body = r.json()
+    check("分页信封字段齐全", {"items", "total", "page", "page_size"} <= set(body), f"{list(body)}")
+    items = body["items"]
+    check("notices 返回 3 条", body["total"] == 3 and len(items) == 3, f"total={body['total']} items={len(items)}")
     check("列表项为摘要模型（无 raw_content）", all("raw_content" not in it for it in items))
     check(
         "列表含 competition 类型",
@@ -220,17 +222,21 @@ def _smoke(client, db_mod, config_dir, tmpdir, real_config_path, real_config_sna
 
     print("== 3. 过滤 ==")
     r = client.get("/api/v1/notices", params={"source": "教务处"})
-    check("按 source 过滤 2 条", len(r.json()) == 2, f"len={len(r.json())}")
+    check("按 source 过滤 2 条", r.json()["total"] == 2, f"total={r.json()['total']}")
     r = client.get("/api/v1/notices", params={"status": "raw"})
-    check("按 status=raw 过滤 1 条", len(r.json()) == 1)
+    check("按 status=raw 过滤 1 条", r.json()["total"] == 1, f"total={r.json()['total']}")
     r = client.get("/api/v1/notices", params={"notice_type": "competition"})
-    check("按 notice_type 过滤 1 条", len(r.json()) == 1)
+    check("按 notice_type 过滤 1 条", r.json()["total"] == 1, f"total={r.json()['total']}")
     r = client.get("/api/v1/notices", params={"keyword": "数学建模"})
-    check("按 keyword 过滤 1 条", len(r.json()) == 1)
+    check("按 keyword 过滤 1 条", r.json()["total"] == 1, f"total={r.json()['total']}")
     r = client.get("/api/v1/notices", params={"is_action": True})
-    check("is_action=true 含行动型", all(it["notice_type"] in ("competition", "lecture") for it in r.json()))
-    r = client.get("/api/v1/notices", params={"limit": 1})
-    check("limit=1 返回 1 条", len(r.json()) == 1)
+    check(
+        "is_action=true 含行动型",
+        all(it["notice_type"] in ("competition", "lecture") for it in r.json()["items"]),
+        f"{[it.get('notice_type') for it in r.json()['items']]}",
+    )
+    r = client.get("/api/v1/notices", params={"page_size": 1})
+    check("page_size=1 返回 1 条", len(r.json()["items"]) == 1 and r.json()["total"] == 3, f"{r.json()}")
 
     print("== 4. 统计 / 来源 / 类型 ==")
     r = client.get("/api/v1/notices/status-counts")
@@ -252,8 +258,9 @@ def _smoke(client, db_mod, config_dir, tmpdir, real_config_path, real_config_sna
     check("detail 999 → 404", r.status_code == 404, f"status={r.status_code}")
 
     print("== 6. 未知路由 → 404 ==")
-    r = client.get("/api/v1/nonexistent")
-    check("未知路由 404", r.status_code == 404)
+    # GET 已由 SPA fallback 接管（frontend/dist 存在时返回 index.html）；非 GET 命中兜底路由但方法不支持 → 405。
+    r = client.delete("/api/v1/nonexistent")
+    check("未知路由 404", r.status_code in (404, 405), f"status={r.status_code}")
 
     print("== 7. 待办模块 ==")
     from unittest.mock import patch
@@ -717,6 +724,104 @@ def _smoke(client, db_mod, config_dir, tmpdir, real_config_path, real_config_sna
     sched_rows = conn.execute("SELECT COUNT(*) FROM scheduler_log").fetchone()[0]
     conn.close()
     check("测试全程 scheduler_log 无写入（调度器确未启动）", sched_rows == 0, f"rows={sched_rows}")
+
+    print("== 14. 通知数据管理 ==")
+    # 14.1 元信息（中文标签）
+    r = client.get("/api/v1/notices/meta")
+    meta = r.json()
+    check("meta 200", r.status_code == 200, f"status={r.status_code}")
+    check(
+        "meta 状态含未提取",
+        any(s["value"] == "raw" and s["label"] == "未提取" for s in meta["statuses"]),
+        f"{meta['statuses']}",
+    )
+    check(
+        "meta 类型含竞赛",
+        any(t["value"] == "competition" and t["label"] == "竞赛" for t in meta["notice_types"]),
+        f"{meta['notice_types']}",
+    )
+    check("meta action 含 competition", "competition" in meta["action_notice_types"], f"{meta['action_notice_types']}")
+
+    # 14.2 分页信封
+    r = client.get("/api/v1/notices", params={"page": 1, "page_size": 2})
+    pg = r.json()
+    check(
+        "分页 items=2 total=3",
+        len(pg["items"]) == 2 and pg["total"] == 3 and pg["page"] == 1 and pg["page_size"] == 2,
+        f"items={len(pg['items'])} total={pg['total']}",
+    )
+
+    # 14.3 时间筛选
+    r = client.get("/api/v1/notices", params={"published_from": "2026-05-01", "published_to": "2026-05-02"})
+    check("published 区间 total=2", r.json()["total"] == 2, f"total={r.json()['total']}")
+    r = client.get("/api/v1/notices", params={"published_before": "2026-05-01"})
+    check("published_before total=0", r.json()["total"] == 0, f"total={r.json()['total']}")
+    r = client.get("/api/v1/notices", params={"crawled_from": "2000-01-01", "crawled_to": "2999-12-31"})
+    check("crawled 全区间 total=3", r.json()["total"] == 3, f"total={r.json()['total']}")
+
+    # 14.4 单条重置
+    r = client.post("/api/v1/notices/2/reset", json={"status": "raw"})
+    check("reset ok", r.status_code == 200 and r.json()["ok"] is True, f"{r.json()}")
+    r = client.get("/api/v1/notices/2")
+    check("reset 后状态 raw", r.json()["status"] == "raw", f"status={r.json()['status']}")
+    r = client.post("/api/v1/notices/999/reset", json={"status": "raw"})
+    check("reset 不存在 404", r.status_code == 404, f"status={r.status_code}")
+
+    # 14.5 批量重置（extracted → raw，异步任务）
+    r = client.post("/api/v1/notices/batch-reset", json={"status": "extracted", "target_status": "raw"})
+    check("batch-reset 202", r.status_code == 202, f"status={r.status_code} {r.json()}")
+    br = poll_task(client, r.json()["task_id"])
+    check(
+        "batch-reset success + reset>=1",
+        br is not None and br["status"] == "success" and br["result"]["ok"] is True and br["result"]["reset_notices"] >= 1,
+        f"{br}",
+    )
+
+    # 14.6 单条重新提取（mock 提取器，异步任务）
+    from core.extractor import ExtractionOutcome as CoreExtractionOutcome
+    from core.models import NoticeExtraction as CoreNoticeExtraction
+
+    class FakeExtractor:
+        """替换 notice_service.NoticeExtractor：_get_agent() 在真实实现里无 key 即抛错，整体 mock 更稳。"""
+
+        async def extract_one(self, title, content, published_at=None, crawled_at=None, notice_id=None):
+            ext = CoreNoticeExtraction(
+                title=title,
+                notice_type="competition",
+                deadline_raw="5 月 20 日",
+                summary="校级竞赛",
+            )
+            return CoreExtractionOutcome(status="extracted", extraction=ext, error=None)
+
+    with patch("services.notice_service.NoticeExtractor", FakeExtractor):
+        r = client.post("/api/v1/notices/1/re-extract")
+        check("re-extract 202", r.status_code == 202, f"status={r.status_code} {r.json()}")
+        rex = poll_task(client, r.json()["task_id"])
+        check("re-extract 任务 success", rex is not None and rex["status"] == "success", f"{rex}")
+    r = client.get("/api/v1/notices/1")
+    check("re-extract 后状态 extracted", r.json()["status"] == "extracted", f"status={r.json()['status']}")
+    r = client.post("/api/v1/notices/999/re-extract")
+    check("re-extract 不存在 404", r.status_code == 404, f"status={r.status_code}")
+
+    # 14.7 单条删除
+    r = client.delete("/api/v1/notices/3")
+    check("delete ok + deleted_notices=1", r.status_code == 200 and r.json()["ok"] is True and r.json()["deleted_notices"] == 1, f"{r.json()}")
+    r = client.delete("/api/v1/notices/999")
+    check("delete 不存在 404", r.status_code == 404, f"status={r.status_code}")
+    r = client.get("/api/v1/notices")
+    check("delete 后 total=2", r.json()["total"] == 2, f"total={r.json()['total']}")
+
+    # 14.8 批量删除（按筛选，异步任务）
+    r = client.post("/api/v1/notices/batch-delete", json={"status": "raw"})
+    check("batch-delete 202", r.status_code == 202, f"status={r.status_code} {r.json()}")
+    bd = poll_task(client, r.json()["task_id"])
+    check(
+        "batch-delete success + ok",
+        bd is not None and bd["status"] == "success" and bd["result"]["ok"] is True and bd["result"]["deleted_notices"] >= 1,
+        f"{bd}",
+    )
+    r = client.get("/api/v1/notices")
+    check("batch-delete 后 total=1", r.json()["total"] == 1, f"total={r.json()['total']}")
 
     # 真实 config/app.yaml 未被修改
     now_snapshot = real_config_path.read_text(encoding="utf-8") if real_config_path.exists() else None

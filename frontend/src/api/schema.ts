@@ -8,7 +8,15 @@ import type { components } from './types'
 
 export type NoticeSummary = components['schemas']['NoticeSummary']
 export type NoticeDetail = components['schemas']['NoticeDetail']
+export type NoticePage = components['schemas']['NoticePage']
 export type StatusCounts = components['schemas']['StatusCounts']
+
+export type NoticeMeta = components['schemas']['NoticeMeta']
+export type NoticeMetaItem = components['schemas']['NoticeMetaItem']
+export type NoticeBatchFilter = components['schemas']['NoticeBatchFilter']
+export type NoticeBatchRequest = components['schemas']['NoticeBatchRequest']
+export type NoticeResetRequest = components['schemas']['NoticeResetRequest']
+export type NoticeMutationResult = components['schemas']['NoticeMutationResult']
 
 export type TodoItem = components['schemas']['TodoItem']
 export type TodoStats = components['schemas']['TodoStats']

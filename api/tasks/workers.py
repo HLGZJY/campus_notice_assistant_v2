@@ -124,6 +124,57 @@ def generate_todos(task: dict, progress_cb, deps: dict) -> dict:
     }
 
 
+def re_extract_notice(task: dict, progress_cb, deps: dict) -> dict:
+    """单条通知重置并重新提取。"""
+    params = task.get("params") or {}
+    result = admin_service.re_extract_notice(
+        params.get("notice_id"),
+        auto_index=params.get("auto_index", True),
+    )
+    if not result.get("success"):
+        raise RuntimeError(result.get("error", "重新提取失败"))
+    return result
+
+
+def _task_filter(params: dict) -> dict:
+    """从任务参数中抽取筛选条件（只保留非空键），与 storage.db.build_notice_where 对齐。"""
+    keys = (
+        "status",
+        "source",
+        "notice_type",
+        "published_from",
+        "published_to",
+        "published_before",
+        "crawled_from",
+        "crawled_to",
+    )
+    return {k: params[k] for k in keys if params.get(k) is not None}
+
+
+def batch_delete(task: dict, progress_cb, deps: dict) -> dict:
+    """按筛选条件批量删除通知（级联清理向量索引）。"""
+    result = admin_service.batch_delete_by_filter(
+        _task_filter(task.get("params") or {}),
+        progress_cb=lambda d, t: _on_progress(progress_cb, d, t),
+    )
+    if not result.get("ok"):
+        raise RuntimeError(result.get("error", "批量删除失败"))
+    return result
+
+
+def batch_reset(task: dict, progress_cb, deps: dict) -> dict:
+    """按筛选条件批量重置通知状态（供重新提取）。"""
+    params = task.get("params") or {}
+    result = admin_service.batch_reset_by_filter(
+        _task_filter(params),
+        target_status=params.get("target_status", "raw"),
+        progress_cb=lambda d, t: _on_progress(progress_cb, d, t),
+    )
+    if not result.get("ok"):
+        raise RuntimeError(result.get("error", "批量重置失败"))
+    return result
+
+
 WORKERS: dict[str, object] = {
     "crawl_source": crawl_source,
     "crawl_all": crawl_all,
@@ -133,4 +184,7 @@ WORKERS: dict[str, object] = {
     "match_all": match_all,
     "rebuild_index": rebuild_index,
     "generate_todos": generate_todos,
+    "re_extract_notice": re_extract_notice,
+    "batch_delete": batch_delete,
+    "batch_reset": batch_reset,
 }

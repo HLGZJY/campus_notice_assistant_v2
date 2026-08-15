@@ -14,12 +14,12 @@ from typing import Optional
 from services.notice_service import extract_notice
 from storage.db import (
     delete_notice as _delete_notice,
-    delete_notices_by_source as _delete_notices_by_source,
-    delete_notices_by_status as _delete_notices_by_status,
+    delete_notices_by_filter as _delete_notices_by_filter,
     delete_reminders_for_todo,
     get_connection,
     get_notice_by_id,
     reset_notice_status,
+    reset_notices_by_filter as _reset_notices_by_filter,
 )
 
 logger = logging.getLogger(__name__)
@@ -79,17 +79,31 @@ def re_extract_notice(notice_id: int, auto_index: bool = True) -> dict:
 
 # ---------- 批量删除 ----------
 
-def batch_delete_by_source(source: str) -> dict:
-    """按来源批量删除通知（级联清理向量索引）。"""
+
+def batch_delete_by_filter(f: dict, progress_cb=None) -> dict:
+    """按筛选条件批量删除通知（级联清理向量索引）。
+
+    Args:
+        f: 筛选条件字典，见 storage.db.build_notice_where 支持的键
+        progress_cb: 可选进度回调 (done:int, total:int) -> None
+    """
     conn = get_connection()
     try:
-        ids, count = _delete_notices_by_source(conn, source)
+        ids, count = _delete_notices_by_filter(conn, f)
 
-        # 级联清理 Chroma（仅当有实际删除时）
         failed_chunks = []
         if ids:
-            index = _get_vector_index()
-            for nid in ids:
+            try:
+                index = _get_vector_index()
+            except Exception as e:  # noqa: BLE001
+                logger.warning("初始化向量索引失败，跳过 chunk 清理: %s", e)
+                index = None
+            total = len(ids)
+            for i, nid in enumerate(ids, start=1):
+                if progress_cb is not None:
+                    progress_cb(i, total)
+                if index is None:
+                    continue
                 try:
                     index.remove_notice(nid)
                 except Exception as e:
@@ -100,33 +114,40 @@ def batch_delete_by_source(source: str) -> dict:
             result["chunk_warnings"] = failed_chunks[:5]
         return result
     except Exception as e:
-        logger.exception("按来源批量删除失败: %s", source)
+        logger.exception("按筛选条件批量删除失败: %s", f)
         return {"ok": False, "error": f"{type(e).__name__}: {e}"}
     finally:
         conn.close()
 
 
+def batch_delete_by_source(source: str) -> dict:
+    """按来源批量删除通知（向后兼容旧入口，转通用筛选）。"""
+    return batch_delete_by_filter({"source": source})
+
+
 def batch_delete_by_status(status: str) -> dict:
-    """按状态批量删除通知（级联清理向量索引）。"""
+    """按状态批量删除通知（向后兼容旧入口，转通用筛选）。"""
+    return batch_delete_by_filter({"status": status})
+
+
+def batch_reset_by_filter(
+    f: dict, target_status: str = "raw", progress_cb=None
+) -> dict:
+    """按筛选条件批量重置通知状态（供重新提取，不动向量索引）。
+
+    Args:
+        f: 筛选条件字典，见 storage.db.build_notice_where 支持的键
+        target_status: 重置目标状态，默认 raw
+        progress_cb: 可选进度回调 (done:int, total:int) -> None
+    """
     conn = get_connection()
     try:
-        ids, count = _delete_notices_by_status(conn, status)
-
-        failed_chunks = []
-        if ids:
-            index = _get_vector_index()
-            for nid in ids:
-                try:
-                    index.remove_notice(nid)
-                except Exception as e:
-                    failed_chunks.append((nid, str(e)))
-
-        result = {"ok": True, "deleted_notices": count, "deleted_ids": ids}
-        if failed_chunks:
-            result["chunk_warnings"] = failed_chunks[:5]
-        return result
+        ids, count = _reset_notices_by_filter(conn, f, target_status)
+        if progress_cb is not None and ids:
+            progress_cb(len(ids), len(ids))
+        return {"ok": True, "reset_notices": count, "reset_ids": ids}
     except Exception as e:
-        logger.exception("按状态批量删除失败: %s", status)
+        logger.exception("按筛选条件批量重置失败: %s", f)
         return {"ok": False, "error": f"{type(e).__name__}: {e}"}
     finally:
         conn.close()

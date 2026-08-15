@@ -11,6 +11,12 @@ export const endpoints = {
     matchedIds: `${API_BASE}/notices/matched-ids`,
     matchMap: `${API_BASE}/notices/match-map`,
     todos: (id: number) => `${API_BASE}/notices/${id}/todos`,
+    meta: `${API_BASE}/notices/meta`,
+    delete: (id: number) => `${API_BASE}/notices/${id}`,
+    reset: (id: number) => `${API_BASE}/notices/${id}/reset`,
+    reExtract: (id: number) => `${API_BASE}/notices/${id}/re-extract`,
+    batchDelete: `${API_BASE}/notices/batch-delete`,
+    batchReset: `${API_BASE}/notices/batch-reset`,
   },
   todos: {
     list: `${API_BASE}/todos`,

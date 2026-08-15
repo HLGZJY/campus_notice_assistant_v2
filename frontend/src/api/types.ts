@@ -663,7 +663,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/notices": {
+    "/api/v1/notices/meta": {
         parameters: {
             query?: never;
             header?: never;
@@ -671,10 +671,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List Notices
-         * @description 多条件查询通知列表（过滤参数直接透传 services，盘点 §5.2-8）。
+         * Notice Meta
+         * @description 状态/类型中文标签映射（筛选下拉与标签渲染的翻译单一事实源）。
          */
-        get: operations["list_notices_api_v1_notices_get"];
+        get: operations["notice_meta_api_v1_notices_meta_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -712,11 +712,71 @@ export interface paths {
         };
         /**
          * List Types
-         * @description 全部通知类型。
+         * @description 全部通知类型（存储值，展示用 /notices/meta 的 label）。
          */
         get: operations["list_types_api_v1_notices_types_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Notices
+         * @description 多条件分页查询通知列表（含时间范围筛选，返回分页信封）。
+         */
+        get: operations["list_notices_api_v1_notices_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notices/batch-delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Batch Delete Notices
+         * @description 按筛选条件批量删除通知（异步任务：级联清理向量索引）。
+         */
+        post: operations["batch_delete_notices_api_v1_notices_batch_delete_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notices/batch-reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Batch Reset Notices
+         * @description 按筛选条件批量重置通知状态（异步任务，供重新提取）。
+         */
+        post: operations["batch_reset_notices_api_v1_notices_batch_reset_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -737,6 +797,50 @@ export interface paths {
         get: operations["notice_detail_api_v1_notices__notice_id__get"];
         put?: never;
         post?: never;
+        /**
+         * Delete Notice
+         * @description 删除单条通知（级联删除待办/提醒/订阅命中 + Chroma 向量）。
+         */
+        delete: operations["delete_notice_api_v1_notices__notice_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notices/{notice_id}/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reset Notice
+         * @description 重置单条通知状态（如 failed→raw，供重新提取）。
+         */
+        post: operations["reset_notice_api_v1_notices__notice_id__reset_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notices/{notice_id}/re-extract": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Re Extract Notice
+         * @description 重置并重新提取单条通知（异步任务，LLM 调用在 worker 执行）。
+         */
+        post: operations["re_extract_notice_api_v1_notices__notice_id__re_extract_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -773,8 +877,27 @@ export interface paths {
         /**
          * Health
          * @description 健康检查：DB 探活 + 通知计数。
+         *
+         *     若内部服务不可用（缺少依赖或 DB 未就绪），返回降级信息以便镜像能在受限环境下启动。
          */
         get: operations["health_api_v1_health_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/{full_path}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Spa Fallback */
+        get: operations["spa_fallback__full_path__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -945,6 +1068,55 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * NoticeBatchFilter
+         * @description 通知筛选条件（列表时间筛选 / 批量操作共用）。
+         */
+        NoticeBatchFilter: {
+            /** Status */
+            status?: string | null;
+            /** Source */
+            source?: string | null;
+            /** Notice Type */
+            notice_type?: string | null;
+            /** Published From */
+            published_from?: string | null;
+            /** Published To */
+            published_to?: string | null;
+            /** Published Before */
+            published_before?: string | null;
+            /** Crawled From */
+            crawled_from?: string | null;
+            /** Crawled To */
+            crawled_to?: string | null;
+        };
+        /**
+         * NoticeBatchRequest
+         * @description 批量重置请求体：筛选条件 + 重置目标状态。
+         */
+        NoticeBatchRequest: {
+            /** Status */
+            status?: string | null;
+            /** Source */
+            source?: string | null;
+            /** Notice Type */
+            notice_type?: string | null;
+            /** Published From */
+            published_from?: string | null;
+            /** Published To */
+            published_to?: string | null;
+            /** Published Before */
+            published_before?: string | null;
+            /** Crawled From */
+            crawled_from?: string | null;
+            /** Crawled To */
+            crawled_to?: string | null;
+            /**
+             * Target Status
+             * @default raw
+             */
+            target_status: string;
+        };
+        /**
          * NoticeDetail
          * @description 通知详情（含正文与关键日期）。
          */
@@ -997,6 +1169,79 @@ export interface components {
              * @default []
              */
             keywords: string[];
+        };
+        /**
+         * NoticeMeta
+         * @description 通知元信息（状态/类型中文标签，翻译单一事实源在 core/models.py）。
+         */
+        NoticeMeta: {
+            /** Statuses */
+            statuses?: components["schemas"]["NoticeMetaItem"][];
+            /** Notice Types */
+            notice_types?: components["schemas"]["NoticeMetaItem"][];
+            /** Action Notice Types */
+            action_notice_types?: string[];
+        };
+        /**
+         * NoticeMetaItem
+         * @description 元信息条目：存储值 + 中文标签。
+         */
+        NoticeMetaItem: {
+            /** Value */
+            value: string;
+            /** Label */
+            label: string;
+        };
+        /**
+         * NoticeMutationResult
+         * @description 单条管理操作结果（删除/重置共用）。
+         */
+        NoticeMutationResult: {
+            /** Ok */
+            ok: boolean;
+            /** Error */
+            error?: string | null;
+            /** Id */
+            id?: number | null;
+            /**
+             * Deleted Notices
+             * @default 0
+             */
+            deleted_notices: number;
+        };
+        /**
+         * NoticePage
+         * @description 通知列表分页信封（items + 总数，供分页条）。
+         */
+        NoticePage: {
+            /** Items */
+            items: components["schemas"]["NoticeSummary"][];
+            /**
+             * Total
+             * @default 0
+             */
+            total: number;
+            /**
+             * Page
+             * @default 1
+             */
+            page: number;
+            /**
+             * Page Size
+             * @default 20
+             */
+            page_size: number;
+        };
+        /**
+         * NoticeResetRequest
+         * @description 单条重置状态请求体。
+         */
+        NoticeResetRequest: {
+            /**
+             * Status
+             * @default raw
+             */
+            status: string;
         };
         /**
          * NoticeSummary
@@ -2888,16 +3133,9 @@ export interface operations {
             };
         };
     };
-    list_notices_api_v1_notices_get: {
+    notice_meta_api_v1_notices_meta_get: {
         parameters: {
-            query?: {
-                status?: string | null;
-                source?: string | null;
-                notice_type?: string | null;
-                keyword?: string | null;
-                is_action?: boolean | null;
-                limit?: number;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -2912,7 +3150,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NoticeSummary"][];
+                    "application/json": components["schemas"]["NoticeMeta"];
                 };
             };
             /** @description Validation Error */
@@ -2988,6 +3226,120 @@ export interface operations {
             };
         };
     };
+    list_notices_api_v1_notices_get: {
+        parameters: {
+            query?: {
+                status?: string | null;
+                source?: string | null;
+                notice_type?: string | null;
+                keyword?: string | null;
+                is_action?: boolean | null;
+                published_from?: string | null;
+                published_to?: string | null;
+                published_before?: string | null;
+                crawled_from?: string | null;
+                crawled_to?: string | null;
+                page?: number;
+                page_size?: number;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoticePage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    batch_delete_notices_api_v1_notices_batch_delete_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NoticeBatchFilter"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskCreateResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    batch_reset_notices_api_v1_notices_batch_reset_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NoticeBatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskCreateResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     notice_detail_api_v1_notices__notice_id__get: {
         parameters: {
             query?: never;
@@ -3008,6 +3360,109 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NoticeDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_notice_api_v1_notices__notice_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path: {
+                notice_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoticeMutationResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reset_notice_api_v1_notices__notice_id__reset_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path: {
+                notice_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NoticeResetRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoticeMutationResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    re_extract_notice_api_v1_notices__notice_id__re_extract_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path: {
+                notice_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskCreateResult"];
                 };
             };
             /** @description Validation Error */
@@ -3074,6 +3529,37 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+        };
+    };
+    spa_fallback__full_path__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                full_path: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

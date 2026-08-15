@@ -8,12 +8,22 @@ const reminders = useRemindersStore()
 
 onMounted(async () => {
   await Promise.all([
+    notices.fetchMeta().catch(() => {}),
     notices.fetchFilters().catch(() => {}),
-    notices.fetchNotices({ limit: 10 }).catch(() => {}),
+    notices.fetchNotices({ page: 1, page_size: 10 }).catch(() => {}),
     notices.fetchStatusCounts().catch(() => {}),
     reminders.fetchPendingCount().catch(() => {}),
   ])
 })
+
+function statusLabel(v: string): string {
+  return notices.meta?.statuses?.find((s) => s.value === v)?.label ?? v
+}
+
+function typeLabel(v?: string | null): string {
+  if (!v) return '未分类'
+  return notices.meta?.notice_types?.find((t) => t.value === v)?.label ?? v
+}
 </script>
 
 <template>
@@ -21,22 +31,22 @@ onMounted(async () => {
     <n-card title="数据概览">
       <n-grid :cols="5" :x-gap="12">
         <n-grid-item>
-          <n-statistic label="未提取 (raw)">
+          <n-statistic :label="`未提取 (${statusLabel('raw')})`">
             <template #default>{{ notices.statusCounts.raw }}</template>
           </n-statistic>
         </n-grid-item>
         <n-grid-item>
-          <n-statistic label="已提取 (extracted)">
+          <n-statistic :label="`已提取 (${statusLabel('extracted')})`">
             <template #default>{{ notices.statusCounts.extracted }}</template>
           </n-statistic>
         </n-grid-item>
         <n-grid-item>
-          <n-statistic label="部分提取 (partial)">
+          <n-statistic :label="`部分提取 (${statusLabel('partial')})`">
             <template #default>{{ notices.statusCounts.partial }}</template>
           </n-statistic>
         </n-grid-item>
         <n-grid-item>
-          <n-statistic label="提取失败 (failed)">
+          <n-statistic :label="`提取失败 (${statusLabel('failed')})`">
             <template #default>{{ notices.statusCounts.failed }}</template>
           </n-statistic>
         </n-grid-item>
@@ -59,7 +69,7 @@ onMounted(async () => {
           <template #default>
             <n-space vertical size="small">
               <n-space align="center" size="small">
-                <n-tag size="small" :bordered="false" type="info">{{ item.notice_type || '未分类' }}</n-tag>
+                <n-tag size="small" :bordered="false" type="info">{{ typeLabel(item.notice_type) }}</n-tag>
                 <span>{{ item.title }}</span>
               </n-space>
               <div>{{ item.source }} · {{ item.published_at ?? item.crawled_at }}</div>

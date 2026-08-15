@@ -2218,13 +2218,171 @@
         }
       }
     },
+    "/api/v1/notices/meta": {
+      "get": {
+        "tags": [
+          "notices"
+        ],
+        "summary": "Notice Meta",
+        "description": "状态/类型中文标签映射（筛选下拉与标签渲染的翻译单一事实源）。",
+        "operationId": "notice_meta_api_v1_notices_meta_get",
+        "parameters": [
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NoticeMeta"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/notices/sources": {
+      "get": {
+        "tags": [
+          "notices"
+        ],
+        "summary": "List Sources",
+        "description": "全部数据源名称。",
+        "operationId": "list_sources_api_v1_notices_sources_get",
+        "parameters": [
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "title": "Response List Sources Api V1 Notices Sources Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/notices/types": {
+      "get": {
+        "tags": [
+          "notices"
+        ],
+        "summary": "List Types",
+        "description": "全部通知类型（存储值，展示用 /notices/meta 的 label）。",
+        "operationId": "list_types_api_v1_notices_types_get",
+        "parameters": [
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "title": "Response List Types Api V1 Notices Types Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/notices": {
       "get": {
         "tags": [
           "notices"
         ],
         "summary": "List Notices",
-        "description": "多条件查询通知列表（过滤参数直接透传 services，盘点 §5.2-8）。",
+        "description": "多条件分页查询通知列表（含时间范围筛选，返回分页信封）。",
         "operationId": "list_notices_api_v1_notices_get",
         "parameters": [
           {
@@ -2308,15 +2466,106 @@
             }
           },
           {
-            "name": "limit",
+            "name": "published_from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Published From"
+            }
+          },
+          {
+            "name": "published_to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Published To"
+            }
+          },
+          {
+            "name": "published_before",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Published Before"
+            }
+          },
+          {
+            "name": "crawled_from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Crawled From"
+            }
+          },
+          {
+            "name": "crawled_to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Crawled To"
+            }
+          },
+          {
+            "name": "page",
             "in": "query",
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 2000,
               "minimum": 1,
-              "default": 200,
-              "title": "Limit"
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 20,
+              "title": "Page Size"
             }
           },
           {
@@ -2342,11 +2591,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/NoticeSummary"
-                  },
-                  "title": "Response List Notices Api V1 Notices Get"
+                  "$ref": "#/components/schemas/NoticePage"
                 }
               }
             }
@@ -2364,14 +2609,14 @@
         }
       }
     },
-    "/api/v1/notices/sources": {
-      "get": {
+    "/api/v1/notices/batch-delete": {
+      "post": {
         "tags": [
           "notices"
         ],
-        "summary": "List Sources",
-        "description": "全部数据源名称。",
-        "operationId": "list_sources_api_v1_notices_sources_get",
+        "summary": "Batch Delete Notices",
+        "description": "按筛选条件批量删除通知（异步任务：级联清理向量索引）。",
+        "operationId": "batch_delete_notices_api_v1_notices_batch_delete_post",
         "parameters": [
           {
             "name": "x-api-key",
@@ -2390,17 +2635,23 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NoticeBatchFilter"
+              }
+            }
+          }
+        },
         "responses": {
-          "200": {
+          "202": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  },
-                  "title": "Response List Sources Api V1 Notices Sources Get"
+                  "$ref": "#/components/schemas/TaskCreateResult"
                 }
               }
             }
@@ -2418,14 +2669,14 @@
         }
       }
     },
-    "/api/v1/notices/types": {
-      "get": {
+    "/api/v1/notices/batch-reset": {
+      "post": {
         "tags": [
           "notices"
         ],
-        "summary": "List Types",
-        "description": "全部通知类型。",
-        "operationId": "list_types_api_v1_notices_types_get",
+        "summary": "Batch Reset Notices",
+        "description": "按筛选条件批量重置通知状态（异步任务，供重新提取）。",
+        "operationId": "batch_reset_notices_api_v1_notices_batch_reset_post",
         "parameters": [
           {
             "name": "x-api-key",
@@ -2444,17 +2695,23 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NoticeBatchRequest"
+              }
+            }
+          }
+        },
         "responses": {
-          "200": {
+          "202": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  },
-                  "title": "Response List Types Api V1 Notices Types Get"
+                  "$ref": "#/components/schemas/TaskCreateResult"
                 }
               }
             }
@@ -2473,6 +2730,63 @@
       }
     },
     "/api/v1/notices/{notice_id}": {
+      "delete": {
+        "tags": [
+          "notices"
+        ],
+        "summary": "Delete Notice",
+        "description": "删除单条通知（级联删除待办/提醒/订阅命中 + Chroma 向量）。",
+        "operationId": "delete_notice_api_v1_notices__notice_id__delete",
+        "parameters": [
+          {
+            "name": "notice_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Notice Id"
+            }
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NoticeMutationResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
       "get": {
         "tags": [
           "notices"
@@ -2514,6 +2828,134 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/NoticeDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/notices/{notice_id}/reset": {
+      "post": {
+        "tags": [
+          "notices"
+        ],
+        "summary": "Reset Notice",
+        "description": "重置单条通知状态（如 failed→raw，供重新提取）。",
+        "operationId": "reset_notice_api_v1_notices__notice_id__reset_post",
+        "parameters": [
+          {
+            "name": "notice_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Notice Id"
+            }
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NoticeResetRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NoticeMutationResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/notices/{notice_id}/re-extract": {
+      "post": {
+        "tags": [
+          "notices"
+        ],
+        "summary": "Re Extract Notice",
+        "description": "重置并重新提取单条通知（异步任务，LLM 调用在 worker 执行）。",
+        "operationId": "re_extract_notice_api_v1_notices__notice_id__re_extract_post",
+        "parameters": [
+          {
+            "name": "notice_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Notice Id"
+            }
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskCreateResult"
                 }
               }
             }
@@ -2597,7 +3039,7 @@
           "system"
         ],
         "summary": "Health",
-        "description": "健康检查：DB 探活 + 通知计数。",
+        "description": "健康检查：DB 探活 + 通知计数。\n\n若内部服务不可用（缺少依赖或 DB 未就绪），返回降级信息以便镜像能在受限环境下启动。",
         "operationId": "health_api_v1_health_get",
         "responses": {
           "200": {
@@ -2608,6 +3050,43 @@
                   "additionalProperties": true,
                   "type": "object",
                   "title": "Response Health Api V1 Health Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/{full_path}": {
+      "get": {
+        "summary": "Spa Fallback",
+        "operationId": "spa_fallback__full_path__get",
+        "parameters": [
+          {
+            "name": "full_path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Full Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -2962,6 +3441,201 @@
         "title": "ModelsView",
         "description": "各任务模型配置视图。"
       },
+      "NoticeBatchFilter": {
+        "properties": {
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "notice_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notice Type"
+          },
+          "published_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published From"
+          },
+          "published_to": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published To"
+          },
+          "published_before": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published Before"
+          },
+          "crawled_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Crawled From"
+          },
+          "crawled_to": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Crawled To"
+          }
+        },
+        "type": "object",
+        "title": "NoticeBatchFilter",
+        "description": "通知筛选条件（列表时间筛选 / 批量操作共用）。"
+      },
+      "NoticeBatchRequest": {
+        "properties": {
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "notice_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notice Type"
+          },
+          "published_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published From"
+          },
+          "published_to": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published To"
+          },
+          "published_before": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published Before"
+          },
+          "crawled_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Crawled From"
+          },
+          "crawled_to": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Crawled To"
+          },
+          "target_status": {
+            "type": "string",
+            "title": "Target Status",
+            "default": "raw"
+          }
+        },
+        "type": "object",
+        "title": "NoticeBatchRequest",
+        "description": "批量重置请求体：筛选条件 + 重置目标状态。"
+      },
       "NoticeDetail": {
         "properties": {
           "id": {
@@ -3149,6 +3823,138 @@
         ],
         "title": "NoticeDetail",
         "description": "通知详情（含正文与关键日期）。"
+      },
+      "NoticeMeta": {
+        "properties": {
+          "statuses": {
+            "items": {
+              "$ref": "#/components/schemas/NoticeMetaItem"
+            },
+            "type": "array",
+            "title": "Statuses"
+          },
+          "notice_types": {
+            "items": {
+              "$ref": "#/components/schemas/NoticeMetaItem"
+            },
+            "type": "array",
+            "title": "Notice Types"
+          },
+          "action_notice_types": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Action Notice Types"
+          }
+        },
+        "type": "object",
+        "title": "NoticeMeta",
+        "description": "通知元信息（状态/类型中文标签，翻译单一事实源在 core/models.py）。"
+      },
+      "NoticeMetaItem": {
+        "properties": {
+          "value": {
+            "type": "string",
+            "title": "Value"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "value",
+          "label"
+        ],
+        "title": "NoticeMetaItem",
+        "description": "元信息条目：存储值 + 中文标签。"
+      },
+      "NoticeMutationResult": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "deleted_notices": {
+            "type": "integer",
+            "title": "Deleted Notices",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "ok"
+        ],
+        "title": "NoticeMutationResult",
+        "description": "单条管理操作结果（删除/重置共用）。"
+      },
+      "NoticePage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/NoticeSummary"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total",
+            "default": 0
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page",
+            "default": 1
+          },
+          "page_size": {
+            "type": "integer",
+            "title": "Page Size",
+            "default": 20
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "NoticePage",
+        "description": "通知列表分页信封（items + 总数，供分页条）。"
+      },
+      "NoticeResetRequest": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "default": "raw"
+          }
+        },
+        "type": "object",
+        "title": "NoticeResetRequest",
+        "description": "单条重置状态请求体。"
       },
       "NoticeSummary": {
         "properties": {

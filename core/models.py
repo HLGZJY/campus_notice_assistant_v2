@@ -31,6 +31,28 @@ ACTION_NOTICE_TYPES = {
 # 非行动型通知：只有展示价值，无截止/报名字段
 NON_ACTION_NOTICE_TYPES = {"policy", "result", "news", "other"}
 
+# 通知类型中文标签（前后端翻译单一事实源，经 GET /notices/meta 下发）
+NOTICE_TYPE_LABELS: dict[str, str] = {
+    "competition": "竞赛",
+    "lecture": "讲座",
+    "registration": "报名/选课/培训",
+    "scholarship": "奖学金",
+    "administrative": "行政事务",
+    "recruitment": "招聘/实习",
+    "policy": "政策/资讯",
+    "result": "结果公示",
+    "news": "动态/新闻",
+    "other": "其他",
+}
+
+# 通知状态中文标签（UI 展示用，值保持英文存储）
+STATUS_LABELS: dict[str, str] = {
+    "raw": "未提取",
+    "extracted": "已提取",
+    "partial": "部分提取",
+    "failed": "提取失败",
+}
+
 
 class KeyDate(BaseModel):
     """一个重要的日期/时间点（如报名截止、初赛、决赛、颁奖）。"""

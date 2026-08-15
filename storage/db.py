@@ -449,6 +449,111 @@ def reset_notice_status(conn: sqlite3.Connection, notice_id: int, status: str = 
     return cur.rowcount > 0
 
 
+# ---------- 通知筛选条件（管理页批量操作 / 列表时间筛选共用） ----------
+
+
+def _date_upper_bound(value: str) -> str:
+    """把日期/时间字符串转成区间上界（含当天）：date-only 补齐到当天结束，ISO 原样。"""
+    if value and len(value) == 10 and value[4] == "-":
+        return value + "T23:59:59.999999"
+    return value
+
+
+def build_notice_where(f: dict) -> tuple[list[str], list]:
+    """根据筛选条件字典构造 notices 表的 WHERE 子句与参数。
+
+    支持的键：
+      status / source / notice_type             等值过滤
+      published_from / published_to             发布时间区间（含边界）
+      published_before                          发布时间严格早于（清理预设用，不含当天）
+      crawled_from / crawled_to                 抓取时间区间（含边界）
+    """
+    where: list[str] = []
+    params: list = []
+
+    if f.get("status"):
+        where.append("status = ?")
+        params.append(f["status"])
+    if f.get("source"):
+        where.append("source = ?")
+        params.append(f["source"])
+    if f.get("notice_type"):
+        where.append("notice_type = ?")
+        params.append(f["notice_type"])
+
+    if f.get("published_from"):
+        where.append("published_at >= ?")
+        params.append(f["published_from"])
+    if f.get("published_to"):
+        where.append("published_at <= ?")
+        params.append(_date_upper_bound(f["published_to"]))
+    if f.get("published_before"):
+        where.append("published_at < ?")
+        params.append(f["published_before"])
+
+    if f.get("crawled_from"):
+        where.append("crawled_at >= ?")
+        params.append(f["crawled_from"])
+    if f.get("crawled_to"):
+        where.append("crawled_at <= ?")
+        params.append(_date_upper_bound(f["crawled_to"]))
+
+    return where, params
+
+
+def count_notices_by_filter(conn: sqlite3.Connection, f: dict) -> int:
+    """按筛选条件统计通知数量。"""
+    where, params = build_notice_where(f)
+    sql = "SELECT COUNT(*) AS n FROM notices"
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    row = conn.execute(sql, params).fetchone()
+    return row["n"] if row else 0
+
+
+def get_notice_ids_by_filter(conn: sqlite3.Connection, f: dict) -> list[int]:
+    """返回命中筛选条件的通知 ID 列表。"""
+    where, params = build_notice_where(f)
+    sql = "SELECT id FROM notices"
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    sql += " ORDER BY id"
+    rows = conn.execute(sql, params).fetchall()
+    return [r["id"] for r in rows]
+
+
+def delete_notices_by_filter(conn: sqlite3.Connection, f: dict) -> tuple[list[int], int]:
+    """按筛选条件批量删除通知（级联删提醒/待办/订阅命中）。返回 (被删 ID, 条数)。"""
+    ids = get_notice_ids_by_filter(conn, f)
+    for nid in ids:
+        delete_reminders_for_notice(conn, nid)
+        conn.execute("DELETE FROM todos WHERE notice_id = ?", (nid,))
+        conn.execute("DELETE FROM notice_subscription_matches WHERE notice_id = ?", (nid,))
+    where, params = build_notice_where(f)
+    sql = "DELETE FROM notices"
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    cur = conn.execute(sql, params)
+    conn.commit()
+    return ids, cur.rowcount
+
+
+def reset_notices_by_filter(
+    conn: sqlite3.Connection, f: dict, target_status: str = "raw"
+) -> tuple[list[int], int]:
+    """按筛选条件批量重置通知状态（供重新提取）。返回 (命中的 ID, 更新条数)。"""
+    ids = get_notice_ids_by_filter(conn, f)
+    if not ids:
+        return [], 0
+    where, params = build_notice_where(f)
+    sql = f"UPDATE notices SET status = ?"
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    cur = conn.execute(sql, [target_status] + params)
+    conn.commit()
+    return ids, cur.rowcount
+
+
 # ---------- todos（M3 待办） ----------
 
 

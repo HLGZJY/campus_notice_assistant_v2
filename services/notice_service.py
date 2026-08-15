@@ -13,6 +13,7 @@ from core.models import ACTION_NOTICE_TYPES
 from crawler import ListPageConfig, WebCrawler
 from services.subscription_service import match_notice
 from storage.db import (
+    build_notice_where,
     count_notices_by_status,
     get_connection,
     get_notice_by_id,
@@ -118,9 +119,15 @@ def get_notices(
     notice_type: Optional[str] = None,
     keyword: Optional[str] = None,
     is_action: Optional[bool] = None,
-    limit: int = 200,
-) -> list[dict]:
-    """多条件查询通知列表。
+    published_from: Optional[str] = None,
+    published_to: Optional[str] = None,
+    published_before: Optional[str] = None,
+    crawled_from: Optional[str] = None,
+    crawled_to: Optional[str] = None,
+    page: int = 1,
+    page_size: int = 20,
+) -> dict:
+    """多条件分页查询通知列表。
 
     Args:
         status: raw / extracted / partial / failed
@@ -128,21 +135,28 @@ def get_notices(
         notice_type: 通知类型
         keyword: 标题关键词（模糊匹配）
         is_action: 是否只返回行动型通知
-        limit: 最大返回条数
+        published_from/to / crawled_from/to: 时间范围筛选（含边界）
+        published_before: 发布时间严格早于该日期（清理预设）
+        page: 页码（从 1 起）
+        page_size: 每页条数
+
+    Returns:
+        {"items": [...], "total": int, "page": int, "page_size": int}
     """
     conn = get_connection()
     try:
-        where: list[str] = []
-        params: list = []
-        if status:
-            where.append("status = ?")
-            params.append(status)
-        if source:
-            where.append("source = ?")
-            params.append(source)
-        if notice_type:
-            where.append("notice_type = ?")
-            params.append(notice_type)
+        where, params = build_notice_where(
+            {
+                "status": status,
+                "source": source,
+                "notice_type": notice_type,
+                "published_from": published_from,
+                "published_to": published_to,
+                "published_before": published_before,
+                "crawled_from": crawled_from,
+                "crawled_to": crawled_to,
+            }
+        )
         if keyword:
             where.append("title LIKE ?")
             params.append(f"%{keyword}%")
@@ -155,16 +169,35 @@ def get_notices(
             where.append(f"(notice_type IS NULL OR notice_type NOT IN ({placeholders}))")
             params.extend(ACTION_NOTICE_TYPES)
 
-        sql = "SELECT * FROM notices"
-        if where:
-            sql += " WHERE " + " AND ".join(where)
-        sql += " ORDER BY crawled_at DESC LIMIT ?"
-        params.append(limit)
+        w = (" WHERE " + " AND ".join(where)) if where else ""
+        total = conn.execute(f"SELECT COUNT(*) AS n FROM notices{w}", params).fetchone()["n"]
 
-        rows = conn.execute(sql, params).fetchall()
-        return [dict(r) for r in rows]
+        offset = max(0, (page - 1) * page_size)
+        rows = conn.execute(
+            f"SELECT * FROM notices{w} ORDER BY crawled_at DESC, id DESC LIMIT ? OFFSET ?",
+            params + [page_size, offset],
+        ).fetchall()
+        return {
+            "items": [dict(r) for r in rows],
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+        }
     finally:
         conn.close()
+
+
+def get_notice_meta() -> dict:
+    """通知元信息：状态/类型的中文标签映射（翻译单一事实源在 core/models.py）。"""
+    from core.models import ACTION_NOTICE_TYPES, NOTICE_TYPE_LABELS, STATUS_LABELS
+
+    return {
+        "statuses": [{"value": k, "label": v} for k, v in STATUS_LABELS.items()],
+        "notice_types": [
+            {"value": k, "label": v} for k, v in NOTICE_TYPE_LABELS.items()
+        ],
+        "action_notice_types": sorted(ACTION_NOTICE_TYPES),
+    }
 
 
 def get_notice_detail(notice_id: int) -> Optional[dict]:
