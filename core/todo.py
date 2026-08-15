@@ -34,22 +34,31 @@ logger = logging.getLogger(__name__)
 
 MAX_ITEMS = 1  # MVP：每条通知最多 1 条主待办
 MAX_RETRIES = 1  # 生成任务简单，重试 1 次
+PROMPT_VERSION = "todo-v1"  # 待办生成 prompt 版本（回归评估/日志相关用）
 
-TODO_INSTRUCTIONS = """你是校园通知的待办生成助手。输入是一条通知的结构化提取结果，输出 0~1 条可执行的待办。
+TODO_INSTRUCTIONS = """你是校园通知的待办生成助手。你的唯一职责：把输入的结构化通知翻译成 0~1 条"行动型待办"的自然中文表述。due_at / priority 由系统确定性校准，你无需推理。
 
-## 输出字段说明
-- action：待办内容，一句自然中文，包含【具体动作】和【截止时间】。
-  例如："在 2026-09-30 17:00 前完成工创大赛校赛报名并提交报名表"。
-  动作应尽量参考输入的 signup_method（如"通过QQ群报名""发送报名表至邮箱"）。
-- due_at：必须直接使用输入中的 deadline 字段（ISO 8601），不要改写、不要重新推断。输入没有 deadline 则填 null。
-- priority：只能填 high 或 normal。截止距今 ≤7 天填 high，否则 normal，无截止填 normal。
+## 你的任务
+- 仅以下类型生成待办：competition / lecture / registration / scholarship / administrative / recruitment；其余类型输出空 items。
+- 最多生成 1 条"最关键行动"，优先级：报名 > 提交 > 参加。
+- action：一句自然中文，包含【具体动作】+【截止时间】。动作尽量复用输入的 signup_method / signup_url / location。
 
-## 生成规则
-1. 只有行动型通知才生成待办：competition / lecture / registration / scholarship / administrative / recruitment。
-2. policy / result / news / other 一律不生成，items 返回空数组。
-3. 每条通知最多生成 1 条"最关键行动"的待办，优先级：报名 > 提交 > 参加。
-4. 不要编造 deadline 之外的时间。
-5. 输出必须是严格的 JSON：{"items":[{"action":"...","due_at":"...","priority":"..."}]}"""
+## 字段填写（后端会覆盖重算，照抄即可）
+- due_at：原样复制输入中的 deadline（无则 null）。
+- priority：填 "high"（后端按距今天数重算）。
+
+## 示例
+输入：notice_type=competition, deadline=2026-09-30 17:00, signup_method=发送报名表至邮箱, title=工创大赛校赛
+输出：{"items":[{"action":"在 2026-09-30 17:00 前完成工创大赛校赛报名并提交报名表","due_at":"2026-09-30T17:00:00","priority":"high"}]}
+
+输入：notice_type=news, title=校园网络维护通知
+输出：{"items":[]}
+
+## 红线
+1. action 只能使用输入字段中已有的信息，严禁编造 deadline、时间、URL、地点等未给出的细节。
+2. 输入没有 deadline 时，action 不得出现任何具体时间。
+3. 动作不明确时用保守模板（如"尽快完成《标题》相关报名/提交"），不要猜测具体流程。
+4. 输出必须是严格 JSON：{"items":[...]}，items 长度 0 或 1。"""
 
 
 @dataclass
@@ -91,7 +100,6 @@ def _build_prompt(notice: dict) -> str:
             ensure_ascii=False,
         )
     )
-    meta.append(f"今天日期：{datetime.now().strftime('%Y-%m-%d')}")
     return "\n".join(meta)
 
 
@@ -112,8 +120,9 @@ def template_fallback(notice: dict) -> TodoItem:
 class TodoGenerator:
     """基于 OpenAI Agents SDK 的待办生成器。"""
 
-    def __init__(self):
+    def __init__(self, temperature: float = 0.0):
         self.api_key, self.base_url, self.model = get_model_for_task("todo")
+        self.temperature = temperature  # 默认 0 提升确定性；评估脚本固定 temperature=0
         self._agent: Optional[Agent] = None
 
     def _get_agent(self) -> Agent:
@@ -131,7 +140,8 @@ class TodoGenerator:
                 model=self.model,
                 output_type=TodoList,
                 model_settings=ModelSettings(
-                    extra_body={"response_format": {"type": "json_object"}}
+                    temperature=self.temperature,
+                    extra_body={"response_format": {"type": "json_object"}},
                 ),
             )
         return self._agent
@@ -234,6 +244,8 @@ def generate_todos_for_notice(
 
         if not items:
             items = [template_fallback(notice)]
+
+        logger.info("待办生成完成 (prompt=%s, notice_id=%s, items=%d)", PROMPT_VERSION, notice_id, len(items))
 
         if not dry_run and replace and items:
             delete_todos_for_notice(conn, notice_id, status="pending")
