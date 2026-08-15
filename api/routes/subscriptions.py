@@ -16,13 +16,15 @@
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from api.deps import require_auth
 from api.routes.tasks import get_task_manager
 from api.schemas import (
     MatchMapRequest,
     MatchMapResult,
+    NoticePage,
+    NoticeSummary,
     SubscriptionCreateRequest,
     SubscriptionItem,
     SubscriptionMutationResult,
@@ -37,6 +39,7 @@ from services.subscription_service import (
     count_all_notices,
     delete_subscription_record,
     get_matched_notice_ids_set,
+    get_matched_notices_for_subscription,
     get_match_map,
     get_subscription_record,
     get_subscription_stats_ui,
@@ -69,6 +72,41 @@ def list_subscriptions() -> list[SubscriptionItem]:
 def subscription_stats() -> SubscriptionStats:
     """订阅统计：总数 / 启用数 / 命中总数。"""
     return SubscriptionStats(**get_subscription_stats_ui())
+
+
+@router.get("/{subscription_id}/notices", response_model=NoticePage)
+def subscription_notices(
+    subscription_id: int,
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=200),
+) -> NoticePage:
+    """某订阅命中的通知列表（分页，供订阅页内联展开验证）。
+
+    订阅不存在返回 404；每条通知带 keywords=[订阅词] 便于列表徽标展示。
+    """
+    data = get_matched_notices_for_subscription(subscription_id, page, page_size)
+    if data is None:
+        raise HTTPException(status_code=404, detail=f"订阅 {subscription_id} 不存在")
+    sub = get_subscription_record(subscription_id)
+    keyword = sub.get("keyword") if sub else None
+    items = [
+        NoticeSummary(
+            **{
+                k: (r.get(k) or []) if k == "keywords" else r.get(k)
+                for k in NoticeSummary.model_fields
+            }
+        )
+        for r in data["items"]
+    ]
+    for it in items:
+        if keyword:
+            it.keywords = [keyword]
+    return NoticePage(
+        items=items,
+        total=data["total"],
+        page=data["page"],
+        page_size=data["page_size"],
+    )
 
 
 @router.post("/preview", response_model=SubscriptionPreview)

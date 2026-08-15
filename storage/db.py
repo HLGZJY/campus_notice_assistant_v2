@@ -1171,6 +1171,33 @@ def count_matches_by_subscription(
     return row["n"] if row else 0
 
 
+def get_notice_rows_for_subscription(
+    conn: sqlite3.Connection, subscription_id: int, page: int = 1, page_size: int = 20
+) -> dict:
+    """分页查询某订阅命中的通知（含全部通知字段）。
+
+    Returns:
+        {"items": [notice dict, ...], "total": int, "page": int, "page_size": int}
+    """
+    base = "FROM notice_subscription_matches m JOIN notices n ON n.id = m.notice_id"
+    total = conn.execute(
+        f"SELECT COUNT(*) AS n {base} WHERE m.subscription_id = ?",
+        (subscription_id,),
+    ).fetchone()["n"]
+    offset = max(0, (page - 1) * page_size)
+    rows = conn.execute(
+        f"SELECT n.* {base} WHERE m.subscription_id = ?"
+        " ORDER BY n.crawled_at DESC, n.id DESC LIMIT ? OFFSET ?",
+        (subscription_id, page_size, offset),
+    ).fetchall()
+    return {
+        "items": [dict(r) for r in rows],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+    }
+
+
 def get_matched_notice_ids(conn: sqlite3.Connection) -> list[int]:
     """返回全部有命中关系的通知 ID（去重）。"""
     rows = conn.execute(

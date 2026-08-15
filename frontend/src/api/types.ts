@@ -319,6 +319,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/subscriptions/{subscription_id}/notices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Subscription Notices
+         * @description 某订阅命中的通知列表（分页，供订阅页内联展开验证）。
+         *
+         *     订阅不存在返回 404；每条通知带 keywords=[订阅词] 便于列表徽标展示。
+         */
+        get: operations["subscription_notices_api_v1_subscriptions__subscription_id__notices_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/subscriptions/{subscription_id}": {
         parameters: {
             query?: never;
@@ -1615,6 +1637,8 @@ export interface components {
             total: number;
             /** Samples */
             samples?: string[];
+            /** Sample Ids */
+            sample_ids?: number[];
         };
         /**
          * SubscriptionPreviewRequest
@@ -1656,6 +1680,11 @@ export interface components {
              * @default 0
              */
             matches: number;
+            /**
+             * Total Notices
+             * @default 0
+             */
+            total_notices: number;
         };
         /**
          * SubscriptionToggleRequest
@@ -2465,6 +2494,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SubscriptionPreview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    subscription_notices_api_v1_subscriptions__subscription_id__notices_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path: {
+                subscription_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoticePage"];
                 };
             };
             /** @description Validation Error */

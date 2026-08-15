@@ -36,6 +36,7 @@ export const endpoints = {
     preview: `${API_BASE}/subscriptions/preview`,
     matchAll: `${API_BASE}/subscriptions/match-all`,
     detail: (id: number) => `${API_BASE}/subscriptions/${id}`,
+    notices: (id: number) => `${API_BASE}/subscriptions/${id}/notices`,
     toggle: (id: number) => `${API_BASE}/subscriptions/${id}/toggle`,
   },
   qa: {

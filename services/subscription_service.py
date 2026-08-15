@@ -24,6 +24,7 @@ from storage.db import (
     get_matched_notice_ids,
     get_matches_for_notice,
     get_notice_by_id,
+    get_notice_rows_for_subscription,
     get_subscription_by_id,
     get_subscription_stats,
     insert_notice_subscription_match,
@@ -103,6 +104,7 @@ def preview_subscription_matches(
     sub = {"keyword": keyword, "notice_type": notice_type, "enabled": enabled}
     matched = 0
     samples: list[str] = []
+    sample_ids: list[int] = []
     conn = get_connection()
     try:
         rows = conn.execute(
@@ -115,7 +117,13 @@ def preview_subscription_matches(
             matched += 1
             if len(samples) < sample_limit:
                 samples.append(r["title"])
-    return {"matched": matched, "total": len(rows), "samples": samples}
+                sample_ids.append(r["id"])
+    return {
+        "matched": matched,
+        "total": len(rows),
+        "samples": samples,
+        "sample_ids": sample_ids,
+    }
 
 
 # ---------- 匹配维护 ----------
@@ -321,12 +329,15 @@ def get_subscriptions_for_ui() -> list[dict]:
 
 
 def get_subscription_stats_ui() -> dict:
-    """订阅统计：总数/启用数/命中总数。"""
+    """订阅统计：总数/启用数/命中总数 + 全库通知数（口径参照）。"""
     conn = get_connection()
     try:
-        return get_subscription_stats(conn)
+        stats = get_subscription_stats(conn)
+        row = conn.execute("SELECT COUNT(*) AS n FROM notices").fetchone()
     finally:
         conn.close()
+    stats["total_notices"] = int(row["n"])
+    return stats
 
 
 def get_subscription_record(subscription_id: int) -> Optional[dict]:
@@ -344,6 +355,23 @@ def count_all_notices() -> int:
     try:
         row = conn.execute("SELECT COUNT(*) AS n FROM notices").fetchone()
         return int(row["n"])
+    finally:
+        conn.close()
+
+
+def get_matched_notices_for_subscription(
+    subscription_id: int, page: int = 1, page_size: int = 20
+) -> Optional[dict]:
+    """分页返回某订阅命中的通知列表（含全部通知字段）。
+
+    订阅不存在返回 None（路由据此 404）；否则返回
+    {"items": [...], "total": int, "page": int, "page_size": int}。
+    """
+    conn = get_connection()
+    try:
+        if get_subscription_by_id(conn, subscription_id) is None:
+            return None
+        return get_notice_rows_for_subscription(conn, subscription_id, page, page_size)
     finally:
         conn.close()
 

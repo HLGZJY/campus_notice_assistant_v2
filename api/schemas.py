@@ -255,6 +255,7 @@ class SubscriptionStats(BaseModel):
     total: int = 0
     enabled: int = 0
     matches: int = 0
+    total_notices: int = 0
 
 
 class SubscriptionPreview(BaseModel):
@@ -263,6 +264,7 @@ class SubscriptionPreview(BaseModel):
     matched: int = 0
     total: int = 0
     samples: list[str] = Field(default_factory=list)
+    sample_ids: list[int] = Field(default_factory=list)
 
 
 class SubscriptionPreviewRequest(BaseModel):

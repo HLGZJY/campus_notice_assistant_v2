@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import { endpoints } from '../api/endpoints'
 import { del, get, post, put } from '../api/http'
 import type {
+  NoticePage,
   SubscriptionCreateRequest,
   SubscriptionItem,
   SubscriptionMutationResult,
@@ -15,7 +16,7 @@ import type {
 
 export const useSubscriptionsStore = defineStore('subscriptions', () => {
   const list = ref<SubscriptionItem[]>([])
-  const stats = ref<SubscriptionStats>({ total: 0, enabled: 0, matches: 0 })
+  const stats = ref<SubscriptionStats>({ total: 0, enabled: 0, matches: 0, total_notices: 0 })
   const loading = ref(false)
 
   async function fetchList() {
@@ -33,6 +34,13 @@ export const useSubscriptionsStore = defineStore('subscriptions', () => {
 
   async function preview(body: SubscriptionPreviewRequest) {
     return await post<SubscriptionPreview>(endpoints.subscriptions.preview, body)
+  }
+
+  async function fetchMatchedNotices(id: number, page = 1, pageSize = 20) {
+    return await get<NoticePage>(endpoints.subscriptions.notices(id), {
+      page,
+      page_size: pageSize,
+    })
   }
 
   async function create(body: SubscriptionCreateRequest) {
@@ -62,6 +70,7 @@ export const useSubscriptionsStore = defineStore('subscriptions', () => {
     fetchList,
     fetchStats,
     preview,
+    fetchMatchedNotices,
     create,
     update,
     toggle,

@@ -1032,6 +1032,88 @@
         }
       }
     },
+    "/api/v1/subscriptions/{subscription_id}/notices": {
+      "get": {
+        "tags": [
+          "subscriptions"
+        ],
+        "summary": "Subscription Notices",
+        "description": "某订阅命中的通知列表（分页，供订阅页内联展开验证）。\n\n订阅不存在返回 404；每条通知带 keywords=[订阅词] 便于列表徽标展示。",
+        "operationId": "subscription_notices_api_v1_subscriptions__subscription_id__notices_get",
+        "parameters": [
+          {
+            "name": "subscription_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Subscription Id"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1.0,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200.0,
+              "minimum": 1.0,
+              "default": 20,
+              "title": "Page Size"
+            }
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NoticePage"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/subscriptions/{subscription_id}": {
       "put": {
         "tags": [
@@ -4724,6 +4806,13 @@
             },
             "type": "array",
             "title": "Samples"
+          },
+          "sample_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Sample Ids"
           }
         },
         "type": "object",
@@ -4782,6 +4871,11 @@
           "matches": {
             "type": "integer",
             "title": "Matches",
+            "default": 0
+          },
+          "total_notices": {
+            "type": "integer",
+            "title": "Total Notices",
             "default": 0
           }
         },
