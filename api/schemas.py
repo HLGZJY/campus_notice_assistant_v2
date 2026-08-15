@@ -150,11 +150,12 @@ class NoticeMutationResult(BaseModel):
 
 
 class TodoItem(BaseModel):
-    """待办列表项（含关联通知标题）。"""
+    """待办列表项（含关联通知标题与原文链接）。"""
 
     id: int
     notice_id: int
     notice_title: Optional[str] = None
+    notice_url: Optional[str] = None
     action: str
     due_at: Optional[str] = None
     priority: str = "normal"

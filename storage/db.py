@@ -587,7 +587,7 @@ def get_todos(
     status: Optional[str] = None,
     notice_id: Optional[int] = None,
 ) -> list[dict]:
-    """查询待办，按截止时间升序（无截止的排在最后）。带通知标题。"""
+    """查询待办，按截止时间升序（无截止的排在最后）。带通知标题与原文链接。"""
     where: list[str] = []
     params: list = []
     if status:
@@ -598,7 +598,7 @@ def get_todos(
         params.append(notice_id)
     w = ("WHERE " + " AND ".join(where)) if where else ""
     rows = conn.execute(
-        f"""SELECT t.*, n.title AS notice_title, n.notice_type
+        f"""SELECT t.*, n.title AS notice_title, n.url AS notice_url, n.notice_type
             FROM todos t
             LEFT JOIN notices n ON n.id = t.notice_id
             {w}
@@ -627,9 +627,9 @@ def set_todo_status(conn: sqlite3.Connection, todo_id: int, status: str) -> bool
 
 
 def get_todo_by_id(conn: sqlite3.Connection, todo_id: int) -> Optional[dict]:
-    """按 id 查询待办（带通知标题），返回 dict 或 None。"""
+    """按 id 查询待办（带通知标题与原文链接），返回 dict 或 None。"""
     row = conn.execute(
-        """SELECT t.*, n.title AS notice_title, n.notice_type
+        """SELECT t.*, n.title AS notice_title, n.url AS notice_url, n.notice_type
            FROM todos t
            LEFT JOIN notices n ON n.id = t.notice_id
            WHERE t.id = ?""",

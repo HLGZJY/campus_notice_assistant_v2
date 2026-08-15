@@ -1808,7 +1808,7 @@ export interface components {
         };
         /**
          * TodoItem
-         * @description 待办列表项（含关联通知标题）。
+         * @description 待办列表项（含关联通知标题与原文链接）。
          */
         TodoItem: {
             /** Id */
@@ -1817,6 +1817,8 @@ export interface components {
             notice_id: number;
             /** Notice Title */
             notice_title?: string | null;
+            /** Notice Url */
+            notice_url?: string | null;
             /** Action */
             action: string;
             /** Due At */

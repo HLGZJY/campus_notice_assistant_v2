@@ -199,8 +199,18 @@ async function saveEdit() {
                 </n-tag>
               </n-space>
               <div style="color: #888; font-size: 13px">
-                来源：{{ t.notice_title || `通知 #${t.notice_id}` }} · 截止 {{ fmtDate(t.due_at) }} ·
-                {{ relativeDueText(t.due_at) }}
+                来源：
+                <n-a
+                  v-if="t.notice_url"
+                  :href="t.notice_url"
+                  target="_blank"
+                  rel="noopener"
+                  style="font-size: 13px"
+                >
+                  {{ t.notice_title || `通知 #${t.notice_id}` }}
+                </n-a>
+                <span v-else>{{ t.notice_title || `通知 #${t.notice_id}` }}</span>
+                · 截止 {{ fmtDate(t.due_at) }} · {{ relativeDueText(t.due_at) }}
               </div>
               <div v-if="t.notes" style="color: #666; font-size: 13px">备注：{{ t.notes }}</div>
             </n-space>

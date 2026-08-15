@@ -5117,6 +5117,17 @@
             ],
             "title": "Notice Title"
           },
+          "notice_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notice Url"
+          },
           "action": {
             "type": "string",
             "title": "Action"
@@ -5177,7 +5188,7 @@
           "created_at"
         ],
         "title": "TodoItem",
-        "description": "待办列表项（含关联通知标题）。"
+        "description": "待办列表项（含关联通知标题与原文链接）。"
       },
       "TodoStats": {
         "properties": {
