@@ -184,6 +184,24 @@ def run():
     check("兜底待办提醒挂 todo_id 且关联通知", by_notice[n2]["todo_id"] == t2, f"todo_id={by_notice[n2]['todo_id']}")
     conn.close()
 
+    # ---------- Part D2：待办延期后，扫描优先采用待办 due_at ----------
+    print("\n== D2. 待办延期：扫描优先采用待办 due_at ==")
+    reset_db()
+    conn = get_connection()
+    n1 = insert_notice_sql(conn, "https://r/d2x", "延期的通知", deadline=(today + timedelta(days=3)).isoformat())
+    t1 = insert_todo_sql(conn, n1, "延后到 1 天后的待办", (today + timedelta(days=1)).isoformat())
+    conn.close()
+
+    result = scan_reminders()
+    check("扫描创建 1 条提醒", result["created"] == 1, f"result={result}")
+    conn = get_connection()
+    rows = reminder_rows(conn, notice_id=n1)
+    check("生成 1 条提醒", len(rows) == 1, f"rows={rows}")
+    check("提醒 due_at = 待办 due_at（1 天后）", rows[0]["due_at"] == (today + timedelta(days=1)).isoformat(), f"due_at={rows[0]['due_at']}")
+    check("提醒档位按待办 due 计算 = 1d", rows[0]["tier"] == "1d", f"tier={rows[0]['tier']}")
+    check("提醒挂上 todo_id", rows[0]["todo_id"] == t1)
+    conn.close()
+
     # ---------- Part E：待办完成 → 提醒自动已读 ----------
     print("\n== E. 待办完成/跳过后待处理提醒自动收敛为已读 ==")
     reset_db()
