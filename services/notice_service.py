@@ -4,9 +4,11 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
+from datetime import datetime, timedelta
 from typing import Optional
 
-from config.schema import SourceConfig
+from config.schema import ExtractConfig, SourceConfig
 from config.store import ConfigStore
 from core.extractor import NoticeExtractor
 from core.models import ACTION_NOTICE_TYPES
@@ -14,14 +16,24 @@ from crawler import ListPageConfig, WebCrawler
 from services.subscription_service import match_notice
 from storage.db import (
     build_notice_where,
+    clear_prefiltered,
     count_notices_by_status,
     get_connection,
     get_notice_by_id,
     get_notices_by_status,
     mark_failed,
+    mark_prefiltered,
     update_extraction,
 )
 logger = logging.getLogger(__name__)
+
+# 时间线索词：规则预检（require_time_hint）用，零 LLM 成本
+_TIME_HINT_PATTERN = re.compile(
+    r"\d{4}[-年/.]\d{1,2}[-月/.]\d{1,2}|"
+    r"截止|报名|开始|结束|时间|日期|期限|期间|月\d{1,2}日|周[一二三四五六日天]|"
+    r"上午|下午|点|时|:00|：00",
+    re.IGNORECASE,
+)
 
 
 def _get_vector_index():
@@ -36,14 +48,44 @@ def get_school_config():
     return ConfigStore.get_instance().get_school()
 
 
-def crawl_source(source_cfg: SourceConfig) -> dict:
-    """抓取单个数据源，返回结构化结果字典。"""
-    cfg = ListPageConfig(
+def _build_list_page_config(
+    source_cfg: SourceConfig,
+    mode: Optional[str] = None,
+    max_pages: Optional[int] = None,
+    deep_check: Optional[bool] = None,
+) -> ListPageConfig:
+    """把 SourceConfig + 全局抓取参数组装为爬虫配置（阶段 7：全量透传新字段）。"""
+    crawl = ConfigStore.get_instance().get_crawl()
+    return ListPageConfig(
         list_url=source_cfg.list_url,
         source_name=source_cfg.name,
         url_pattern=source_cfg.url_pattern,
-        max_pages=source_cfg.max_pages,
+        max_pages=max_pages or source_cfg.max_pages,
+        crawl_mode=mode or source_cfg.crawl_mode,
+        max_age_days=source_cfg.max_age_days,
+        fetch_detail=source_cfg.fetch_detail,
+        deep_check=deep_check if deep_check is not None else source_cfg.deep_check,
+        stop_when_caught_up=crawl.stop_when_caught_up,
+        request_timeout=crawl.request_timeout,
+        retry_times=crawl.retry_times,
+        concurrency=crawl.concurrency,
     )
+
+
+def crawl_source(
+    source_cfg: SourceConfig,
+    mode: Optional[str] = None,
+    max_pages: Optional[int] = None,
+    deep_check: Optional[bool] = None,
+) -> dict:
+    """抓取单个数据源，返回结构化结果字典。
+
+    Args:
+        mode: 覆盖抓取模式（incremental/full/list_only）
+        max_pages: 覆盖翻页上限
+        deep_check: 覆盖深度变更检测开关（full 模式隐含开启）
+    """
+    cfg = _build_list_page_config(source_cfg, mode=mode, max_pages=max_pages, deep_check=deep_check)
     crawler = WebCrawler(config=cfg)
     result = crawler.crawl()
     return {
@@ -54,21 +96,37 @@ def crawl_source(source_cfg: SourceConfig) -> dict:
         "changed": result.total_changed,
         "failed": result.total_failed,
         "errors": result.errors,
+        "mode": cfg.crawl_mode,
     }
 
 
-def crawl_all_sources(progress_cb=None) -> dict:
+def crawl_all_sources(
+    progress_cb=None,
+    deep_check: bool = False,
+    mode: Optional[str] = None,
+    max_pages: Optional[int] = None,
+) -> dict:
     """按配置文件抓取所有数据源。返回 {source_name: result_dict}。
 
     Args:
         progress_cb: 可选进度回调 (done:int, total:int) -> None，供任务管理器上报进度。
+        deep_check: 全局深度变更检测（调度器定期深检 / 手动"深度抓取"用）。
+        mode / max_pages: 覆盖所有来源的抓取模式 / 翻页上限（手动批量抓取对话框用）。
     """
     school_config = get_school_config()
     results = {}
-    total = len(school_config.sources)
-    for i, source in enumerate(school_config.sources, start=1):
+    enabled_sources = [s for s in school_config.sources if s.enabled]
+    if len(enabled_sources) != len(school_config.sources):
+        logger.info("跳过 %d 个已停用来源", len(school_config.sources) - len(enabled_sources))
+    total = len(enabled_sources)
+    for i, source in enumerate(enabled_sources, start=1):
         try:
-            results[source.name] = crawl_source(source)
+            results[source.name] = crawl_source(
+                source,
+                mode=mode,
+                max_pages=max_pages,
+                deep_check=deep_check if deep_check else None,
+            )
         except Exception as e:
             logger.exception("抓取失败: %s", source.name)
             results[source.name] = {
@@ -85,22 +143,36 @@ def crawl_all_sources(progress_cb=None) -> dict:
     return results
 
 
-def crawl_source_by_name(source_name: str, progress_cb=None) -> dict:
+def crawl_source_by_name(
+    source_name: str,
+    progress_cb=None,
+    mode: Optional[str] = None,
+    max_pages: Optional[int] = None,
+    deep_check: Optional[bool] = None,
+) -> dict:
     """按来源名抓取单个数据源（供异步任务使用）。
 
     Args:
         source_name: 数据源名称（对应 config/schools/*.yaml 的 sources[].name）
         progress_cb: 可选进度回调 (done:int, total:int) -> None
+        mode / max_pages / deep_check: 抓取参数覆盖（见 crawl_source）
 
     Returns:
-        成功返回 crawl_source 的结构化结果；来源不存在返回 {"ok": False, "error": ...}。
+        成功返回 crawl_source 的结构化结果；来源不存在/已停用返回 {"ok": False, "error": ...}。
     """
     school_config = get_school_config()
     for source in school_config.sources:
         if source.name == source_name:
+            if not source.enabled:
+                return {"ok": False, "error": f"数据源已停用: {source_name}"}
             if progress_cb is not None:
                 progress_cb(1, 1)
-            return crawl_source(source)
+            return crawl_source(
+                source,
+                mode=mode,
+                max_pages=max_pages,
+                deep_check=deep_check if deep_check is not None else source.deep_check,
+            )
     return {"ok": False, "error": f"数据源不存在: {source_name}"}
 
 
@@ -310,28 +382,123 @@ def extract_notice(notice_id: int, auto_index: bool = True) -> dict:
         conn.close()
 
 
+def prefilter_notice(notice: dict, cfg: ExtractConfig) -> tuple[bool, Optional[str]]:
+    """提取前置规则预检（零 LLM 成本）。返回 (是否通过, 跳过原因)。
+
+    判定顺序：时效 → 正文长度 → 关键词白名单 → 标题黑名单 → 时间线索 → 仅订阅命中。
+    所有开关可关（默认宽松：只开时效与长度），关闭后行为接近现状。
+    """
+    if cfg.max_age_days:
+        crawled = notice.get("crawled_at")
+        if crawled:
+            try:
+                crawled_dt = datetime.fromisoformat(crawled)
+                if crawled_dt < datetime.now() - timedelta(days=cfg.max_age_days):
+                    return False, f"抓取超过 {cfg.max_age_days} 天"
+            except ValueError:
+                pass
+
+    content = notice.get("raw_content") or ""
+    if len(content) < cfg.min_content_length:
+        return False, f"正文过短（{len(content)} 字符 < {cfg.min_content_length}）"
+
+    title = notice.get("title") or ""
+    text = f"{title}\n{content}"
+
+    if cfg.keyword_filter:
+        kws = [k.strip() for k in cfg.keyword_filter.split(",") if k.strip()]
+        if kws and not any(k in text for k in kws):
+            return False, "不包含任一关注关键词"
+
+    if cfg.skip_keywords:
+        kws = [k.strip() for k in cfg.skip_keywords.split(",") if k.strip()]
+        if kws:
+            hit = next((k for k in kws if k in title), None)
+            if hit:
+                return False, f"标题包含排除词「{hit}」"
+
+    if cfg.require_time_hint and not _TIME_HINT_PATTERN.search(text):
+        return False, "无时间线索（报名/截止/日期等）"
+
+    if cfg.match_subscription_only:
+        from storage.db import get_matches_for_notice
+
+        conn = get_connection()
+        try:
+            matches = get_matches_for_notice(conn, notice["id"])
+        finally:
+            conn.close()
+        if not matches:
+            return False, "未命中任何订阅"
+
+    return True, None
+
+
 def extract_batch(
     limit: int = 50,
     auto_index: bool = True,
     extractor: NoticeExtractor | None = None,
     progress_cb=None,
+    prefilter: bool = True,
 ) -> dict:
-    """批量提取所有 status=raw 的通知（断点续跑的提取游标）。
+    """批量提取所有 status=raw 的通知（断点续跑的提取游标 + 阶段 7 前置过滤）。
 
     Args:
-        limit: 最大处理条数
+        limit: 最大处理条数（预筛通过后才计入；<=0 时取 config.extract.batch_limit）
         auto_index: 每条提取成功后是否自动加入向量索引
         extractor: 可注入（测试用），默认真实 NoticeExtractor
         progress_cb: 可选进度回调 (done:int, total:int) -> None，供任务管理器上报进度
+        prefilter: 是否启用规则预筛（读取 config.extract；跳过项写 extract_skipped_reason，
+                   状态保持 raw，下轮不再重复判定）
     """
+    cfg = ConfigStore.get_instance().get_extract()
+    effective_limit = limit if limit and limit > 0 else cfg.batch_limit
+
     conn = get_connection()
     try:
-        notices = get_notices_by_status(conn, "raw", limit=limit)
+        # 候选 = raw（排除已预筛）+ failed（retry_failed 开启时，供重试）
+        raw_notices = get_notices_by_status(
+            conn, "raw", limit=effective_limit * 3, exclude_prefiltered=True
+        )
+        failed_notices = (
+            get_notices_by_status(conn, "failed", limit=effective_limit * 3)
+            if cfg.retry_failed
+            else []
+        )
     finally:
         conn.close()
 
+    seen: set[int] = set()
+    candidates: list[dict] = []
+    for n in raw_notices + failed_notices:
+        if n["id"] in seen:
+            continue
+        seen.add(n["id"])
+        candidates.append(n)
+
+    skipped: list[dict] = []
+    notices: list[dict] = []
+    if prefilter:
+        for n in candidates:
+            ok, reason = prefilter_notice(n, cfg)
+            if ok:
+                notices.append(n)
+            else:
+                skipped.append({"id": n["id"], "title": n["title"], "reason": reason})
+            if len(notices) >= effective_limit:
+                break
+        if skipped:
+            conn = get_connection()
+            try:
+                for s in skipped:
+                    mark_prefiltered(conn, s["id"], s["reason"])
+            finally:
+                conn.close()
+    else:
+        notices = candidates[:effective_limit]
+
     if not notices:
-        return {"processed": 0, "summary": {}}
+        return {"processed": 0, "prefiltered": len(skipped), "summary": {}}
 
     extractor = extractor or NoticeExtractor()
     total = len(notices)
@@ -396,4 +563,8 @@ def extract_batch(
         return summary
 
     summary = asyncio.run(_run())
-    return {"processed": len(notices), "summary": summary}
+    return {
+        "processed": len(notices),
+        "prefiltered": len(skipped),
+        "summary": summary,
+    }

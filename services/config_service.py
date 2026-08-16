@@ -15,6 +15,8 @@ import requests
 from openai import AsyncOpenAI
 
 from config.schema import (
+    CrawlConfig,
+    ExtractConfig,
     ModelProfile,
     ModelsConfig,
     ProviderConfig,
@@ -53,6 +55,16 @@ def get_sources_for_ui() -> dict:
         "code": school.code,
         "sources": [s.model_dump() for s in school.sources],
     }
+
+
+def get_crawl_for_ui() -> dict:
+    """获取全局抓取参数（阶段 7）。"""
+    return ConfigStore.get_instance().get_crawl().model_dump()
+
+
+def get_extract_for_ui() -> dict:
+    """获取提取前置过滤配置（阶段 7）。"""
+    return ConfigStore.get_instance().get_extract().model_dump()
 
 
 def get_config_disk_info() -> dict:
@@ -114,6 +126,28 @@ def update_sources(sources_data: list[dict]) -> dict:
         return {"ok": False, "error": f"{type(e).__name__}: {e}"}
 
 
+def update_crawl(crawl_data: dict) -> dict:
+    """保存全局抓取参数（阶段 7：增量早停/超时/重试/并发/深检周期）。"""
+    try:
+        crawl = CrawlConfig(**crawl_data)
+        result = ConfigStore.get_instance().save_crawl(crawl)
+        return {"ok": True, **result}
+    except Exception as e:
+        logger.exception("保存抓取参数失败")
+        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+
+
+def update_extract(extract_data: dict) -> dict:
+    """保存提取前置过滤配置（阶段 7）。"""
+    try:
+        extract = ExtractConfig(**extract_data)
+        result = ConfigStore.get_instance().save_extract(extract)
+        return {"ok": True, **result}
+    except Exception as e:
+        logger.exception("保存提取过滤配置失败")
+        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+
+
 def force_reload_config() -> dict:
     """强制从磁盘重新加载配置。"""
     try:
@@ -126,7 +160,7 @@ def force_reload_config() -> dict:
 # ---------- 测试：连通性 ----------
 
 def test_source_url(url: str, timeout: int = 15) -> dict:
-    """测试数据源 URL 是否可达，并返回发现的链接数。"""
+    """测试数据源 URL 是否可达，并返回发现的链接数与建议的 url_pattern（阶段 7）。"""
     try:
         start = time.time()
         resp = requests.get(
@@ -151,15 +185,24 @@ def test_source_url(url: str, timeout: int = 15) -> dict:
 
         parser = ListPageParser(resp.text, url)
         links = parser.discover_notice_links()
+        suggested_pattern, sample_links = parser.suggest_url_pattern()
         return {
             "ok": True,
             "status_code": resp.status_code,
             "latency_ms": latency_ms,
             "link_count": len(links),
+            "suggested_pattern": suggested_pattern,
+            "sample_links": sample_links,
             "error": None,
         }
     except Exception as e:
-        return {"ok": False, "status_code": None, "latency_ms": 0, "link_count": 0, "error": f"{type(e).__name__}: {e}"}
+        return {
+            "ok": False,
+            "status_code": None,
+            "latency_ms": 0,
+            "link_count": 0,
+            "error": f"{type(e).__name__}: {e}",
+        }
 
 
 def test_model_connection(provider_name: str, model_name: str, timeout: int = 30) -> dict:
