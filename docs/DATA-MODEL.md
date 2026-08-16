@@ -307,6 +307,8 @@ class NoticeExtraction(BaseModel):
 > - `extract_skipped_reason`：阶段 7 提取前置过滤跳过原因（正文过短/关键词不中/时间线索缺失等）。
 >   状态保持 `raw`，批量提取游标默认排除（`exclude_prefiltered=True`）；
 >   「重置提取」或正文变更（update_notice_content）会清空该标记，恢复候选资格。
+> - `skip_llm` 省 token 模式：`config.extract.skip_llm=true` 时通知不调 LLM，仅订阅匹配 + 建向量索引，
+>   状态置 `partial`（此时 partial = 仅索引未结构化，结构化字段为空）。
 
 ### 2.2 待办项
 

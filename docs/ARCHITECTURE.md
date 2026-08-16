@@ -334,12 +334,13 @@ crawl:
 extract:
   batch_limit: 50              # 单批上限
   min_content_length: 100      # 正文长度下限（过滤空页面/占位页）
-  max_age_days: null           # 只提取最近 N 天；null = 不限
+  max_age_days: null           # 只提取最近 N 天发布（发布时间缺失回退抓取时间）；null = 不限
   keyword_filter: null         # 仅含关键词（逗号分隔，标题+正文）
   skip_keywords: null          # 排除关键词（标题命中即跳过）
   require_time_hint: false     # 必须含时间线索（日期/报名/截止等）
   match_subscription_only: false  # 仅提取至少命中一条订阅的通知
   retry_failed: true           # 每轮顺带重试 status=failed 的通知
+  skip_llm: false              # 跳过 LLM 提取：仅入库 + 建索引，状态置 partial（省 token 模式）
 scheduler:
   enabled: true        # API lifespan 是否拉起调度器
   enable_daily: true   # 过期清理 + 向量一致性检查
@@ -376,7 +377,7 @@ sources:
 | 模块 | 主要端点 | 说明 |
 | --- | --- | --- |
 | notices | `GET /notices`（分页信封）、`GET /notices/{id}`、`GET /notices/status-counts`、`GET /notices/meta`、`GET /notices/sources`、`GET /notices/types` | 只读浏览 + 元信息 |
-| notices 管理 | `DELETE /notices/{id}`、`POST /notices/{id}/reset`、`POST /notices/{id}/re-extract`（任务）、`POST /notices/batch-delete`（任务）、`POST /notices/batch-reset`（任务） | CRUD |
+| notices 管理 | `DELETE /notices/{id}`、`POST /notices/{id}/reset`、`POST /notices/{id}/re-extract`（任务）、`POST /notices/batch-delete`（任务）、`POST /notices/batch-reset`（任务）、`POST /notices/extract-preview`（dry-run 预筛，返回将提取/跳过明细及原因） | CRUD + 提取预览 |
 | todos | `GET /todos`、`GET /todos/stats`、`POST /todos/{id}/status`、`PATCH /todos/{id}`（action/due_at/notes）、`POST /notices/{id}/todos`（任务）、`GET /notices/{id}/todos` | 待办中心 |
 | reminders | `GET /reminders`、`GET /reminders/stats`、`GET /reminders/pending-count`、`POST /reminders/{id}/status` | 截止提醒 |
 | subscriptions | `GET /subscriptions`、`GET /subscriptions/stats`、`POST /subscriptions/preview`、`POST /subscriptions`（任务）、`PUT /subscriptions/{id}`（任务）、`POST /subscriptions/{id}/toggle`（任务）、`DELETE /subscriptions/{id}`、`POST /subscriptions/match-all`（任务）、`GET /subscriptions/{id}/notices` | 两步式订阅 |
@@ -395,8 +396,10 @@ sources:
 | 网页抓取失败 | 按 `crawl.retry_times` 指数退避重试（默认 2 次），记录失败日志（crawl_log） |
 | LLM 调用限流 | 指数退避重试（已在 RAG 项目验证） |
 | 提取结果为空 | 保留原始通知，标记 `status=failed` |
-| 提取前置过滤 | 不调 LLM，落 `extract_skipped_reason`，状态保持 raw（可重置/变更后恢复候选） |
-| 向量索引失败 | 不阻塞主流程，记录日志 |
+| 提取前置过滤 | 不调 LLM，落 `extract_skipped_reason`，状态保持 raw（可重置/变更后恢复候选）；时效按发布时间（缺失回退抓取时间） |
+| 提取预览 | `POST /notices/extract-preview` dry-run 预筛，不落库不改状态；前端勾选后提交 `notice_ids`（显式勾选跳过预筛） |
+| 跳过 LLM 提取 | `config.extract.skip_llm=true`：不调 LLM，仅订阅匹配 + 建索引，状态置 partial（仅索引未结构化） |
+| 向量索引失败 | 不阻塞主流程，记录日志（旧 chunk 已删，每日体检一致性重建兜底） |
 | 长耗时操作 | 异步任务化（202 + 轮询），失败落 tasks.error |
 | 埋点写库失败 | 只记日志返回 ok=false，不阻塞主流程 |
 | 调度 job 失败 | 不吞异常，落 scheduler_log（含连续失败计数） |

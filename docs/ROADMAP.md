@@ -146,6 +146,19 @@
 - [x] 前端：数据源表单新字段 + 测试链接自动填充 URL 模式 + 「抓取与提取」配置 tab + 抓取/深度抓取对话框 + 「已跳过提取」标签
 - [x] 测试：早停/时效/深检/预筛单测（`test_incremental_crawl.py`）+ 既有测试适配（`prefilter=False` / `deep_check=True` / 调度桩 `**kwargs`）+ 实测（6 源全库一轮 ≈ 3.5s，深检 13 条 ≈ 5s）
 
+## 阶段 7.1 修复 + 提取体验 ✅
+
+> 依据用户实测反馈（`docs/测试记录(only read).md` / `docs-local/assest/提取相关内容.md`）：
+> 预筛"最大通知天数"语义与预期不符（原按抓取时间）、分页页被当通知、无进度提示、无法预览。
+
+- [x] 修复：预筛时效按**发布时间**计算（缺失回退抓取时间）——`prefilter_notice` 语义修复 + 测试注入配置（`extract_cfg` 参数）
+- [x] 修复：抓取排除分页页码 / 列表页自身 URL（`exclude_urls` 集合），分页页不再被当通知收录
+- [x] 修复：向量写入失败明确日志（embedding None 等），留待每日体检一致性重建
+- [x] 提取前预览：`POST /notices/extract-preview`（dry-run 不落库）+ 前端勾选弹窗（将提取可勾选 / 跳过带原因）+ `extract_batch(notice_ids=...)` 显式勾选跳过预筛
+- [x] 任务进度条：抓取 / 批量提取运行时实时展示（后端 `tasks.progress` 原生支持）
+- [x] 省 Token 开关：`config.extract.skip_llm`（不调 LLM 仅入库 + 索引，状态 partial；RAG 不受影响）
+- [x] 后续省 Token 方案（meta_only / 输出长度控制 / 提取并发）登记 GitHub issue #5
+
 ---
 
 ### Phase 0：仓库初始化 ✅
