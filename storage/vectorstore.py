@@ -215,8 +215,14 @@ class VectorIndex:
 
         docs = _split_notice(notice)
         ids = [_doc_id(notice_id, idx) for idx in range(len(docs))]
-        if docs:
+        if not docs:
+            return {"notice_id": notice_id, "chunks": 0}
+        try:
             store.add_documents(docs, ids=ids)
+        except Exception as e:
+            # embedding 返回 None / 模型故障等：旧 chunk 已删，留待每日体检一致性重建
+            logger.warning("向量写入失败 notice_id=%s（旧 chunk 已删，待体检重建）: %s", notice_id, e)
+            raise
         return {"notice_id": notice_id, "chunks": len(docs)}
 
     def remove_notice(self, notice_id: int) -> int:
