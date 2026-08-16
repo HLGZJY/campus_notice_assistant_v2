@@ -158,6 +158,7 @@
 - [x] 任务进度条：抓取 / 批量提取运行时实时展示（后端 `tasks.progress` 原生支持）
 - [x] 省 Token 开关：`config.extract.skip_llm`（不调 LLM 仅入库 + 索引，状态 partial；RAG 不受影响）
 - [x] 后续省 Token 方案（meta_only / 输出长度控制 / 提取并发）登记 GitHub issue #5
+- [x] 修复：手动抓取勾选只抓选中来源（`crawl_all_sources(sources=...)` + workers 透传 mode/max_pages，此前勾选仅过滤展示实际抓全量）+ 前端合并抓取/深度抓取按钮（深度检查并入抓取对话框）
 
 ---
 
