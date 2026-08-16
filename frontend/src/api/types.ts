@@ -479,6 +479,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/config/providers/{provider_name}/api-key": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Put Provider Api Key
+         * @description 写入供应商 API Key 到 .env（gitignore，不落库），免重启生效。
+         */
+        put: operations["put_provider_api_key_api_v1_config_providers__provider_name__api_key_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/config/sources": {
         parameters: {
             query?: never;
@@ -1023,6 +1043,30 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         /**
+         * ApiKeyRequest
+         * @description 供应商 API Key 写入请求体（后端 upsert 到 .env，不入库不落 YAML）。
+         */
+        ApiKeyRequest: {
+            /** Api Key */
+            api_key: string;
+        };
+        /**
+         * ApiKeyResult
+         * @description API Key 写入结果。
+         */
+        ApiKeyResult: {
+            /** Ok */
+            ok: boolean;
+            /** Env Var */
+            env_var?: string | null;
+            /** Env Path */
+            env_path?: string | null;
+            /** Error */
+            error?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * ConfigMutationResult
          * @description 配置写操作结果（models/providers/sources PUT 共用）。
          */
@@ -1282,12 +1326,15 @@ export interface components {
         /**
          * ModelProfile
          * @description 某个任务（extraction / qa / todo / embedding）使用的模型配置。
+         *
+         *     models: 有序模型候选列表，先尝试在前。首模型失败（配额/网络/5xx 等可恢复错误）
+         *             时自动切换到下一个（同供应商内）。旧格式 model: "x" 自动迁移为 models: ["x"]。
          */
         ModelProfile: {
             /** Provider */
             provider: string;
-            /** Model */
-            model: string;
+            /** Models */
+            models: string[];
         };
         /**
          * ModelProfileView
@@ -1296,8 +1343,11 @@ export interface components {
         ModelProfileView: {
             /** Provider */
             provider: string;
-            /** Model */
-            model: string;
+            /**
+             * Models
+             * @default []
+             */
+            models: string[];
         } & {
             [key: string]: unknown;
         };
@@ -1540,6 +1590,7 @@ export interface components {
          *
          *     不直接保存 api_key，而是通过 api_key_env 引用环境变量名，
          *     避免密钥写入版本控制的 YAML。
+         *     models: 该供应商可选的模型名列表（纯手动维护，供前端下拉选择）。
          */
         ProviderConfig: {
             /** Name */
@@ -1554,6 +1605,11 @@ export interface components {
              * @default
              */
             api_key_env: string;
+            /**
+             * Models
+             * @default []
+             */
+            models: string[];
         };
         /**
          * ProviderView
@@ -1577,6 +1633,11 @@ export interface components {
              * @default false
              */
             api_key_status: boolean;
+            /**
+             * Models
+             * @default []
+             */
+            models: string[];
         } & {
             [key: string]: unknown;
         };
@@ -3085,6 +3146,43 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConfigMutationResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_provider_api_key_api_v1_config_providers__provider_name__api_key_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path: {
+                provider_name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApiKeyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiKeyResult"];
                 };
             };
             /** @description Validation Error */

@@ -19,6 +19,8 @@ const activeTab = ref('models')
 
 const modelsDraft = ref<ModelsConfig | null>(null)
 const providerDraft = ref<Record<string, ProviderConfig>>({})
+const providerKeyDraft = ref<Record<string, string>>({})
+const savingKey = ref<Record<string, boolean>>({})
 const sourcesDraft = ref<SourceConfig[]>([])
 const crawlDraft = ref<CrawlConfig | null>(null)
 const extractDraft = ref<ExtractConfig | null>(null)
@@ -30,6 +32,11 @@ const reloading = ref(false)
 const loading = ref(false)
 
 const providerNames = computed(() => Object.keys(cfg.providers || {}))
+
+const taskKeys = ['extraction', 'qa', 'todo', 'embedding'] as const
+type TaskKey = (typeof taskKeys)[number]
+
+type SelectValue = string | number | Array<string | number> | null
 
 const taskLabels: Record<string, string> = {
   extraction: '信息提取',
@@ -68,22 +75,28 @@ async function load() {
 function initDrafts() {
   if (cfg.models) {
     modelsDraft.value = {
-      extraction: { ...cfg.models.extraction },
-      qa: { ...cfg.models.qa },
-      todo: { ...cfg.models.todo },
-      embedding: { ...cfg.models.embedding },
+      extraction: { provider: cfg.models.extraction.provider, models: [...cfg.models.extraction.models] },
+      qa: { provider: cfg.models.qa.provider, models: [...cfg.models.qa.models] },
+      todo: { provider: cfg.models.todo.provider, models: [...cfg.models.todo.models] },
+      embedding: { provider: cfg.models.embedding.provider, models: [...cfg.models.embedding.models] },
     }
     testModelInput.value = {}
     for (const profile of Object.values(cfg.models) as ModelProfileView[]) {
       if (profile.provider && !testModelInput.value[profile.provider]) {
-        testModelInput.value[profile.provider] = profile.model
+        testModelInput.value[profile.provider] = profile.models?.[0] ?? ''
       }
     }
   }
   providerDraft.value = {}
   for (const [name, p] of Object.entries(cfg.providers || {})) {
-    providerDraft.value[name] = { name: p.name, base_url: p.base_url, api_key_env: p.api_key_env }
+    providerDraft.value[name] = {
+      name: p.name,
+      base_url: p.base_url,
+      api_key_env: p.api_key_env,
+      models: [...(p.models ?? [])],
+    }
   }
+  providerKeyDraft.value = {}
   sourcesDraft.value = (cfg.sources?.sources ?? []).map((s) => ({ ...s }))
   crawlDraft.value = cfg.crawl ? { ...cfg.crawl } : null
   extractDraft.value = cfg.extract ? { ...cfg.extract } : null
@@ -117,6 +130,144 @@ async function saveProviders() {
     message.error(e instanceof Error ? e.message : String(e))
   } finally {
     saving.value = false
+  }
+}
+
+// ---------- 任务候选模型列表操作 ----------
+
+function modelOptionsFor(provider: string) {
+  return (cfg.providers?.[provider]?.models ?? []).map((m) => ({ label: m, value: m }))
+}
+
+function addTaskModel(task: TaskKey) {
+  modelsDraft.value![task].models.push('')
+}
+
+function removeTaskModel(task: TaskKey, idx: number) {
+  const arr = modelsDraft.value![task].models
+  if (arr.length <= 1) {
+    message.warning('至少保留一个候选模型')
+    return
+  }
+  arr.splice(idx, 1)
+}
+
+function moveTaskModel(task: TaskKey, idx: number, dir: number) {
+  const arr = modelsDraft.value![task].models
+  const j = idx + dir
+  if (j < 0 || j >= arr.length) return
+  const tmp = arr[idx]
+  arr[idx] = arr[j]
+  arr[j] = tmp
+}
+
+function setTaskModel(task: TaskKey, idx: number, v: SelectValue) {
+  const arr = modelsDraft.value![task].models
+  const val = Array.isArray(v) ? String(v[0] ?? '') : (v ?? '').toString()
+  if (arr[idx] !== undefined) arr[idx] = val
+}
+
+async function testModelRow(provider: string, model: string) {
+  if (!model.trim()) {
+    message.warning('该候选模型为空，请先填写模型名')
+    return
+  }
+  const id = `${provider}::${model}`
+  testBusy.value[id] = true
+  try {
+    const res = await cfg.testModel({ provider, model, timeout: 30 })
+    if (res.ok) {
+      message.success(`连接成功（${res.latency_ms}ms）${res.completion ? `：${res.completion}` : ''}`)
+    } else {
+      message.error(res.error || '连接失败')
+    }
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : String(e))
+  } finally {
+    testBusy.value[id] = false
+  }
+}
+
+// ---------- 供应商增删 / 改名 / API Key ----------
+
+function addProvider() {
+  const base = 'new-provider'
+  let name = base
+  let i = 2
+  while (providerDraft.value[name]) {
+    name = `${base}-${i}`
+    i += 1
+  }
+  providerDraft.value[name] = { name, base_url: '', api_key_env: '', models: [] }
+}
+
+function onNameBlur(oldName: string) {
+  const p = providerDraft.value[oldName]
+  if (!p) return
+  const newName = (p.name || '').trim() || oldName
+  if (newName === oldName) {
+    p.name = oldName
+    return
+  }
+  if (providerDraft.value[newName]) {
+    message.error(`供应商「${newName}」已存在`)
+    p.name = oldName
+    return
+  }
+  delete providerDraft.value[oldName]
+  p.name = newName
+  providerDraft.value[newName] = p
+  for (const [k, v] of Object.entries(providerKeyDraft.value)) {
+    if (k === oldName) {
+      providerKeyDraft.value[newName] = v
+      delete providerKeyDraft.value[k]
+    }
+  }
+  for (const [k, v] of Object.entries(testModelInput.value)) {
+    if (k === oldName) {
+      testModelInput.value[newName] = v
+      delete testModelInput.value[k]
+    }
+  }
+}
+
+function removeProvider(name: string) {
+  const used = (Object.values(modelsDraft.value ?? {}) as ModelProfileView[]).some(
+    (p) => p.provider === name
+  )
+  if (used) {
+    message.error(`任务模型仍在引用供应商「${name}」，请先在「模型」tab 更换后再删除`)
+    return
+  }
+  delete providerDraft.value[name]
+  delete providerKeyDraft.value[name]
+  delete testModelInput.value[name]
+}
+
+async function saveProviderKey(name: string) {
+  const key = (providerKeyDraft.value[name] || '').trim()
+  if (!key) {
+    message.warning('请先粘贴 API Key')
+    return
+  }
+  savingKey.value[name] = true
+  try {
+    const res = await cfg.saveApiKey(name, key)
+    if (res.ok) {
+      providerKeyDraft.value[name] = ''
+      message.success(`已写入 .env（${res.env_var}）${res.env_path ? `：${res.env_path}` : ''}`)
+      await cfg.fetchProviders()
+      const p = providerDraft.value[name]
+      if (p && cfg.providers?.[name]) {
+        p.api_key_env = cfg.providers[name].api_key_env
+      }
+    } else {
+      message.error(res.error || '写入失败')
+    }
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : String(e))
+  } finally {
+    savingKey.value[name] = false
   }
 }
 
@@ -243,16 +394,58 @@ async function reloadConfig() {
     <n-spin :show="loading">
       <n-tabs v-model:value="activeTab" type="line" animated>
         <n-tab-pane name="models" tab="模型">
+          <n-alert type="info" :bordered="false" style="margin-bottom: 12px">
+            每个任务按序尝试候选模型（同供应商内）：前一个模型失败（配额不足/网络/5xx/404）时自动切换下一个。
+            模型名下拉候选来自「供应商」tab 维护的可选模型列表，也可直接输入自定义模型名。
+          </n-alert>
           <n-form label-placement="left" label-width="90" v-if="modelsDraft">
-            <n-form-item v-for="task in (['extraction', 'qa', 'todo', 'embedding'] as const)" :key="task" :label="taskLabels[task]">
-              <n-space>
-                <n-select
-                  v-model:value="modelsDraft[task].provider"
-                  :options="providerNames.map((p) => ({ label: p, value: p }))"
-                  placeholder="Provider"
-                  style="width: 200px"
-                />
-                <n-input v-model:value="modelsDraft[task].model" placeholder="模型名" style="width: 300px" />
+            <n-form-item v-for="task in taskKeys" :key="task" :label="taskLabels[task]">
+              <n-space vertical>
+                <n-space>
+                  <n-select
+                    v-model:value="modelsDraft[task].provider"
+                    :options="providerNames.map((p) => ({ label: p, value: p }))"
+                    placeholder="Provider"
+                    style="width: 200px"
+                  />
+                </n-space>
+                <n-space v-for="(m, idx) in modelsDraft[task].models" :key="idx">
+                  <n-select
+                    :value="modelsDraft[task].models[idx]"
+                    @update:value="(v: SelectValue) => setTaskModel(task, idx, v)"
+                    :options="modelOptionsFor(modelsDraft[task].provider)"
+                    filterable
+                    tag
+                    placeholder="模型名（可输入自定义）"
+                    style="width: 300px"
+                  />
+                  <n-button size="small" quaternary :disabled="idx === 0" @click="moveTaskModel(task, idx, -1)">
+                    ↑
+                  </n-button>
+                  <n-button
+                    size="small"
+                    quaternary
+                    :disabled="idx === modelsDraft[task].models.length - 1"
+                    @click="moveTaskModel(task, idx, 1)"
+                  >
+                    ↓
+                  </n-button>
+                  <n-button size="small" quaternary type="error" @click="removeTaskModel(task, idx)">
+                    移除
+                  </n-button>
+                  <n-button
+                    size="small"
+                    secondary
+                    :loading="testBusy[`${modelsDraft[task].provider}::${m}`]"
+                    @click="testModelRow(modelsDraft[task].provider, m)"
+                  >
+                    测试
+                  </n-button>
+                </n-space>
+                <n-space>
+                  <n-button size="small" secondary @click="addTaskModel(task)">添加候选模型</n-button>
+                  <span style="font-size: 12px; color: #999">先尝试在上，失败自动切向下一个</span>
+                </n-space>
               </n-space>
             </n-form-item>
             <n-button type="primary" :loading="saving" @click="saveModels">保存模型配置</n-button>
@@ -261,33 +454,69 @@ async function reloadConfig() {
 
         <n-tab-pane name="providers" tab="供应商">
           <n-space vertical size="large">
-            <n-card
-              v-for="(p, name) in providerDraft"
-              :key="name"
-              size="small"
-              :title="`${name}（${name}）`"
-            >
-              <n-form label-placement="left" label-width="110">
+            <n-card v-for="(p, name) in providerDraft" :key="name" size="small" :title="`供应商：${name}`">
+              <n-form label-placement="left" label-width="140">
+                <n-form-item label="名称">
+                  <n-input v-model:value="p.name" @blur="onNameBlur(name)" placeholder="供应商唯一标识" style="width: 240px" />
+                </n-form-item>
                 <n-form-item label="Base URL">
                   <n-input v-model:value="p.base_url" placeholder="https://api.example.com" />
                 </n-form-item>
                 <n-form-item label="API Key 环境变量">
-                  <n-input v-model:value="p.api_key_env" placeholder="OPENAI_API_KEY" />
+                  <n-input v-model:value="p.api_key_env" placeholder="OPENAI_API_KEY" style="width: 240px" />
+                  <template #feedback>Key 写入 .env 的该变量名；留空时保存 Key 会自动生成 &lt;NAME&gt;_API_KEY</template>
+                </n-form-item>
+                <n-form-item label="API Key">
+                  <n-space>
+                    <n-input
+                      v-model:value="providerKeyDraft[name]"
+                      type="password"
+                      show-password-on="click"
+                      placeholder="粘贴 API Key，保存后写入 .env"
+                      style="width: 320px"
+                    />
+                    <n-button
+                      size="small"
+                      secondary
+                      type="primary"
+                      :loading="savingKey[name]"
+                      @click="saveProviderKey(name)"
+                    >
+                      保存 Key 到 .env
+                    </n-button>
+                  </n-space>
+                  <template #feedback>不落库、不进 YAML，仅写入项目根 .env（已 gitignore，免重启生效）</template>
                 </n-form-item>
                 <n-form-item label="Key 状态">
-                  <n-tag :bordered="false" :type="cfg.providers?.[name]?.api_key_status ? 'success' : 'default'" size="small">
-                    已配置{{ cfg.providers?.[name]?.api_key_status ? '' : '（未读）' }}
+                  <n-tag
+                    :bordered="false"
+                    :type="cfg.providers?.[name]?.api_key_status ? 'success' : 'default'"
+                    size="small"
+                  >
+                    {{ cfg.providers?.[name]?.api_key_status ? '已配置' : '未配置' }}
                   </n-tag>
+                </n-form-item>
+                <n-form-item label="可选模型">
+                  <n-dynamic-tags v-model:value="p.models" :max="20" size="small" style="min-width: 340px" />
+                  <template #feedback>「模型」tab 的下拉候选；留空则模型名只能手动输入</template>
                 </n-form-item>
                 <n-form-item label="连通性测试">
                   <n-space>
                     <n-input v-model:value="testModelInput[name]" placeholder="测试用模型名" style="width: 200px" />
-                    <n-button size="small" secondary :loading="testBusy[name]" @click="testProvider(name)">测试连接</n-button>
+                    <n-button size="small" secondary :loading="testBusy[name]" @click="testProvider(name)">
+                      测试连接
+                    </n-button>
                   </n-space>
+                </n-form-item>
+                <n-form-item label=" ">
+                  <n-button size="small" quaternary type="error" @click="removeProvider(name)">删除供应商</n-button>
                 </n-form-item>
               </n-form>
             </n-card>
-            <n-button type="primary" :loading="saving" @click="saveProviders">保存供应商配置</n-button>
+            <n-space>
+              <n-button secondary @click="addProvider">添加供应商</n-button>
+              <n-button type="primary" :loading="saving" @click="saveProviders">保存供应商配置</n-button>
+            </n-space>
           </n-space>
         </n-tab-pane>
 

@@ -3,6 +3,8 @@ import { ref } from 'vue'
 import { endpoints } from '../api/endpoints'
 import { get, post, put } from '../api/http'
 import type {
+  ApiKeyRequest,
+  ApiKeyResult,
   ConfigMutationResult,
   CrawlConfig,
   DiskInfo,
@@ -95,6 +97,11 @@ export const useConfigStore = defineStore('config', () => {
     return await post<TestModelResult>(endpoints.config.testModel, payload)
   }
 
+  async function saveApiKey(providerName: string, apiKey: string) {
+    const body: ApiKeyRequest = { api_key: apiKey }
+    return await put<ApiKeyResult>(endpoints.config.apiKey(providerName), body)
+  }
+
   return {
     values,
     models,
@@ -119,5 +126,6 @@ export const useConfigStore = defineStore('config', () => {
     reload,
     testSource,
     testModel,
+    saveApiKey,
   }
 })

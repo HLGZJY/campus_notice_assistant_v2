@@ -55,6 +55,7 @@ export const endpoints = {
     reload: `${API_BASE}/config/reload`,
     testSource: `${API_BASE}/config/test-source`,
     testModel: `${API_BASE}/config/test-model`,
+    apiKey: (providerName: string) => `${API_BASE}/config/providers/${providerName}/api-key`,
   },
   tasks: {
     list: `${API_BASE}/tasks`,
