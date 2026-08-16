@@ -34,7 +34,16 @@ DEFAULT_MAX_PAGES = 20  # 最多翻多少页，防止失控
 
 @dataclass
 class ListPageConfig:
-    """单个列表页的配置（可从 YAML 加载，也可自动发现）。"""
+    """单个列表页的配置（可从 YAML 加载，也可自动发现）。
+
+    阶段 7 抓取/提取优化新增字段：
+      - crawl_mode: incremental（增量早停，默认）/ full（全量+变更检测）/ list_only（仅列表快照）
+      - max_age_days: 只收录最近 N 天发布的通知（按列表页日期，无日期则忽略）
+      - fetch_detail: 是否抓详情页（false = 仅收列表页标题/日期）
+      - deep_check: 每轮重抓已入库详情页做内容指纹变更检测
+      - stop_when_caught_up: 整页均已入库时停止翻页（incremental 生效）
+      - request_timeout / retry_times / concurrency: 详情页请求参数
+    """
 
     list_url: str
     source_name: str = ""
@@ -44,6 +53,14 @@ class ListPageConfig:
     pagination_selector: Optional[str] = None
     # 可选：最大翻页数
     max_pages: int = DEFAULT_MAX_PAGES
+    crawl_mode: str = "incremental"  # incremental / full / list_only
+    max_age_days: Optional[int] = None
+    fetch_detail: bool = True
+    deep_check: bool = False
+    stop_when_caught_up: bool = True
+    request_timeout: int = DEFAULT_TIMEOUT
+    retry_times: int = 2
+    concurrency: int = 1
 
 
 @dataclass
@@ -197,6 +214,23 @@ class ListPageParser:
                 missing.append(url)
 
         return missing
+
+    def suggest_url_pattern(self, limit: int = 5) -> tuple[Optional[str], list[str]]:
+        """返回自动发现的最佳链接模式（正则）与示例链接，供 UI 一键填入 url_pattern。
+
+        例如 scuec 的通知路径 /info/1009/1.htm → 建议模式 "info/\\d+/1\\.htm"。
+        """
+        all_links = self._extract_all_links()
+        filtered = self._auto_discover_links(all_links)
+        if not filtered:
+            return None, []
+        url = filtered[0][1]
+        path = urlparse(url).path.lstrip("/")
+        if not path:
+            return None, []
+        pattern = re.sub(r"\d+", r"\\d+", re.escape(path))
+        samples = [u for _, u in filtered[:limit]]
+        return pattern, samples
 
     def _extract_all_links(self) -> list[tuple[str, str]]:
         """提取页面所有链接，返回 (text, full_url) 列表。"""

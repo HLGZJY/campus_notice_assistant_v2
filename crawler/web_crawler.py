@@ -1,5 +1,18 @@
-"""网页爬虫：列表页遍历 + 详情页提取。"""
+"""网页爬虫：列表页遍历 + 详情页提取（阶段 7：增量早停 + 抓取模式）。
+
+工作流程：
+1. 抓取列表页第一页，自动发现通知链接 + 翻页链接
+2. 按 crawl_mode 遍历翻页：
+   - incremental（默认）：遇到"整页通知均已入库"立即停止翻页；
+   - full：翻满 max_pages 并对已入库通知重抓详情页做变更检测；
+   - list_only：只收录列表页标题/日期，不抓详情页
+3. 仅对新增 URL 抓详情页（incremental 默认不重抓已入库详情页，除非 deep_check）
+4. 存入 SQLite（URL 去重）
+"""
 import logging
+import time
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta
 from typing import Optional
 
 import newspaper
@@ -51,112 +64,170 @@ def _match_notice_by_url(url: str) -> None:
         logger.warning("订阅匹配失败 url=%s: %s", url, e)
 
 
+def _parse_published_date(value: Optional[str]) -> Optional[datetime]:
+    """宽容解析列表页日期（date-only / ISO / 带空格）。"""
+    if not value:
+        return None
+    text = value.strip()
+    try:
+        return datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        pass
+    import re
+
+    m = re.search(r"(\d{4})-(\d{1,2})-(\d{1,2})", text)
+    if m:
+        try:
+            return datetime(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+        except ValueError:
+            return None
+    return None
+
+
 class WebCrawler:
     """网页爬虫：抓取列表页所有通知，存入 SQLite。
 
     工作流程：
     1. 抓取列表页第一页
     2. 自动发现通知链接 + 翻页链接
-    3. 遍历所有翻页，收集全部通知链接
-    4. 对每个通知链接，用 newspaper4k 提取详情
+    3. 按模式遍历翻页（增量早停 / 全量 / 仅列表）
+    4. 对需要的新通知链接，用 newspaper4k 提取详情
     5. 存入 SQLite（URL 去重）
     """
 
     def __init__(self, config: ListPageConfig):
         self.config = config
-        self.fetcher = PageFetcher()
+        self.fetcher = PageFetcher(timeout=config.request_timeout)
 
     def crawl(self) -> CrawlResult:
         """执行完整抓取流程。"""
         result = CrawlResult(source=self.config.source_name or self.config.list_url)
-        all_notices: dict[str, NoticeItem] = {}  # url -> NoticeItem（去重）
-
-        # 1. 抓取第一页，发现通知链接和翻页
-        try:
-            html = self.fetcher.fetch(self.config.list_url)
-        except Exception as e:
-            result.errors.append(f"列表页抓取失败: {type(e).__name__}: {e}")
-            return result
-
-        parser = ListPageParser(html, self.config.list_url)
-
-        # 发现第一页的通知链接
-        notices = parser.discover_notice_links(self.config.url_pattern)
-        for n in notices:
-            all_notices[n.url] = n
-        result.total_discovered = len(all_notices)
-
-        # 2. 发现并遍历翻页
-        pagination = parser.discover_pagination()
-        pages_to_crawl = pagination.page_urls[: self.config.max_pages - 1]
-
-        for page_url in pages_to_crawl:
-            try:
-                page_html = self.fetcher.fetch(page_url)
-                page_parser = ListPageParser(page_html, page_url)
-                page_notices = page_parser.discover_notice_links(
-                    self.config.url_pattern
-                )
-                for n in page_notices:
-                    if n.url not in all_notices:
-                        all_notices[n.url] = n
-            except Exception as e:
-                result.errors.append(f"翻页抓取失败 {page_url}: {e}")
-
-        result.total_discovered = len(all_notices)
-        logger.info(
-            f"[{result.source}] 共发现 {result.total_discovered} 条通知，"
-            f"来自 {len(pages_to_crawl) + 1} 页"
-        )
-
-        # 3. 抓取详情页，存入 SQLite（已存在 URL 也抓详情页，用于内容指纹变更检测）
         conn = get_connection()
         try:
-            for url, item in all_notices.items():
-                existing = get_notice_by_url(conn, url)
+            # ---------- 1. 抓取第一页，发现通知链接和翻页 ----------
+            try:
+                html = self.fetcher.fetch(self.config.list_url)
+            except Exception as e:
+                result.errors.append(f"列表页抓取失败: {type(e).__name__}: {e}")
+                log_crawl(
+                    conn,
+                    result.source,
+                    0,
+                    0,
+                    0,
+                    0,
+                    result.errors,
+                    0,
+                )
+                return result
 
+            known_urls = self._load_known_urls(conn)
+            all_notices: dict[str, NoticeItem] = {}  # url -> NoticeItem（去重）
+
+            parser = ListPageParser(html, self.config.list_url)
+            pagination = parser.discover_pagination()
+            added, discovered = self._collect_notices(parser, all_notices, known_urls)
+            result.total_discovered = len(all_notices)
+
+            # ---------- 2. 遍历翻页（增量早停 / 全量） ----------
+            pages_to_crawl = pagination.page_urls[: self.config.max_pages - 1]
+            pages_fetched = 1
+            for page_url in pages_to_crawl:
+                if self._should_stop_pagination(added, discovered):
+                    break
                 try:
-                    record = self._fetch_detail(url, item.title, item.published_at)
-                    if not record:
-                        result.total_failed += 1
-                        result.errors.append(f"详情页失败 {url}: 无法提取正文")
-                        continue
+                    page_html = self.fetcher.fetch(page_url)
                 except Exception as e:
-                    result.total_failed += 1
-                    result.errors.append(f"详情页失败 {url}: {e}")
-                    logger.warning(f"详情页失败 {url}: {e}")
+                    result.errors.append(f"翻页抓取失败 {page_url}: {e}")
                     continue
+                page_parser = ListPageParser(page_html, page_url)
+                added, discovered = self._collect_notices(
+                    page_parser, all_notices, known_urls
+                )
+                pages_fetched += 1
 
-                record.content_hash = compute_content_hash(record.raw_content)
+            result.total_discovered = len(all_notices)
+            logger.info(
+                f"[{result.source}] 共发现 {result.total_discovered} 条通知，"
+                f"来自 {pages_fetched} 页（模式={self.config.crawl_mode}"
+                + (f"，最近 {self.config.max_age_days} 天" if self.config.max_age_days else "")
+                + "）"
+            )
 
+            # ---------- 3. 处理详情页：仅新增抓详情；已入库按 deep_check 决定 ----------
+            new_items: list[tuple[str, NoticeItem]] = []
+            for url, item in all_notices.items():
+                existing = known_urls.get(url)
                 if existing:
-                    # 已有记录：内容指纹比较 → 变更检测
-                    if existing.get("content_hash") != record.content_hash:
-                        update_notice_content(
-                            conn,
-                            url,
-                            record.title,
-                            record.raw_content,
-                            record.content_hash,
-                        )
-                        result.total_changed += 1
-                        logger.info(
-                            f"[{result.source}] 内容变更，重置为待提取: {url}"
-                        )
-                        _match_notice_by_url(url)
+                    if self.config.deep_check or self.config.crawl_mode == "full":
+                        self._deep_check_existing(conn, url, item, existing, result)
                     else:
-                        # 正文未变更：不触发任何提取/索引动作
-                        if not existing["published_at"] and item.published_at:
+                        # 已入库且正文未重抓：仅补日期，不触发任何提取/索引动作
+                        if not existing.get("published_at") and item.published_at:
                             update_notice_date(conn, url, item.published_at)
                             result.total_updated += 1
                         else:
                             result.total_skipped += 1
-                            logger.info(f"[{result.source}] skipped(正文未变更): {url}")
+                            logger.info(f"[{result.source}] skipped(已入库): {url}")
                 else:
-                    insert_notice(conn, record)
-                    result.total_new += 1
-                    _match_notice_by_url(url)
-        finally:
+                    new_items.append((url, item))
+
+            # 详情页抓取（并发可选；抓取只读网络，写库回到主线程，规避 SQLite 线程约束）
+            records: list[tuple[str, NoticeItem, Optional[NoticeRecord]]] = []
+            if new_items:
+                if self.config.fetch_detail:
+                    if self.config.concurrency > 1:
+                        with ThreadPoolExecutor(
+                            max_workers=self.config.concurrency,
+                            thread_name_prefix="crawl-detail",
+                        ) as pool:
+                            records = list(
+                                pool.map(
+                                    lambda it: (
+                                        it[0],
+                                        it[1],
+                                        self._fetch_detail_with_retry(
+                                            it[0], it[1].title, it[1].published_at
+                                        ),
+                                    ),
+                                    new_items,
+                                )
+                            )
+                    else:
+                        records = [
+                            (
+                                url,
+                                item,
+                                self._fetch_detail_with_retry(
+                                    url, item.title, item.published_at
+                                ),
+                            )
+                            for url, item in new_items
+                        ]
+                else:
+                    # list_only：仅收录列表页标题/日期，不抓详情页
+                    records = [
+                        (url, item, None) for url, item in new_items
+                    ]
+
+            for url, item, record in records:
+                if record is None and self.config.fetch_detail:
+                    result.total_failed += 1
+                    result.errors.append(f"详情页失败 {url}: 无法提取正文")
+                    continue
+                if record is None:
+                    record = NoticeRecord(
+                        url=url,
+                        source=self.config.source_name,
+                        title=item.title,
+                        raw_content="",
+                        published_at=item.published_at,
+                    )
+                record.content_hash = compute_content_hash(record.raw_content)
+                insert_notice(conn, record)
+                result.total_new += 1
+                _match_notice_by_url(url)
+
             log_crawl(
                 conn,
                 result.source,
@@ -167,9 +238,108 @@ class WebCrawler:
                 result.errors,
                 result.total_changed,
             )
+            return result
+        finally:
             conn.close()
 
-        return result
+    # ---------- 内部：列表页 ----------
+
+    def _load_known_urls(self, conn) -> dict[str, dict]:
+        """加载库中已有 URL → {url: {published_at, content_hash}}，供早停/去重/变更判断。"""
+        rows = conn.execute(
+            "SELECT url, published_at, content_hash FROM notices"
+        ).fetchall()
+        return {r["url"]: dict(r) for r in rows}
+
+    def _collect_notices(
+        self,
+        parser: ListPageParser,
+        all_notices: dict[str, NoticeItem],
+        known_urls: dict[str, dict],
+    ) -> tuple[int, int]:
+        """收集一页的通知链接（含时效过滤），返回 (本页新增数, 本页发现数)。"""
+        notices = parser.discover_notice_links(self.config.url_pattern)
+        if self.config.max_age_days:
+            notices = [n for n in notices if self._age_ok(n)]
+        added = 0
+        for n in notices:
+            if n.url not in all_notices and n.url not in known_urls:
+                added += 1
+            all_notices[n.url] = n
+        return added, len(notices)
+
+    def _age_ok(self, item: NoticeItem) -> bool:
+        """时效过滤：列表页日期早于窗口则跳过（无日期不拦截）。"""
+        if not self.config.max_age_days or not item.published_at:
+            return True
+        published = _parse_published_date(item.published_at)
+        if published is None:
+            return True
+        cutoff = datetime.now() - timedelta(days=self.config.max_age_days)
+        return published >= cutoff
+
+    def _should_stop_pagination(self, added: int, discovered: int) -> bool:
+        """增量早停：整页通知均已入库（或全被时效过滤）时停止翻页。"""
+        if self.config.crawl_mode != "incremental":
+            return False
+        if not self.config.stop_when_caught_up:
+            return False
+        return discovered > 0 and added == 0
+
+    # ---------- 内部：详情页 ----------
+
+    def _deep_check_existing(
+        self,
+        conn,
+        url: str,
+        item: NoticeItem,
+        existing: dict,
+        result: CrawlResult,
+    ) -> None:
+        """深度变更检测：重抓已入库详情页，指纹不一致则重置为待提取。"""
+        try:
+            record = self._fetch_detail_with_retry(
+                url, item.title, item.published_at
+            )
+            if not record:
+                result.total_failed += 1
+                result.errors.append(f"详情页失败 {url}: 无法提取正文")
+                return
+            record.content_hash = compute_content_hash(record.raw_content)
+            if existing.get("content_hash") != record.content_hash:
+                update_notice_content(
+                    conn,
+                    url,
+                    record.title,
+                    record.raw_content,
+                    record.content_hash,
+                )
+                result.total_changed += 1
+                logger.info(f"[{result.source}] 内容变更，重置为待提取: {url}")
+                _match_notice_by_url(url)
+            else:
+                if not existing.get("published_at") and item.published_at:
+                    update_notice_date(conn, url, item.published_at)
+                    result.total_updated += 1
+                else:
+                    result.total_skipped += 1
+                    logger.info(f"[{result.source}] skipped(正文未变更): {url}")
+        except Exception as e:
+            result.total_failed += 1
+            result.errors.append(f"详情页失败 {url}: {type(e).__name__}: {e}")
+            logger.warning(f"详情页失败 {url}: {e}")
+
+    def _fetch_detail_with_retry(
+        self, url: str, fallback_title: str, list_page_date: Optional[str] = None
+    ) -> Optional[NoticeRecord]:
+        """抓取详情页，失败按 retry_times 重试（指数退避），最终失败返回 None。"""
+        for attempt in range(self.config.retry_times + 1):
+            record = self._fetch_detail(url, fallback_title, list_page_date)
+            if record is not None:
+                return record
+            if attempt < self.config.retry_times:
+                time.sleep(0.5 * (attempt + 1))
+        return None
 
     def _fetch_detail(
         self, url: str, fallback_title: str, list_page_date: Optional[str] = None
