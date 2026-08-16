@@ -148,7 +148,7 @@ def run():
     mgr1 = TaskManager(deps={"extractor": FakeExtractor(kill_after=2)})
 
     # 1.1 提交 → queued
-    task_id = mgr1.submit("extract_batch", {"limit": 100, "auto_index": False})
+    task_id = mgr1.submit("extract_batch", {"limit": 100, "auto_index": False, "prefilter": False})
     rec = mgr1.get(task_id)
     check("提交后 status=queued", rec["status"] == "queued", f"status={rec['status']}")
     check("提交后 progress=0", rec["progress"] == 0, f"progress={rec['progress']}")
@@ -179,7 +179,7 @@ def run():
         )
         check(
             "恢复后记录保留（params 原样）",
-            rec["params"] == {"limit": 100, "auto_index": False},
+            rec["params"] == {"limit": 100, "auto_index": False, "prefilter": False},
             f"params={rec['params']}",
         )
         await mgr.stop()
@@ -188,7 +188,7 @@ def run():
 
     # 1.4 重新提交 → _run_one 完成 → success（progress 单调由 spy 记录）
     mgr3 = TaskManager(deps={"extractor": FakeExtractor()})
-    task_id2 = mgr3.submit("extract_batch", {"limit": 100, "auto_index": False})
+    task_id2 = mgr3.submit("extract_batch", {"limit": 100, "auto_index": False, "prefilter": False})
 
     import api.tasks.manager as manager_mod
 
@@ -255,8 +255,8 @@ def run():
     conn.close()
 
     mgr4 = TaskManager(deps={"extractor": FakeExtractor()})
-    t1 = mgr4.submit("extract_batch", {"limit": 100, "auto_index": False})
-    t2 = mgr4.submit("extract_batch", {"limit": 100, "auto_index": False})
+    t1 = mgr4.submit("extract_batch", {"limit": 100, "auto_index": False, "prefilter": False})
+    t2 = mgr4.submit("extract_batch", {"limit": 100, "auto_index": False, "prefilter": False})
     check("第二个任务提交后排队 queued", mgr4.get(t2)["status"] == "queued", f"status={mgr4.get(t2)['status']}")
 
     asyncio.run(_drive(mgr4))

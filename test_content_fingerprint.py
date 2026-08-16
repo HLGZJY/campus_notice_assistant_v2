@@ -131,6 +131,8 @@ def run():
                 list_url="https://example.com/list.htm",
                 source_name="测试来源",
                 url_pattern=r"/notice/\d+\.htm",
+                # 阶段 7：增量模式下重抓已入库详情页需显式开启深度检查
+                deep_check=True,
             ),
             content_provider=lambda: version,
         )

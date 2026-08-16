@@ -231,7 +231,7 @@ def run():
     fake2 = FakeExtractor(kill_after=2, fail_every=5)
     killed = False
     try:
-        extract_batch(limit=100, auto_index=False, extractor=fake2)
+        extract_batch(limit=100, auto_index=False, extractor=fake2, prefilter=False)
     except SimulatedKill:
         killed = True
     check("extract_batch 第一次运行被模拟 kill 中断", killed)
@@ -241,7 +241,7 @@ def run():
     check("kill 后仅 3..10 仍为 raw", raw_after == list(range(3, 11)), f"raw={raw_after}")
     conn.close()
 
-    res = extract_batch(limit=100, auto_index=False, extractor=fake2)
+    res = extract_batch(limit=100, auto_index=False, extractor=fake2, prefilter=False)
     check("extract_batch 重启后完成 8 条", res["processed"] == 8, f"processed={res['processed']}")
 
     conn = get_connection()

@@ -101,7 +101,7 @@ def _patch_jobs():
     import scheduler as sched_mod
 
     originals = (sched_mod.crawl_all_sources, sched_mod.extract_batch)
-    sched_mod.crawl_all_sources = lambda: {}
+    sched_mod.crawl_all_sources = lambda **kwargs: {}
     sched_mod.extract_batch = lambda **kwargs: {"processed": 0, "summary": {}}
     return originals
 
