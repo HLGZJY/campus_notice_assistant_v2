@@ -27,6 +27,7 @@ from config.defaults import DEFAULT_CONFIG
 from config.schema import (
     AppConfig,
     CrawlConfig,
+    ExtractConfig,
     ModelProfile,
     ModelsConfig,
     ProviderConfig,
@@ -126,6 +127,9 @@ class ConfigStore:
     def get_crawl(self) -> CrawlConfig:
         return self._data.crawl
 
+    def get_extract(self) -> ExtractConfig:
+        return self._data.extract
+
     def get_scheduler(self) -> SchedulerConfig:
         return self._data.scheduler
 
@@ -158,6 +162,7 @@ class ConfigStore:
             "models": self._data.models.model_dump(),
             "providers": providers,
             "crawl": self._data.crawl.model_dump(),
+            "extract": self._data.extract.model_dump(),
             "scheduler": self._data.scheduler.model_dump(),
         }
 
@@ -184,6 +189,7 @@ class ConfigStore:
                 models=models,
                 providers=self._data.providers,
                 crawl=self._data.crawl,
+                extract=self._data.extract,
                 scheduler=self._data.scheduler,
             )
             return self._save_app_config(new_data)
@@ -196,6 +202,7 @@ class ConfigStore:
                 models=self._data.models,
                 providers=providers,
                 crawl=self._data.crawl,
+                extract=self._data.extract,
                 scheduler=self._data.scheduler,
             )
             return self._save_app_config(new_data)
@@ -208,6 +215,20 @@ class ConfigStore:
                 models=self._data.models,
                 providers=self._data.providers,
                 crawl=crawl,
+                extract=self._data.extract,
+                scheduler=self._data.scheduler,
+            )
+            return self._save_app_config(new_data)
+
+    def save_extract(self, extract: ExtractConfig) -> dict:
+        """保存提取前置过滤配置。"""
+        with self._write_lock:
+            new_data = AppConfig(
+                active_school=self._data.active_school,
+                models=self._data.models,
+                providers=self._data.providers,
+                crawl=self._data.crawl,
+                extract=extract,
                 scheduler=self._data.scheduler,
             )
             return self._save_app_config(new_data)

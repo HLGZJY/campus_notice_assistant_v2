@@ -55,13 +55,26 @@ class ModelsConfig(BaseModel):
 
 
 class SourceConfig(BaseModel):
-    """单个数据源（列表页）配置。"""
+    """单个数据源（列表页）配置。
+
+    抓取策略字段（阶段 7 抓取/提取优化）：
+      - enabled: 停用来源无需删除配置
+      - crawl_mode: incremental（增量早停，默认）/ full（全量翻页+变更检测）/ list_only（仅列表快照）
+      - max_age_days: 只收录最近 N 天发布的（按列表页日期，无日期则忽略该过滤）
+      - fetch_detail: 是否抓取详情页（false = 仅收录列表页标题/日期）
+      - deep_check: 每轮重抓已入库详情页做内容指纹变更检测（incremental 下默认关闭）
+    """
 
     name: str
     type: str = "web"
     list_url: str
     url_pattern: Optional[str] = None
     max_pages: int = 5
+    enabled: bool = True
+    crawl_mode: Literal["incremental", "full", "list_only"] = "incremental"
+    max_age_days: Optional[int] = None
+    fetch_detail: bool = True
+    deep_check: bool = False
 
     @field_validator("name", "list_url")
     @classmethod
@@ -76,6 +89,13 @@ class SourceConfig(BaseModel):
     def _max_pages_positive(cls, v: int) -> int:
         if v < 1:
             raise ValueError("max_pages 至少为 1")
+        return v
+
+    @field_validator("max_age_days")
+    @classmethod
+    def _max_age_days_positive(cls, v: Optional[int]) -> Optional[int]:
+        if v is not None and v < 1:
+            raise ValueError("max_age_days 至少为 1")
         return v
 
 
@@ -112,11 +132,57 @@ class CrawlConfig(BaseModel):
     expire_days: int = 90
     # 调度器每日清理是否自动删除过期通知（默认 False=只报告不删除，见 issue #3）
     cleanup_enabled: bool = False
+    # 阶段 7 抓取/提取优化：
+    # 增量早停：整页通知均已入库时停止翻页（incremental 模式生效）
+    stop_when_caught_up: bool = True
+    # 详情页请求超时（秒）
+    request_timeout: int = 15
+    # 详情页失败重试次数
+    retry_times: int = 2
+    # 详情页抓取并发数（默认 1=礼貌抓取；>1 时每线程独立 SQLite 连接）
+    concurrency: int = 1
+    # 每 N 轮定时抓取自动做一轮全来源深度变更检测（0=关闭，只靠手动深度抓取）
+    deep_check_interval_cycles: int = 24
 
-    @field_validator("interval_minutes", "max_pages", "expire_days")
+    @field_validator("interval_minutes", "max_pages", "expire_days", "request_timeout", "retry_times", "concurrency", "deep_check_interval_cycles")
     @classmethod
     def _positive(cls, v: int) -> int:
         if v < 1:
+            raise ValueError("必须 >= 1")
+        return v
+
+    @field_validator("concurrency")
+    @classmethod
+    def _concurrency_cap(cls, v: int) -> int:
+        if v > 8:
+            raise ValueError("并发数过大（上限 8），请控制对目标站点的请求频率")
+        return v
+
+
+class ExtractConfig(BaseModel):
+    """提取前置过滤配置（阶段 7：零 LLM 成本的规则预检，全部可关=行为接近现状）。"""
+
+    # 每轮最多提取条数（通过预筛后才调 LLM）
+    batch_limit: int = 50
+    # 只提取最近 N 天抓取的通知（None=不限制）
+    max_age_days: Optional[int] = None
+    # 正文长度低于该值不提取（过滤无正文/纯标题快照）
+    min_content_length: int = 100
+    # 标题或正文包含任一关键词才提取（逗号分隔；None/空=不限制）
+    keyword_filter: Optional[str] = None
+    # 标题包含任一关键词则跳过（逗号分隔；None/空=不限制）
+    skip_keywords: Optional[str] = None
+    # 规则预检：标题/正文含时间线索（日期/截止/报名/时间等）才提取
+    require_time_hint: bool = False
+    # 只提取命中订阅的通知（最省成本模式）
+    match_subscription_only: bool = False
+    # failed 通知是否在下轮重试
+    retry_failed: bool = True
+
+    @field_validator("batch_limit", "min_content_length", "max_age_days")
+    @classmethod
+    def _positive(cls, v: Optional[int]) -> Optional[int]:
+        if v is not None and v < 1:
             raise ValueError("必须 >= 1")
         return v
 
@@ -143,6 +209,7 @@ class AppConfig(BaseModel):
     models: ModelsConfig
     providers: dict[str, ProviderConfig]
     crawl: CrawlConfig = Field(default_factory=CrawlConfig)
+    extract: ExtractConfig = Field(default_factory=ExtractConfig)
     scheduler: SchedulerConfig = Field(default_factory=SchedulerConfig)
 
     @field_validator("active_school")
