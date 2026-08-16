@@ -106,7 +106,10 @@ npm run build
 ```bash
 # 抓取 / 提取 / 索引 / 问答 / 待办（M1–M4 入口，运维/调试用）
 python crawl.py                        # 抓取全部数据源
-python extract.py                      # 批量提取 status=raw 的通知
+python crawl.py --source 教务处-通知公告   # 只抓指定来源
+python extract.py                      # 批量提取 status=raw 的通知（带前置过滤）
+python extract.py --no-prefilter       # 关闭提取前置过滤（全部调 LLM）
+python extract.py --status failed      # 重试提取失败的通知
 python index.py                        # 把已提取通知切分并索引到 Chroma
 python qa.py "最近有哪些比赛？"         # 单次问答
 python todo.py --list                  # 待办清单（按截止升序）
@@ -135,8 +138,8 @@ python check_db.py --summary           # 每日体检汇总
 
 | job          | 触发                                                           | 说明                                                                                          |
 | ------------ | -------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| crawl        | 每 `crawl.interval_minutes`（默认 60，运行中改配置自动热更新） | 抓取所有数据源                                                                                |
-| extract      | 紧跟抓取（晚 20s）                                             | 提取 `status=raw` 的通知，成功后增量索引                                                      |
+| crawl        | 每 `crawl.interval_minutes`（默认 60，运行中改配置自动热更新） | 抓取所有数据源（增量模式：已入库不重抓，整页已知立即早停；每 `deep_check_interval_cycles` 轮自动深检一轮内容变更） |
+| extract      | 紧跟抓取（晚 20s）                                             | 提取 `status=raw` 的通知（先按 `extract` 前置过滤规则预筛，跳过项不调 LLM），成功后增量索引  |
 | daily        | 每日 03:00                                                     | 过期清理（默认只报告不删除；`cleanup_enabled=true` 才删）+ 向量一致性检查（自动清理幽灵向量） |
 | reminder     | 每日 03:00                                                     | 截止提醒扫描：对截止前 3 天 / 1 天的通知生成提醒，幂等                                        |
 | config-watch | 每 60s                                                         | 监控配置变更，热更新抓取间隔等                                                                |
@@ -145,6 +148,19 @@ python check_db.py --summary           # 每日体检汇总
 - 崩溃恢复：每次运行落库，重启时打印最近运行记录；已抓 URL 由 `notices.url UNIQUE` 去重，kill 后重启不会重复抓取。
 - `config/app.yaml` 的 `scheduler.enabled / enable_daily / enable_extract / enable_reminder / enable_health` 对应 CLI 的 `--no-*` 开关。
 - 验证自动抓取：把 `crawl.interval_minutes` 改成 1，重启，观察 `data/logs/scheduler.log` 每分钟一轮抓取。
+
+### 增量抓取与提取预筛（阶段 7）
+
+- **增量抓取（默认）**：每轮只抓「新 URL」的详情页；已入库通知不再重抓，列表页出现「整页全部已知」立即停止翻页。
+  首轮全量入库后，常规轮次单来源耗时从分钟级降到秒级（实测 6 源全库一轮 ≈ 3.5s）。
+- **深度变更检测**：内容更新检测改为两种方式——每 `crawl.deep_check_interval_cycles` 轮调度器自动深检一轮
+  （默认 24 轮 ≈ 每日一次），或前端「深度抓取」按钮手动触发；深检会重抓已入库详情页比对内容指纹，
+  有变更则重置为待提取。
+- **来源级策略**：每个数据源可配置 `enabled`（停用后定时/全量抓取跳过）、`crawl_mode`（incremental / full / list_only）、
+  `max_age_days`（只抓最近 N 天）、`fetch_detail`（关闭则仅收录标题/链接）、`deep_check`（是否参与周期深检）。
+- **提取前置过滤**：批量提取前按 `config.extract` 规则预筛（时效 → 正文长度 → 关键词白名单 → 标题黑名单 →
+  时间线索 → 仅订阅命中），不通过的通知**不调 LLM**，落 `extract_skipped_reason` 并保持 raw 状态，
+  后续轮次不再重复判定；「重置」或正文变更会清除该标记恢复候选资格。
 
 ### Windows 后台运行（独立 CLI 方式）
 
@@ -157,8 +173,8 @@ python check_db.py --summary           # 每日体检汇总
 
 配置文件位于 `config/`：
 
-- `config/app.yaml`：应用主配置，包含 `active_school`、`models`（按任务配置模型）、`providers`（供应商注册表）、`crawl`（全局抓取参数）、`scheduler`（调度开关）。
-- `config/schools/<code>.yaml`：学校数据源配置，每个学校一个文件。
+- `config/app.yaml`：应用主配置，包含 `active_school`、`models`（按任务配置模型）、`providers`（供应商注册表）、`crawl`（全局抓取参数）、`extract`（提取前置过滤参数）、`scheduler`（调度开关）。
+- `config/schools/<code>.yaml`：学校数据源配置，每个学校一个文件（含来源级抓取策略）。
 - `.env`：存放 API key 等敏感信息，通过 `api_key_env` 被 YAML 引用。
 
 模型配置示例（当前默认）：

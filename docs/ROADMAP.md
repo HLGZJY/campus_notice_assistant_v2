@@ -134,6 +134,20 @@
 | Phase 7 | 前端（Vue3 + Vite + Naive UI，7 路由平移） | ✅ |
 | Phase 8 | 收尾（静态挂载 + SPA fallback + Docker + README） | ✅ |
 
+## 阶段 7 优化：增量抓取 + 提取预筛 ✅
+
+> 执行依据：`docs-local/短线开发/资源优化方向.md`；目标：降低抓取/LLM 资源消耗（全量抓取 → 增量 + 深检，无差别提取 → 规则预筛）。
+
+- [x] 配置扩展：来源级策略（enabled / crawl_mode / max_age_days / fetch_detail / deep_check）+ 全局抓取参数（早停/超时/重试/并发/深检周期）+ 提取前置过滤参数（`config/schema.py`，全带默认值向后兼容）
+- [x] 增量抓取核心（`crawler/web_crawler.py`）：已入库不重抓详情、整页已知早停、时效过滤、详情并发 + 指数退避重试、deep_check 指纹深检
+- [x] 存储层：`notices.extract_skipped_reason` 列（迁移）+ `mark_prefiltered` / `clear_prefiltered` / `exclude_prefiltered` 游标
+- [x] 提取预筛（`services/notice_service.py:prefilter_notice`）：时效 → 长度 → 关键词 → 黑名单 → 时间线索 → 仅订阅命中；跳过项不调 LLM 且不再重复判定
+- [x] API / 任务层：`GET/PUT /config/crawl`、`GET/PUT /config/extract`、抓取任务参数透传、`test-source` 返回 `suggested_pattern` 建议正则
+- [x] 前端：数据源表单新字段 + 测试链接自动填充 URL 模式 + 「抓取与提取」配置 tab + 抓取/深度抓取对话框 + 「已跳过提取」标签
+- [x] 测试：早停/时效/深检/预筛单测（`test_incremental_crawl.py`）+ 既有测试适配（`prefilter=False` / `deep_check=True` / 调度桩 `**kwargs`）+ 实测（6 源全库一轮 ≈ 3.5s，深检 13 条 ≈ 5s）
+
+---
+
 ### Phase 0：仓库初始化 ✅
 
 - 新仓库 `campus_notice_assistant_v2`；旧仓库封存只读（`legacy/main`）。

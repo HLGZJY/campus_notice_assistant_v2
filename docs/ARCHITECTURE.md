@@ -176,18 +176,29 @@ sequenceDiagram
     participant V as 向量库
 
     S->>C: 触发抓取（按配置的 list_url）
-    C->>C: newspaper.Source.build() 发现文章链接
-    C->>DB: 查询已抓取的 URL（去重）+ 内容指纹比对
-    C->>DB: 存储原始通知（status=raw，含 title/text/publish_date）
-    C->>E: 调用提取 Agent
+    C->>C: 发现列表页通知链接（含 max_age_days 时效过滤）
+    C->>DB: 查询已抓取的 URL（增量早停：整页已知即停止翻页）
+    alt 新增 URL
+        C->>C: 抓详情页（并发可选，失败按 retry_times 重试）
+        C->>DB: 存储原始通知（status=raw，含 content_hash 指纹）
+    else 已入库 URL（deep_check / full 模式）
+        C->>C: 重抓详情页比对指纹
+        C->>DB: 变更 → 更新正文 + 重置 status=raw；未变 → skipped
+    end
+    C->>E: 触发提取（先按 extract 规则预筛，跳过项落 extract_skipped_reason）
     E->>E: LLM 提取结构化字段（类型/截止时间/地点/报名链接）
     E->>DB: 更新通知（status=extracted/partial/failed）
     E->>V: 生成向量并增量索引
     E->>DB: 订阅命中匹配（match_notice）
 ```
 
-> **调度/手动双入口**：调度器 `crawl`/`extract` job 自动执行；前端「抓取/提取」按钮经
-> `POST /api/v1/notices/batch-delete` 等异步任务（202 → `GET /tasks/{id}` 轮询）触发。
+> **调度/手动双入口**：调度器 `crawl`/`extract` job 自动执行；前端「抓取 / 深度抓取 / 批量提取」按钮经
+> 异步任务（202 → `GET /tasks/{id}` 轮询）触发，支持按来源多选 / 模式覆盖（incremental/full/list_only）/
+> 页数覆盖 / 深度检查开关。
+
+> **增量策略（阶段 7）**：常规轮次只抓「新 URL」详情页，已入库通知不重抓；内容变更检测改为
+> 周期深检（`crawl.deep_check_interval_cycles` 轮一次，默认 24 ≈ 每日）与手动「深度抓取」两条路径。
+> 提取侧用规则预筛把空页面/占位页/无关通知挡在 LLM 之外（默认仅开启正文长度下限，行为宽松向后兼容）。
 
 ### 3.2 异步任务模型（Phase 4）
 
@@ -315,12 +326,41 @@ crawl:
   interval_minutes: 60
   cleanup_enabled: false
   expire_days: 90
+  stop_when_caught_up: true    # 增量早停：整页已知即停止翻页
+  request_timeout: 15          # 详情页请求超时（秒）
+  retry_times: 2               # 详情页失败重试次数（指数退避）
+  concurrency: 1               # 详情页并发数（1-8；写库回主线程，规避 SQLite 线程约束）
+  deep_check_interval_cycles: 24  # 每 N 轮自动深检一轮全来源内容变更；0 = 关闭
+extract:
+  batch_limit: 50              # 单批上限
+  min_content_length: 100      # 正文长度下限（过滤空页面/占位页）
+  max_age_days: null           # 只提取最近 N 天；null = 不限
+  keyword_filter: null         # 仅含关键词（逗号分隔，标题+正文）
+  skip_keywords: null          # 排除关键词（标题命中即跳过）
+  require_time_hint: false     # 必须含时间线索（日期/报名/截止等）
+  match_subscription_only: false  # 仅提取至少命中一条订阅的通知
+  retry_failed: true           # 每轮顺带重试 status=failed 的通知
 scheduler:
   enabled: true        # API lifespan 是否拉起调度器
   enable_daily: true   # 过期清理 + 向量一致性检查
   enable_extract: true
   enable_reminder: true
   enable_health: true
+```
+
+数据源配置（`config/schools/<code>.yaml`）来源级策略：
+
+```yaml
+sources:
+  - name: 教务处-通知公告
+    list_url: https://www.scuec.edu.cn/jwc/tzgg.htm
+    url_pattern: "info/\\d+/\\d+\\.htm"
+    enabled: true              # 停用后定时/全量抓取跳过
+    crawl_mode: incremental    # incremental / full / list_only
+    max_age_days: null         # 只抓最近 N 天；null = 不限
+    fetch_detail: true         # false = 仅收录列表标题/链接
+    deep_check: false          # 是否参与周期/手动深度检查
+    max_pages: 5
 ```
 
 配置加载与写入（见 `config/store.py`）：
@@ -341,7 +381,7 @@ scheduler:
 | reminders | `GET /reminders`、`GET /reminders/stats`、`GET /reminders/pending-count`、`POST /reminders/{id}/status` | 截止提醒 |
 | subscriptions | `GET /subscriptions`、`GET /subscriptions/stats`、`POST /subscriptions/preview`、`POST /subscriptions`（任务）、`PUT /subscriptions/{id}`（任务）、`POST /subscriptions/{id}/toggle`（任务）、`DELETE /subscriptions/{id}`、`POST /subscriptions/match-all`（任务）、`GET /subscriptions/{id}/notices` | 两步式订阅 |
 | notices 订阅 | `GET /notices/count`、`GET /notices/matched-ids`、`POST /notices/match-map` | 浏览页命中徽标 |
-| config | `GET/PUT /config/{models,providers,sources}`、`GET /config/disk`、`POST /config/reload`、`POST /config/test-source`、`POST /config/test-model` | 配置 |
+| config | `GET/PUT /config/{models,providers,sources,crawl,extract}`、`GET /config/disk`、`POST /config/reload`、`POST /config/test-source`（含 `suggested_pattern` 自动填充）、`POST /config/test-model` | 配置 |
 | qa | `GET /qa/ask/stream`（SSE）、`GET /qa/index-stats` | 问答 |
 | events | `POST /events` | 埋点 |
 | tasks | `POST /tasks`（202）、`GET /tasks/{id}`、`GET /tasks` | 异步任务 |
@@ -352,9 +392,10 @@ scheduler:
 
 | 场景 | 处理 |
 | --- | --- |
-| 网页抓取失败 | 重试 3 次，记录失败日志（crawl_log） |
+| 网页抓取失败 | 按 `crawl.retry_times` 指数退避重试（默认 2 次），记录失败日志（crawl_log） |
 | LLM 调用限流 | 指数退避重试（已在 RAG 项目验证） |
 | 提取结果为空 | 保留原始通知，标记 `status=failed` |
+| 提取前置过滤 | 不调 LLM，落 `extract_skipped_reason`，状态保持 raw（可重置/变更后恢复候选） |
 | 向量索引失败 | 不阻塞主流程，记录日志 |
 | 长耗时操作 | 异步任务化（202 + 轮询），失败落 tasks.error |
 | 埋点写库失败 | 只记日志返回 ok=false，不阻塞主流程 |

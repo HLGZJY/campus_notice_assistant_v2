@@ -30,7 +30,9 @@ CREATE TABLE notices (
     deadline_raw TEXT,                  -- 截止时间原文片段（可溯源/校验）
     key_dates_json TEXT,                -- 其他重要时间点（JSON 数组）
     summary TEXT,                       -- 摘要
-    extracted_at TEXT                   -- 提取时间
+    extracted_at TEXT,                  -- 提取时间
+    -- 阶段 7 迁移新增列（_MIGRATIONS ALTER 补齐）
+    extract_skipped_reason TEXT         -- 提取前置过滤跳过原因（NULL=未跳过/候选）
 );
 
 CREATE INDEX idx_notices_status ON notices(status);
@@ -302,6 +304,9 @@ class NoticeExtraction(BaseModel):
 >   非行动型）/ `failed`（LLM 调用本身失败）。
 > - 行动型类型 = competition/lecture/registration/scholarship/administrative/recruitment；
 >   非行动型 = policy/result/news/other。
+> - `extract_skipped_reason`：阶段 7 提取前置过滤跳过原因（正文过短/关键词不中/时间线索缺失等）。
+>   状态保持 `raw`，批量提取游标默认排除（`exclude_prefiltered=True`）；
+>   「重置提取」或正文变更（update_notice_content）会清空该标记，恢复候选资格。
 
 ### 2.2 待办项
 
