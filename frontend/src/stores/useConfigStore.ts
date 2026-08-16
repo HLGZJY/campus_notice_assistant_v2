@@ -4,7 +4,9 @@ import { endpoints } from '../api/endpoints'
 import { get, post, put } from '../api/http'
 import type {
   ConfigMutationResult,
+  CrawlConfig,
   DiskInfo,
+  ExtractConfig,
   ModelsConfig,
   ModelsView,
   ProviderConfig,
@@ -23,6 +25,8 @@ export const useConfigStore = defineStore('config', () => {
   const models = ref<ModelsView | null>(null)
   const providers = ref<Record<string, ProviderView>>({})
   const sources = ref<SchoolConfig | null>(null)
+  const crawl = ref<CrawlConfig | null>(null)
+  const extract = ref<ExtractConfig | null>(null)
   const disk = ref<DiskInfo | undefined>(undefined)
   const loading = ref(false)
 
@@ -47,6 +51,14 @@ export const useConfigStore = defineStore('config', () => {
     sources.value = await get<SchoolConfig>(endpoints.config.sources)
   }
 
+  async function fetchCrawl() {
+    crawl.value = await get<CrawlConfig>(endpoints.config.crawl)
+  }
+
+  async function fetchExtract() {
+    extract.value = await get<ExtractConfig>(endpoints.config.extract)
+  }
+
   async function fetchDisk() {
     disk.value = await get<DiskInfo>(endpoints.config.disk)
   }
@@ -61,6 +73,14 @@ export const useConfigStore = defineStore('config', () => {
 
   async function updateSources(body: SourceConfig[]) {
     return await put<ConfigMutationResult>(endpoints.config.sources, body)
+  }
+
+  async function updateCrawl(body: CrawlConfig) {
+    return await put<ConfigMutationResult>(endpoints.config.crawl, body)
+  }
+
+  async function updateExtract(body: ExtractConfig) {
+    return await put<ConfigMutationResult>(endpoints.config.extract, body)
   }
 
   async function reload() {
@@ -80,16 +100,22 @@ export const useConfigStore = defineStore('config', () => {
     models,
     providers,
     sources,
+    crawl,
+    extract,
     disk,
     loading,
     fetchConfig,
     fetchModels,
     fetchProviders,
     fetchSources,
+    fetchCrawl,
+    fetchExtract,
     fetchDisk,
     updateModels,
     updateProviders,
     updateSources,
+    updateCrawl,
+    updateExtract,
     reload,
     testSource,
     testModel,

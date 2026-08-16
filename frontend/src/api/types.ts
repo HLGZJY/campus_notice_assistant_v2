@@ -299,26 +299,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/subscriptions/preview": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Preview Subscription
-         * @description 两步式第一步：只读预览按当前规则该订阅会命中多少条通知（不写库）。
-         */
-        post: operations["preview_subscription_api_v1_subscriptions_preview_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/subscriptions/{subscription_id}/notices": {
         parameters: {
             query?: never;
@@ -335,6 +315,26 @@ export interface paths {
         get: operations["subscription_notices_api_v1_subscriptions__subscription_id__notices_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/subscriptions/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Subscription
+         * @description 两步式第一步：只读预览按当前规则该订阅会命中多少条通知（不写库）。
+         */
+        post: operations["preview_subscription_api_v1_subscriptions_preview_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -496,6 +496,54 @@ export interface paths {
          * @description 保存当前学校数据源配置（body 复用 config.schema.SourceConfig）。
          */
         put: operations["put_sources_api_v1_config_sources_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/config/crawl": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Crawl
+         * @description 获取全局抓取参数（阶段 7）。
+         */
+        get: operations["get_crawl_api_v1_config_crawl_get"];
+        /**
+         * Put Crawl
+         * @description 保存全局抓取参数（阶段 7：增量早停/超时/重试/并发/深检周期）。
+         */
+        put: operations["put_crawl_api_v1_config_crawl_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/config/extract": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Extract
+         * @description 获取提取前置过滤配置（阶段 7）。
+         */
+        get: operations["get_extract_api_v1_config_extract_get"];
+        /**
+         * Put Extract
+         * @description 保存提取前置过滤配置（阶段 7）。
+         */
+        put: operations["put_extract_api_v1_config_extract_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -990,8 +1038,68 @@ export interface components {
             crawl: {
                 [key: string]: unknown;
             };
+            /** Extract */
+            extract?: {
+                [key: string]: unknown;
+            };
         } & {
             [key: string]: unknown;
+        };
+        /**
+         * CrawlConfig
+         * @description 全局抓取参数。
+         */
+        CrawlConfig: {
+            /**
+             * Interval Minutes
+             * @default 60
+             */
+            interval_minutes: number;
+            /**
+             * User Agent
+             * @default CampusAssistant/1.0
+             */
+            user_agent: string;
+            /**
+             * Max Pages
+             * @default 5
+             */
+            max_pages: number;
+            /**
+             * Expire Days
+             * @default 90
+             */
+            expire_days: number;
+            /**
+             * Cleanup Enabled
+             * @default false
+             */
+            cleanup_enabled: boolean;
+            /**
+             * Stop When Caught Up
+             * @default true
+             */
+            stop_when_caught_up: boolean;
+            /**
+             * Request Timeout
+             * @default 15
+             */
+            request_timeout: number;
+            /**
+             * Retry Times
+             * @default 2
+             */
+            retry_times: number;
+            /**
+             * Concurrency
+             * @default 1
+             */
+            concurrency: number;
+            /**
+             * Deep Check Interval Cycles
+             * @default 24
+             */
+            deep_check_interval_cycles: number;
         };
         /**
          * DiskInfo
@@ -1026,6 +1134,43 @@ export interface components {
         EventCreateResult: {
             /** Ok */
             ok: boolean;
+        };
+        /**
+         * ExtractConfig
+         * @description 提取前置过滤配置（阶段 7：零 LLM 成本的规则预检，全部可关=行为接近现状）。
+         */
+        ExtractConfig: {
+            /**
+             * Batch Limit
+             * @default 50
+             */
+            batch_limit: number;
+            /** Max Age Days */
+            max_age_days?: number | null;
+            /**
+             * Min Content Length
+             * @default 100
+             */
+            min_content_length: number;
+            /** Keyword Filter */
+            keyword_filter?: string | null;
+            /** Skip Keywords */
+            skip_keywords?: string | null;
+            /**
+             * Require Time Hint
+             * @default false
+             */
+            require_time_hint: boolean;
+            /**
+             * Match Subscription Only
+             * @default false
+             */
+            match_subscription_only: boolean;
+            /**
+             * Retry Failed
+             * @default true
+             */
+            retry_failed: boolean;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -1213,6 +1358,8 @@ export interface components {
              * @default []
              */
             keywords: string[];
+            /** Extract Skipped Reason */
+            extract_skipped_reason?: string | null;
         };
         /**
          * NoticeMeta
@@ -1317,6 +1464,8 @@ export interface components {
              * @default []
              */
             keywords: string[];
+            /** Extract Skipped Reason */
+            extract_skipped_reason?: string | null;
         };
         /**
          * ProviderConfig
@@ -1505,6 +1654,13 @@ export interface components {
         /**
          * SourceConfig
          * @description 单个数据源（列表页）配置。
+         *
+         *     抓取策略字段（阶段 7 抓取/提取优化）：
+         *       - enabled: 停用来源无需删除配置
+         *       - crawl_mode: incremental（增量早停，默认）/ full（全量翻页+变更检测）/ list_only（仅列表快照）
+         *       - max_age_days: 只收录最近 N 天发布的（按列表页日期，无日期则忽略该过滤）
+         *       - fetch_detail: 是否抓取详情页（false = 仅收录列表页标题/日期）
+         *       - deep_check: 每轮重抓已入库详情页做内容指纹变更检测（incremental 下默认关闭）
          */
         SourceConfig: {
             /** Name */
@@ -1523,6 +1679,29 @@ export interface components {
              * @default 5
              */
             max_pages: number;
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /**
+             * Crawl Mode
+             * @default incremental
+             * @enum {string}
+             */
+            crawl_mode: "incremental" | "full" | "list_only";
+            /** Max Age Days */
+            max_age_days?: number | null;
+            /**
+             * Fetch Detail
+             * @default true
+             */
+            fetch_detail: boolean;
+            /**
+             * Deep Check
+             * @default false
+             */
+            deep_check: boolean;
         };
         /**
          * StatusCounts
@@ -1832,6 +2011,10 @@ export interface components {
             link_count: number;
             /** Error */
             error?: string | null;
+            /** Suggested Pattern */
+            suggested_pattern?: string | null;
+            /** Sample Links */
+            sample_links?: string[];
         } & {
             [key: string]: unknown;
         };
@@ -2472,41 +2655,6 @@ export interface operations {
             };
         };
     };
-    preview_subscription_api_v1_subscriptions_preview_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                "x-api-key"?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SubscriptionPreviewRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SubscriptionPreview"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     subscription_notices_api_v1_subscriptions__subscription_id__notices_get: {
         parameters: {
             query?: {
@@ -2530,6 +2678,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NoticePage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_subscription_api_v1_subscriptions_preview_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubscriptionPreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubscriptionPreview"];
                 };
             };
             /** @description Validation Error */
@@ -2891,6 +3074,138 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["SourceConfig"][];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigMutationResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_crawl_api_v1_config_crawl_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CrawlConfig"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_crawl_api_v1_config_crawl_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CrawlConfig"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigMutationResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_extract_api_v1_config_extract_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExtractConfig"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_extract_api_v1_config_extract_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExtractConfig"];
             };
         };
         responses: {

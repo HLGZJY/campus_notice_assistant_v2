@@ -48,6 +48,8 @@ export const endpoints = {
     models: `${API_BASE}/config/models`,
     providers: `${API_BASE}/config/providers`,
     sources: `${API_BASE}/config/sources`,
+    crawl: `${API_BASE}/config/crawl`,
+    extract: `${API_BASE}/config/extract`,
     disk: `${API_BASE}/config/disk`,
     reload: `${API_BASE}/config/reload`,
     testSource: `${API_BASE}/config/test-source`,

@@ -2,6 +2,7 @@
 import { computed, ref, onMounted } from 'vue'
 import { useDialog, useMessage } from 'naive-ui'
 import { useNoticesStore } from '../stores/useNoticesStore'
+import { useConfigStore } from '../stores/useConfigStore'
 import { useTaskPoll } from '../composables/useTaskPoll'
 import { post } from '../api/http'
 import { endpoints } from '../api/endpoints'
@@ -11,6 +12,7 @@ import type { NoticeBatchFilter, NoticeDetail, NoticeSummary, TaskCreateResult }
 const message = useMessage()
 const dialog = useDialog()
 const notices = useNoticesStore()
+const configStore = useConfigStore()
 const { poll, submitAndPoll } = useTaskPoll()
 
 interface BatchTaskResult {
@@ -36,6 +38,16 @@ const reExtracting = ref<number | null>(null)
 const loading = ref(false)
 const taskRunning = ref(false)
 const batchRunning = ref(false)
+
+const crawlDialogOpen = ref(false)
+const crawlSources = ref<string[]>([])
+const crawlMode = ref('incremental')
+const crawlMaxPages = ref<number | null>(null)
+const crawlDeepCheck = ref(false)
+
+const sourceOptions = computed(() =>
+  (configStore.sources?.sources ?? []).map((s) => ({ label: s.name, value: s.name }))
+)
 
 const FALLBACK_STATUSES = ['raw', 'extracted', 'partial', 'failed']
 const FALLBACK_TYPES = ['competition', 'lecture', 'registration', 'scholarship', 'administrative', 'recruitment', 'policy', 'result', 'news', 'other']
@@ -67,6 +79,7 @@ const statusTagType: Record<string, 'default' | 'info' | 'success' | 'warning' |
 
 onMounted(async () => {
   notices.fetchMeta().catch(() => {})
+  configStore.fetchSources().catch(() => {})
   await notices.fetchFilters().catch(() => {})
   await refresh()
 })
@@ -142,13 +155,27 @@ function matchedKeywords(id: number): string[] {
   return matchMap.value[String(id)] ?? []
 }
 
-async function crawlAll() {
+function openCrawlDialog(deep = false) {
+  crawlSources.value = []
+  crawlMode.value = 'incremental'
+  crawlMaxPages.value = null
+  crawlDeepCheck.value = deep
+  crawlDialogOpen.value = true
+}
+
+async function runCrawl() {
   taskRunning.value = true
+  crawlDialogOpen.value = false
   try {
-    const task = await submitAndPoll('crawl_all', {})
+    const params: Record<string, unknown> = { mode: crawlMode.value, deep_check: crawlDeepCheck.value }
+    if (crawlSources.value.length) params.sources = crawlSources.value
+    if (crawlMaxPages.value) params.max_pages = crawlMaxPages.value
+    const task = await submitAndPoll('crawl_all', params)
     if (task.status === 'success') {
-      const summary = task.result?.summary as { new?: number; failed?: number } | undefined
-      message.success(`全库抓取完成（新增 ${summary?.new ?? 0}，失败 ${summary?.failed ?? 0}）`)
+      const summary = task.result?.summary as { new?: number; failed?: number; deep_check?: boolean } | undefined
+      message.success(
+        `抓取完成（新增 ${summary?.new ?? 0}，失败 ${summary?.failed ?? 0}）${summary?.deep_check ? '【深度检查】' : ''}`
+      )
     } else {
       message.error(task.error || '抓取任务失败')
     }
@@ -163,10 +190,11 @@ async function crawlAll() {
 async function extractBatch() {
   taskRunning.value = true
   try {
-    const task = await submitAndPoll('extract_batch', { limit: 50, auto_index: true })
+    const task = await submitAndPoll('extract_batch', { limit: 50, auto_index: true, prefilter: true })
     const done = task.result?.done as number | undefined
+    const prefiltered = task.result?.prefiltered as number | undefined
     if (task.status === 'success') {
-      message.success(`批量提取完成（处理 ${done ?? 0} 条）`)
+      message.success(`批量提取完成（处理 ${done ?? 0} 条${prefiltered ? `，预筛跳过 ${prefiltered} 条` : ''}）`)
     } else {
       message.error(task.error || '批量提取失败')
     }
@@ -388,8 +416,11 @@ function keyDatesText(d: NoticeDetail): string {
           <n-button size="small" type="warning" secondary :loading="batchRunning" @click="onBatchReset">
             批量重置当前筛选
           </n-button>
-          <n-button size="small" type="primary" secondary :loading="taskRunning" @click="crawlAll">
-            抓取全部
+          <n-button size="small" type="primary" secondary :loading="taskRunning" @click="openCrawlDialog(false)">
+            抓取
+          </n-button>
+          <n-button size="small" type="primary" secondary :loading="taskRunning" @click="openCrawlDialog(true)">
+            深度抓取
           </n-button>
           <n-button size="small" type="primary" secondary :loading="taskRunning" @click="extractBatch">
             批量提取
@@ -445,6 +476,12 @@ function keyDatesText(d: NoticeDetail): string {
                   <template v-for="kw in matchedKeywords(item.id)" :key="`${item.id}-${kw}`">
                     <n-tag size="small" :bordered="false" type="warning" round>订阅命中 · {{ kw }}</n-tag>
                   </template>
+                  <n-tooltip v-if="item.extract_skipped_reason" trigger="hover">
+                    <template #trigger>
+                      <n-tag size="small" :bordered="false" type="default">已跳过提取</n-tag>
+                    </template>
+                    {{ item.extract_skipped_reason }}
+                  </n-tooltip>
                 </n-space>
                 <div>
                   {{ item.source }} · {{ fmtDate(item.published_at ?? item.crawled_at) }}
@@ -481,6 +518,51 @@ function keyDatesText(d: NoticeDetail): string {
       </n-space>
     </n-card>
 
+    <n-modal
+      v-model:show="crawlDialogOpen"
+      preset="card"
+      title="抓取通知"
+      style="width: 520px"
+      :bordered="false"
+    >
+      <n-form label-placement="left" label-width="110">
+        <n-form-item label="数据源">
+          <n-select
+            v-model:value="crawlSources"
+            multiple
+            clearable
+            :options="sourceOptions"
+            placeholder="全部启用来源"
+            style="width: 100%"
+          />
+        </n-form-item>
+        <n-form-item label="模式">
+          <n-select
+            v-model:value="crawlMode"
+            :options="[
+              { label: '增量抓取（推荐）', value: 'incremental' },
+              { label: '全量抓取（重抓全部详情）', value: 'full' },
+              { label: '仅列表', value: 'list_only' },
+            ]"
+            style="width: 260px"
+          />
+        </n-form-item>
+        <n-form-item label="最大页数">
+          <n-input-number v-model:value="crawlMaxPages" :min="1" clearable placeholder="默认" style="width: 120px" />
+        </n-form-item>
+        <n-form-item label="深度检查">
+          <n-switch v-model:value="crawlDeepCheck" />
+          <span style="margin-left: 8px; color: #999; font-size: 12px">重抓已入库详情页比对内容变更</span>
+        </n-form-item>
+      </n-form>
+      <template #footer>
+        <n-space justify="end">
+          <n-button @click="crawlDialogOpen = false">取消</n-button>
+          <n-button type="primary" :loading="taskRunning" @click="runCrawl">开始抓取</n-button>
+        </n-space>
+      </template>
+    </n-modal>
+
     <n-drawer v-model:show="detailOpen" :width="560">
       <n-drawer-content v-if="detail" :title="detail.title" closable>
         <n-space vertical size="large">
@@ -490,6 +572,7 @@ function keyDatesText(d: NoticeDetail): string {
             <n-descriptions-item label="抓取时间">{{ fmtDate(detail.crawled_at) }}</n-descriptions-item>
             <n-descriptions-item label="类型">{{ typeLabel(detail.notice_type) }}</n-descriptions-item>
             <n-descriptions-item label="状态">{{ statusLabel(detail.status) }}</n-descriptions-item>
+            <n-descriptions-item v-if="detail.extract_skipped_reason" label="跳过提取原因">{{ detail.extract_skipped_reason }}</n-descriptions-item>
             <n-descriptions-item label="目标受众">{{ detail.target_audience || '—' }}</n-descriptions-item>
             <n-descriptions-item label="报名方式">{{ detail.signup_method || '—' }}</n-descriptions-item>
             <n-descriptions-item v-if="detail.signup_url" label="报名链接">
