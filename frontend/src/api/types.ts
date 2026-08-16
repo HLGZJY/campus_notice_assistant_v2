@@ -835,6 +835,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/notices/extract-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Extract Preview Route
+         * @description 提取前预览（dry-run）：展示将提取/跳过明细及原因，供勾选后提交 notice_ids。
+         */
+        post: operations["extract_preview_route_api_v1_notices_extract_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/notices/batch-delete": {
         parameters: {
             query?: never;
@@ -1171,6 +1191,53 @@ export interface components {
              * @default true
              */
             retry_failed: boolean;
+            /**
+             * Skip Llm
+             * @default false
+             */
+            skip_llm: boolean;
+        };
+        /**
+         * ExtractPreviewItem
+         * @description 提取前预览明细项（passed 无 reason；skipped 带跳过原因）。
+         */
+        ExtractPreviewItem: {
+            /** Id */
+            id: number;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+            /**
+             * Url
+             * @default
+             */
+            url: string;
+            /**
+             * Source
+             * @default
+             */
+            source: string;
+            /** Published At */
+            published_at?: string | null;
+            /**
+             * Status
+             * @default
+             */
+            status: string;
+            /** Reason */
+            reason?: string | null;
+        };
+        /**
+         * ExtractPreviewResponse
+         * @description 提取前预览结果：将提取 / 跳过明细。
+         */
+        ExtractPreviewResponse: {
+            /** Passed */
+            passed?: components["schemas"]["ExtractPreviewItem"][];
+            /** Skipped */
+            skipped?: components["schemas"]["ExtractPreviewItem"][];
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -3712,6 +3779,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NoticePage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    extract_preview_route_api_v1_notices_extract_preview_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExtractPreviewResponse"];
                 };
             };
             /** @description Validation Error */

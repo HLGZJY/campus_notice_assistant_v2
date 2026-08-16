@@ -17,6 +17,7 @@ export const endpoints = {
     reExtract: (id: number) => `${API_BASE}/notices/${id}/re-extract`,
     batchDelete: `${API_BASE}/notices/batch-delete`,
     batchReset: `${API_BASE}/notices/batch-reset`,
+    extractPreview: `${API_BASE}/notices/extract-preview`,
   },
   todos: {
     list: `${API_BASE}/todos`,

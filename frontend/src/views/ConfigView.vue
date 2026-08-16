@@ -429,6 +429,10 @@ async function reloadConfig() {
                   <n-switch v-model:value="extractDraft.retry_failed" />
                   <span style="margin-left: 8px; color: #999; font-size: 12px">每次提取顺带重试 status=failed 的旧通知</span>
                 </n-form-item>
+                <n-form-item label="跳过 LLM 提取">
+                  <n-switch v-model:value="extractDraft.skip_llm" />
+                  <span style="margin-left: 8px; color: #999; font-size: 12px">不调 LLM，仅入库 + 建向量索引（状态置“部分提取”），最省 Token 模式</span>
+                </n-form-item>
                 <n-button type="primary" :loading="saving" @click="saveExtract">保存提取过滤配置</n-button>
               </n-form>
             </n-card>

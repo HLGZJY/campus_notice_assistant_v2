@@ -7,7 +7,7 @@ import { useTaskPoll } from '../composables/useTaskPoll'
 import { post } from '../api/http'
 import { endpoints } from '../api/endpoints'
 import { trackEvent, EVENT_TYPES } from '../api/events'
-import type { NoticeBatchFilter, NoticeDetail, NoticeSummary, TaskCreateResult } from '../api/schema'
+import type { ExtractPreviewItem, ExtractPreviewResponse, NoticeBatchFilter, NoticeDetail, NoticeSummary, TaskCreateResult } from '../api/schema'
 
 const message = useMessage()
 const dialog = useDialog()
@@ -44,6 +44,14 @@ const crawlSources = ref<string[]>([])
 const crawlMode = ref('incremental')
 const crawlMaxPages = ref<number | null>(null)
 const crawlDeepCheck = ref(false)
+
+const previewOpen = ref(false)
+const previewLoading = ref(false)
+const previewPassed = ref<ExtractPreviewItem[]>([])
+const previewSkipped = ref<ExtractPreviewItem[]>([])
+const selectedIds = ref<number[]>([])
+const taskProgress = ref(0)
+const taskProgressVisible = ref(false)
 
 const sourceOptions = computed(() =>
   (configStore.sources?.sources ?? []).map((s) => ({ label: s.name, value: s.name }))
@@ -166,11 +174,15 @@ function openCrawlDialog(deep = false) {
 async function runCrawl() {
   taskRunning.value = true
   crawlDialogOpen.value = false
+  taskProgressVisible.value = true
+  taskProgress.value = 0
   try {
     const params: Record<string, unknown> = { mode: crawlMode.value, deep_check: crawlDeepCheck.value }
     if (crawlSources.value.length) params.sources = crawlSources.value
     if (crawlMaxPages.value) params.max_pages = crawlMaxPages.value
-    const task = await submitAndPoll('crawl_all', params)
+    const task = await submitAndPoll('crawl_all', params, (t) => {
+      if (typeof t.progress === 'number') taskProgress.value = t.progress
+    })
     if (task.status === 'success') {
       const summary = task.result?.summary as { new?: number; failed?: number; deep_check?: boolean } | undefined
       message.success(
@@ -184,17 +196,48 @@ async function runCrawl() {
     message.error(e instanceof Error ? e.message : String(e))
   } finally {
     taskRunning.value = false
+    taskProgressVisible.value = false
   }
 }
 
-async function extractBatch() {
-  taskRunning.value = true
+async function openExtractPreview() {
+  previewLoading.value = true
   try {
-    const task = await submitAndPoll('extract_batch', { limit: 50, auto_index: true, prefilter: true })
-    const done = task.result?.done as number | undefined
-    const prefiltered = task.result?.prefiltered as number | undefined
+    const res = await post<ExtractPreviewResponse>(endpoints.notices.extractPreview)
+    previewPassed.value = res.passed ?? []
+    previewSkipped.value = res.skipped ?? []
+    selectedIds.value = (res.passed ?? []).map((p) => p.id)
+    previewOpen.value = true
+    if (!previewPassed.value.length && !previewSkipped.value.length) {
+      message.info('暂无待提取的通知')
+    }
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : String(e))
+  } finally {
+    previewLoading.value = false
+  }
+}
+
+async function runExtractSelected() {
+  if (!selectedIds.value.length) {
+    message.warning('请至少选择一条通知')
+    return
+  }
+  previewOpen.value = false
+  taskRunning.value = true
+  taskProgressVisible.value = true
+  taskProgress.value = 0
+  try {
+    const task = await submitAndPoll(
+      'extract_batch',
+      { notice_ids: selectedIds.value, auto_index: true },
+      (t) => {
+        if (typeof t.progress === 'number') taskProgress.value = t.progress
+      }
+    )
+    const done = task.result?.processed as number | undefined
     if (task.status === 'success') {
-      message.success(`批量提取完成（处理 ${done ?? 0} 条${prefiltered ? `，预筛跳过 ${prefiltered} 条` : ''}）`)
+      message.success(`批量提取完成（处理 ${done ?? 0} 条）`)
     } else {
       message.error(task.error || '批量提取失败')
     }
@@ -203,6 +246,7 @@ async function extractBatch() {
     message.error(e instanceof Error ? e.message : String(e))
   } finally {
     taskRunning.value = false
+    taskProgressVisible.value = false
   }
 }
 
@@ -422,9 +466,16 @@ function keyDatesText(d: NoticeDetail): string {
           <n-button size="small" type="primary" secondary :loading="taskRunning" @click="openCrawlDialog(true)">
             深度抓取
           </n-button>
-          <n-button size="small" type="primary" secondary :loading="taskRunning" @click="extractBatch">
+          <n-button size="small" type="primary" secondary :loading="taskRunning" @click="openExtractPreview">
             批量提取
           </n-button>
+          <n-progress
+            v-if="taskProgressVisible"
+            type="line"
+            :percentage="Math.round(taskProgress * 100)"
+            :show-indicator="false"
+            style="width: 110px"
+          />
         </n-space>
       </template>
 
@@ -559,6 +610,65 @@ function keyDatesText(d: NoticeDetail): string {
         <n-space justify="end">
           <n-button @click="crawlDialogOpen = false">取消</n-button>
           <n-button type="primary" :loading="taskRunning" @click="runCrawl">开始抓取</n-button>
+        </n-space>
+      </template>
+    </n-modal>
+
+    <n-modal
+      v-model:show="previewOpen"
+      preset="card"
+      title="提取预览"
+      style="width: 680px"
+      :bordered="false"
+    >
+      <n-spin :show="previewLoading">
+        <n-space vertical size="large">
+          <div v-if="previewPassed.length">
+            <div style="margin-bottom: 8px">将提取 {{ previewPassed.length }} 条（可取消勾选）：</div>
+            <n-scrollbar style="max-height: 240px">
+              <n-checkbox-group v-model:value="selectedIds">
+                <n-space vertical size="small">
+                  <n-checkbox v-for="p in previewPassed" :key="p.id" :value="p.id">
+                    {{ p.title }}
+                    <span style="color: #999">（{{ p.source }} · {{ fmtDate(p.published_at) }}）</span>
+                  </n-checkbox>
+                </n-space>
+              </n-checkbox-group>
+            </n-scrollbar>
+          </div>
+          <div v-if="previewSkipped.length">
+            <div style="margin-bottom: 8px">预筛跳过 {{ previewSkipped.length }} 条（不调 LLM）：</div>
+            <n-scrollbar style="max-height: 200px">
+              <n-list size="small">
+                <n-list-item v-for="s in previewSkipped" :key="s.id">
+                  <n-space align="center" size="small">
+                    <n-tag size="small" :bordered="false" type="default">跳过</n-tag>
+                    <span style="color: #999">{{ s.title }}</span>
+                    <n-tooltip trigger="hover">
+                      <template #trigger>
+                        <n-text depth="3" style="cursor: help">原因</n-text>
+                      </template>
+                      {{ s.reason }}
+                    </n-tooltip>
+                  </n-space>
+                </n-list-item>
+              </n-list>
+            </n-scrollbar>
+          </div>
+          <div v-if="!previewPassed.length && !previewSkipped.length">暂无待提取的通知</div>
+        </n-space>
+      </n-spin>
+      <template #footer>
+        <n-space justify="end">
+          <n-button @click="previewOpen = false">取消</n-button>
+          <n-button
+            type="primary"
+            :disabled="!selectedIds.length"
+            :loading="taskRunning"
+            @click="runExtractSelected"
+          >
+            提取选中 {{ selectedIds.length }} 条
+          </n-button>
         </n-space>
       </template>
     </n-modal>

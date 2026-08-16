@@ -57,6 +57,8 @@ export type TestSourceRequest = components['schemas']['TestSourceRequest']
 export type TestSourceResult = components['schemas']['TestSourceResult']
 export type TestModelRequest = components['schemas']['TestModelRequest']
 export type TestModelResult = components['schemas']['TestModelResult']
+export type ExtractPreviewItem = components['schemas']['ExtractPreviewItem']
+export type ExtractPreviewResponse = components['schemas']['ExtractPreviewResponse']
 
 export type TaskCreateRequest = components['schemas']['TaskCreateRequest']
 export type TaskCreateResult = components['schemas']['TaskCreateResult']
