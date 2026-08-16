@@ -163,9 +163,10 @@ def run():
 
     core_extractor.run_agent = fake_extract_run
     extractor = core_extractor.NoticeExtractor.__new__(core_extractor.NoticeExtractor)
-    extractor.model = "extract-model"
-    extractor._get_agent = lambda: object()
-    out = asyncio.run(extractor._call("prompt", None, attempt=1, notice_id=7))
+    extractor.models = ["extract-model"]
+    extractor._agents = {}
+    extractor._get_agent = lambda model: object()
+    out = asyncio.run(extractor._call("extract-model", "prompt", None, attempt=1, notice_id=7))
     check("返回 NoticeExtraction", isinstance(out, NoticeExtraction))
     check(
         "task/attempt/notice_id 传入统一调用点",
@@ -195,8 +196,9 @@ def run():
 
     core_todo.run_agent = FlakyRun()
     gen = core_todo.TodoGenerator.__new__(core_todo.TodoGenerator)
-    gen.model = "todo-model"
-    gen._get_agent = lambda: object()
+    gen.models = ["todo-model"]
+    gen._agents = {}
+    gen._get_agent = lambda model: object()
     notice = {
         "id": 3,
         "title": "工创大赛",
@@ -233,14 +235,15 @@ def run():
 
     core_qa.run_agent = fake_qa_run
     qa = core_qa.QAAgent.__new__(core_qa.QAAgent)
-    qa.model = "qa-model"
+    qa.models = ["qa-model"]
+    qa._agents = {}
     qa.top_k = 6
     qa.max_sources = 5
     qa.search_mode = "vector"
     qa.strategy = "none"
     qa.expire_days = None
     qa.search_kwargs = {}
-    qa._get_agent = lambda: object()
+    qa._get_agent = lambda model: object()
     qa.index = SimpleNamespace(
         search=lambda question, k, **kwargs: [
             SimpleNamespace(

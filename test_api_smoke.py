@@ -511,7 +511,11 @@ def _smoke(client, db_mod, config_dir, tmpdir, real_config_path, real_config_sna
         f"{r.json()}",
     )
     r = client.get("/api/v1/config/models")
-    check("PUT models 后 GET 反映", r.json()["extraction"]["model"] == "model-b", f"{r.json()}")
+    check(
+        "PUT models 后 GET 反映（旧格式 model 自动迁移为 models 列表）",
+        r.json()["extraction"]["models"] == ["model-b"],
+        f"{r.json()}",
+    )
     # 引用不存在的 provider → ok=false（AppConfig 交叉校验兜底）
     r = client.put(
         "/api/v1/config/models",
@@ -543,6 +547,22 @@ def _smoke(client, db_mod, config_dir, tmpdir, real_config_path, real_config_sna
         r.json()["opencode-zen"]["base_url"] == "https://new.example.com/v1",
         f"{r.json()}",
     )
+
+    # PUT providers/{name}/api-key → 写入临时 .env（gitignore，免重启生效）
+    r = client.put(
+        "/api/v1/config/providers/opencode-zen/api-key",
+        json={"api_key": "sk-smoke"},
+    )
+    check(
+        "PUT api-key ok + env_var",
+        r.status_code == 200 and r.json()["ok"] is True and r.json()["env_var"] == "OPENCODE_API_KEY",
+        f"{r.json()}",
+    )
+    env_txt = (Path(tmpdir.name) / ".env").read_text(encoding="utf-8")
+    check(".env 已写入 Key", "OPENCODE_API_KEY=sk-smoke" in env_txt, env_txt)
+    # 未知供应商 → ok=false
+    r = client.put("/api/v1/config/providers/ghost/api-key", json={"api_key": "x"})
+    check("PUT api-key 未知供应商 ok=false", r.status_code == 200 and r.json()["ok"] is False, f"{r.json()}")
 
     # PUT sources → GET 验证
     r = client.put(
