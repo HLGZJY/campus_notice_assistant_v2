@@ -13,6 +13,8 @@ from fastapi import APIRouter, Depends
 
 from api.deps import require_auth
 from api.schemas import (
+    ApiKeyRequest,
+    ApiKeyResult,
     ConfigMutationResult,
     ConfigView,
     DiskInfo,
@@ -41,6 +43,7 @@ from services.config_service import (
     get_models_for_ui,
     get_providers_for_ui,
     get_sources_for_ui,
+    save_provider_api_key,
     test_model_connection,
     test_source_url,
     update_crawl,
@@ -85,6 +88,12 @@ def get_providers() -> dict:
 def put_providers(body: dict[str, ProviderConfig]) -> dict:
     """保存供应商配置（body 复用 config.schema.ProviderConfig）。"""
     return update_providers({k: v.model_dump() for k, v in body.items()})
+
+
+@router.put("/providers/{provider_name}/api-key", response_model=ApiKeyResult)
+def put_provider_api_key(provider_name: str, body: ApiKeyRequest) -> dict:
+    """写入供应商 API Key 到 .env（gitignore，不落库），免重启生效。"""
+    return save_provider_api_key(provider_name, body.api_key)
 
 
 @router.get("/sources", response_model=SchoolConfig)

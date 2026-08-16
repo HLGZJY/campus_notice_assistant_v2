@@ -101,7 +101,7 @@ def update_providers(providers_data: dict[str, dict]) -> dict:
     """保存供应商配置。
 
     providers_data 格式：
-    {"opencode-zen": {"name": "opencode-zen", "base_url": "...", "api_key_env": "OPENCODE_API_KEY"}}
+    {"opencode-zen": {"name": "opencode-zen", "base_url": "...", "api_key_env": "OPENCODE_API_KEY", "models": [...]}}
     """
     try:
         providers = ConfigStore.build_providers_config(providers_data)
@@ -109,6 +109,18 @@ def update_providers(providers_data: dict[str, dict]) -> dict:
         return {"ok": True, **result}
     except Exception as e:
         logger.exception("保存供应商配置失败")
+        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+
+
+def save_provider_api_key(provider_name: str, api_key: str) -> dict:
+    """把供应商 API Key 写入 .env（gitignore，不落库），免重启生效。
+
+    返回统一结构 {"ok": bool, "env_var": ..., "env_path": ..., "error": ...}。
+    """
+    try:
+        return ConfigStore.get_instance().save_api_key(provider_name, api_key)
+    except Exception as e:
+        logger.exception("写入 API Key 失败")
         return {"ok": False, "error": f"{type(e).__name__}: {e}"}
 
 

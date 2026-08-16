@@ -372,6 +372,7 @@ class ProviderView(BaseModel):
     base_url: str = ""
     api_key_env: str = ""
     api_key_status: bool = False
+    models: list[str] = []  # 可选模型名列表（纯手动维护）
 
 
 class ModelProfileView(BaseModel):
@@ -380,7 +381,7 @@ class ModelProfileView(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     provider: str
-    model: str
+    models: list[str] = []  # 有序候选列表，先尝试在前
 
 
 class ModelsView(BaseModel):
@@ -477,6 +478,23 @@ class TestModelResult(BaseModel):
     ok: bool
     latency_ms: int = 0
     completion: Optional[str] = None
+    error: Optional[str] = None
+
+
+class ApiKeyRequest(BaseModel):
+    """供应商 API Key 写入请求体（后端 upsert 到 .env，不入库不落 YAML）。"""
+
+    api_key: str
+
+
+class ApiKeyResult(BaseModel):
+    """API Key 写入结果。"""
+
+    model_config = ConfigDict(extra="allow")
+
+    ok: bool
+    env_var: Optional[str] = None
+    env_path: Optional[str] = None
     error: Optional[str] = None
 
 

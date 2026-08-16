@@ -1633,6 +1633,75 @@
         }
       }
     },
+    "/api/v1/config/providers/{provider_name}/api-key": {
+      "put": {
+        "tags": [
+          "config"
+        ],
+        "summary": "Put Provider Api Key",
+        "description": "写入供应商 API Key 到 .env（gitignore，不落库），免重启生效。",
+        "operationId": "put_provider_api_key_api_v1_config_providers__provider_name__api_key_put",
+        "parameters": [
+          {
+            "name": "provider_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Provider Name"
+            }
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApiKeyRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiKeyResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/config/sources": {
       "get": {
         "tags": [
@@ -3514,6 +3583,68 @@
   },
   "components": {
     "schemas": {
+      "ApiKeyRequest": {
+        "properties": {
+          "api_key": {
+            "type": "string",
+            "title": "Api Key"
+          }
+        },
+        "type": "object",
+        "required": [
+          "api_key"
+        ],
+        "title": "ApiKeyRequest",
+        "description": "供应商 API Key 写入请求体（后端 upsert 到 .env，不入库不落 YAML）。"
+      },
+      "ApiKeyResult": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "env_var": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Env Var"
+          },
+          "env_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Env Path"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "ok"
+        ],
+        "title": "ApiKeyResult",
+        "description": "API Key 写入结果。"
+      },
       "ConfigMutationResult": {
         "properties": {
           "ok": {
@@ -3983,18 +4114,21 @@
             "type": "string",
             "title": "Provider"
           },
-          "model": {
-            "type": "string",
-            "title": "Model"
+          "models": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Models"
           }
         },
         "type": "object",
         "required": [
           "provider",
-          "model"
+          "models"
         ],
         "title": "ModelProfile",
-        "description": "某个任务（extraction / qa / todo / embedding）使用的模型配置。"
+        "description": "某个任务（extraction / qa / todo / embedding）使用的模型配置。\n\nmodels: 有序模型候选列表，先尝试在前。首模型失败（配额/网络/5xx 等可恢复错误）\n        时自动切换到下一个（同供应商内）。旧格式 model: \"x\" 自动迁移为 models: [\"x\"]。"
       },
       "ModelProfileView": {
         "properties": {
@@ -4002,16 +4136,19 @@
             "type": "string",
             "title": "Provider"
           },
-          "model": {
-            "type": "string",
-            "title": "Model"
+          "models": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Models",
+            "default": []
           }
         },
         "additionalProperties": true,
         "type": "object",
         "required": [
-          "provider",
-          "model"
+          "provider"
         ],
         "title": "ModelProfileView",
         "description": "任务-模型映射视图。"
@@ -4710,6 +4847,14 @@
             "type": "string",
             "title": "Api Key Env",
             "default": ""
+          },
+          "models": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Models",
+            "default": []
           }
         },
         "type": "object",
@@ -4717,7 +4862,7 @@
           "name"
         ],
         "title": "ProviderConfig",
-        "description": "LLM / Embedding 供应商配置。\n\n不直接保存 api_key，而是通过 api_key_env 引用环境变量名，\n避免密钥写入版本控制的 YAML。"
+        "description": "LLM / Embedding 供应商配置。\n\n不直接保存 api_key，而是通过 api_key_env 引用环境变量名，\n避免密钥写入版本控制的 YAML。\nmodels: 该供应商可选的模型名列表（纯手动维护，供前端下拉选择）。"
       },
       "ProviderView": {
         "properties": {
@@ -4739,6 +4884,14 @@
             "type": "boolean",
             "title": "Api Key Status",
             "default": false
+          },
+          "models": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Models",
+            "default": []
           }
         },
         "additionalProperties": true,
