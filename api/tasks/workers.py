@@ -20,10 +20,15 @@ def _on_progress(progress_cb, done: int, total: int) -> None:
 
 
 def crawl_source(task: dict, progress_cb, deps: dict) -> dict:
-    """单源抓取。"""
-    source_name = (task.get("params") or {}).get("source_name")
+    """单源抓取（阶段 7 支持 mode/max_pages/deep_check 覆盖）。"""
+    params = task.get("params") or {}
+    source_name = params.get("source_name")
     result = notice_service.crawl_source_by_name(
-        source_name, progress_cb=lambda d, t: _on_progress(progress_cb, d, t)
+        source_name,
+        progress_cb=lambda d, t: _on_progress(progress_cb, d, t),
+        mode=params.get("mode"),
+        max_pages=params.get("max_pages"),
+        deep_check=params.get("deep_check"),
     )
     if result.get("ok") is False:
         raise RuntimeError(result.get("error", "抓取失败"))
@@ -31,28 +36,43 @@ def crawl_source(task: dict, progress_cb, deps: dict) -> dict:
 
 
 def crawl_all(task: dict, progress_cb, deps: dict) -> dict:
-    """全部数据源抓取。"""
-    result = notice_service.crawl_all_sources(
-        progress_cb=lambda d, t: _on_progress(progress_cb, d, t)
+    """全部数据源抓取（阶段 7 支持 sources 多选 / mode / max_pages / deep_check）。"""
+    params = task.get("params") or {}
+    mode = params.get("mode")
+    max_pages = params.get("max_pages")
+    deep_check = bool(params.get("deep_check", False))
+    sources = params.get("sources") or None
+
+    def _cb(done: int, total: int) -> None:
+        _on_progress(progress_cb, done, total)
+
+    results = notice_service.crawl_all_sources(
+        progress_cb=_cb, deep_check=deep_check
     )
+    if sources:
+        results = {k: v for k, v in results.items() if k in sources}
+
     summary = {
-        "sources": len(result),
-        "discovered": sum(r.get("discovered", 0) for r in result.values()),
-        "new": sum(r.get("new", 0) for r in result.values()),
-        "skipped": sum(r.get("skipped", 0) for r in result.values()),
-        "changed": sum(r.get("changed", 0) for r in result.values()),
-        "failed": sum(r.get("failed", 0) for r in result.values()),
+        "sources": len(results),
+        "discovered": sum(r.get("discovered", 0) for r in results.values()),
+        "new": sum(r.get("new", 0) for r in results.values()),
+        "skipped": sum(r.get("skipped", 0) for r in results.values()),
+        "changed": sum(r.get("changed", 0) for r in results.values()),
+        "failed": sum(r.get("failed", 0) for r in results.values()),
+        "mode": mode or "incremental",
+        "deep_check": deep_check,
     }
-    return {"summary": summary, "per_source": result}
+    return {"summary": summary, "per_source": results}
 
 
 def extract_batch(task: dict, progress_cb, deps: dict) -> dict:
-    """批量提取 status=raw 的通知（断点续跑游标）。"""
+    """批量提取 status=raw 的通知（断点续跑游标 + 阶段 7 前置过滤）。"""
     params = task.get("params") or {}
     return notice_service.extract_batch(
         limit=params.get("limit", 50),
         auto_index=params.get("auto_index", True),
         extractor=deps.get("extractor"),
+        prefilter=params.get("prefilter", True),
         progress_cb=lambda d, t: _on_progress(progress_cb, d, t),
     )
 

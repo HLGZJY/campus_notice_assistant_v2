@@ -24,16 +24,27 @@ from api.schemas import (
     TestSourceRequest,
     TestSourceResult,
 )
-from config.schema import ModelsConfig, ProviderConfig, SchoolConfig, SourceConfig
+from config.schema import (
+    CrawlConfig,
+    ExtractConfig,
+    ModelsConfig,
+    ProviderConfig,
+    SchoolConfig,
+    SourceConfig,
+)
 from services.config_service import (
     force_reload_config,
     get_config_disk_info,
     get_config_for_ui,
+    get_crawl_for_ui,
+    get_extract_for_ui,
     get_models_for_ui,
     get_providers_for_ui,
     get_sources_for_ui,
     test_model_connection,
     test_source_url,
+    update_crawl,
+    update_extract,
     update_models,
     update_providers,
     update_sources,
@@ -86,6 +97,30 @@ def get_sources() -> dict:
 def put_sources(body: list[SourceConfig]) -> dict:
     """保存当前学校数据源配置（body 复用 config.schema.SourceConfig）。"""
     return update_sources([s.model_dump() for s in body])
+
+
+@router.get("/crawl", response_model=CrawlConfig)
+def get_crawl() -> dict:
+    """获取全局抓取参数（阶段 7）。"""
+    return get_crawl_for_ui()
+
+
+@router.put("/crawl", response_model=ConfigMutationResult)
+def put_crawl(body: CrawlConfig) -> dict:
+    """保存全局抓取参数（阶段 7：增量早停/超时/重试/并发/深检周期）。"""
+    return update_crawl(body.model_dump())
+
+
+@router.get("/extract", response_model=ExtractConfig)
+def get_extract() -> dict:
+    """获取提取前置过滤配置（阶段 7）。"""
+    return get_extract_for_ui()
+
+
+@router.put("/extract", response_model=ConfigMutationResult)
+def put_extract(body: ExtractConfig) -> dict:
+    """保存提取前置过滤配置（阶段 7）。"""
+    return update_extract(body.model_dump())
 
 
 @router.get("/disk", response_model=DiskInfo)

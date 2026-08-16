@@ -44,6 +44,7 @@ class NoticeSummary(BaseModel):
     deadline: Optional[str] = None
     summary: Optional[str] = None
     keywords: list[str] = []  # 订阅命中词（浏览页徽标用，无则空）
+    extract_skipped_reason: Optional[str] = None  # 提取预筛跳过原因（阶段 7）
 
 
 class NoticeDetail(BaseModel):
@@ -69,6 +70,7 @@ class NoticeDetail(BaseModel):
     summary: Optional[str] = None
     extracted_at: Optional[str] = None
     keywords: list[str] = []
+    extract_skipped_reason: Optional[str] = None  # 提取预筛跳过原因（阶段 7）
 
 
 # ---------- 通知列表分页 / 元信息 / 管理（新增数据管理能力） ----------
@@ -382,6 +384,7 @@ class ConfigView(BaseModel):
     models: ModelsView
     providers: dict[str, ProviderView]
     crawl: dict
+    extract: dict = Field(default_factory=dict)
 
 
 class ConfigMutationResult(BaseModel):
@@ -434,6 +437,9 @@ class TestSourceResult(BaseModel):
     latency_ms: int = 0
     link_count: int = 0
     error: Optional[str] = None
+    # 阶段 7：自动发现的链接模式建议（前端一键填入 url_pattern）
+    suggested_pattern: Optional[str] = None
+    sample_links: list[str] = Field(default_factory=list)
 
 
 class TestModelRequest(BaseModel):
