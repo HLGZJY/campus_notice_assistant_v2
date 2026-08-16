@@ -162,6 +162,20 @@
 
 ---
 
+## 阶段 7.2 模型失败切换 + 供应商优化 ✅
+
+> 依据用户反馈：阿里云百炼免费模型配额低，单模型常 429 触发降级。决策：同供应商内多候选模型失败自动切换（不做跨供应商）。
+
+- [x] 数据模型：`ModelProfile.model: str` → `models: list[str]` 有序候选（旧单 `model:` 格式自动迁移）；`ProviderConfig.models` 供应商可选模型列表（纯手动维护，作模型 tab 下拉数据源）
+- [x] 失败切换：`utils.llm.is_failover_worthy`（400/401/403 不切，429/5xx/404/网络切）；extractor/qa/todo 按 `get_model_candidates(task)` 顺序构建 `_agents[model]` 并按序切换；流式 `ask_stream` 只在首个 delta 前切换；embedding 探测按候选顺序
+- [x] API Key 免手动编辑：`ConfigStore.save_api_key` upsert 到 `.env`（保留注释/无关行，原子写）+ 同步 `os.environ` 免重启生效 + `api_key_env` 为空时自动生成 `<NAME>_API_KEY` 并回写 app.yaml
+- [x] 新端点：`PUT /api/v1/config/providers/{name}/api-key`
+- [x] 供应商删除守卫：被任务模型引用的供应商由 AppConfig 交叉校验拒绝 + 前端前置提示
+- [x] 前端：模型 tab 有序候选（n-select filterable+tag + ↑/↓/移除/行内测试）；供应商 tab 增删 / 保存 Key 到 .env / 可选模型列表
+- [x] 测试：`test_model_failover.py`（8 组全过）+ `test_api_smoke.py` 补 api-key 端点断言；回归 suite 全过
+
+---
+
 ### Phase 0：仓库初始化 ✅
 
 - 新仓库 `campus_notice_assistant_v2`；旧仓库封存只读（`legacy/main`）。

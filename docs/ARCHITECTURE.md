@@ -315,13 +315,14 @@ extractor_agent = Agent(
 ```yaml
 active_school: scuec
 models:
-  extraction: { provider: bailian, model: qwen3.7-max }
-  qa:         { provider: bailian, model: qwen3.7-max }
-  todo:       { provider: bailian, model: qwen3.7-max }
-  embedding:  { provider: local, model: models/bge-small-zh-v1.5 }
+  # models 为有序候选列表（同供应商内失败切换）：先尝试在前，失败自动切下一个
+  extraction: { provider: bailian, models: [qwen3.7-flash, qwen3.7-max] }
+  qa:         { provider: bailian, models: [qwen3.7-flash, qwen3.7-max] }
+  todo:       { provider: bailian, models: [qwen3.7-flash, qwen3.7-max] }
+  embedding:  { provider: local, models: [models/bge-small-zh-v1.5] }
 providers:
-  bailian:  { name: bailian,  base_url: https://dashscope.aliyuncs.com/compatible-mode/v1, api_key_env: DASHSCOPE_API_KEY }
-  local:    { name: local,    base_url: "", api_key_env: "" }
+  bailian:  { name: bailian,  base_url: https://dashscope.aliyuncs.com/compatible-mode/v1, api_key_env: DASHSCOPE_API_KEY, models: [qwen3.7-flash, qwen3.7-turbo, qwen3.7-max] }
+  local:    { name: local,    base_url: "", api_key_env: "", models: [models/bge-small-zh-v1.5] }
 crawl:
   interval_minutes: 60
   cleanup_enabled: false
@@ -382,7 +383,7 @@ sources:
 | reminders | `GET /reminders`、`GET /reminders/stats`、`GET /reminders/pending-count`、`POST /reminders/{id}/status` | 截止提醒 |
 | subscriptions | `GET /subscriptions`、`GET /subscriptions/stats`、`POST /subscriptions/preview`、`POST /subscriptions`（任务）、`PUT /subscriptions/{id}`（任务）、`POST /subscriptions/{id}/toggle`（任务）、`DELETE /subscriptions/{id}`、`POST /subscriptions/match-all`（任务）、`GET /subscriptions/{id}/notices` | 两步式订阅 |
 | notices 订阅 | `GET /notices/count`、`GET /notices/matched-ids`、`POST /notices/match-map` | 浏览页命中徽标 |
-| config | `GET/PUT /config/{models,providers,sources,crawl,extract}`、`GET /config/disk`、`POST /config/reload`、`POST /config/test-source`（含 `suggested_pattern` 自动填充）、`POST /config/test-model` | 配置 |
+| config | `GET/PUT /config/{models,providers,sources,crawl,extract}`、`GET /config/disk`、`POST /config/reload`、`POST /config/test-source`（含 `suggested_pattern` 自动填充）、`POST /config/test-model`、`PUT /config/providers/{name}/api-key`（写入 `.env` + 同步环境变量） | 配置 |
 | qa | `GET /qa/ask/stream`（SSE）、`GET /qa/index-stats` | 问答 |
 | events | `POST /events` | 埋点 |
 | tasks | `POST /tasks`（202）、`GET /tasks/{id}`、`GET /tasks` | 异步任务 |

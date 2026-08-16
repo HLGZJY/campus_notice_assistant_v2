@@ -185,25 +185,25 @@ python check_db.py --summary           # 每日体检汇总
 - `config/schools/<code>.yaml`：学校数据源配置，每个学校一个文件（含来源级抓取策略）。
 - `.env`：存放 API key 等敏感信息，通过 `api_key_env` 被 YAML 引用。
 
-模型配置示例（当前默认）：
+模型配置示例（当前默认）。`models.<task>.models` 为有序候选列表：先尝试在前，同供应商内失败自动切换下一个（缓解免费模型配额不足）：
 
 ```yaml
 models:
   extraction:
     provider: bailian
-    model: qwen3.7-max
+    models: [qwen3.7-flash, qwen3.7-max]
   qa:
     provider: bailian
-    model: qwen3.7-max
+    models: [qwen3.7-flash, qwen3.7-max]
   todo:
     provider: bailian
-    model: qwen3.7-max
+    models: [qwen3.7-flash, qwen3.7-max]
   embedding:
     provider: local
-    model: models/bge-small-zh-v1.5
+    models: [models/bge-small-zh-v1.5]
 ```
 
-新增供应商只需在 `providers` 下添加条目并配置对应的环境变量名即可。切换模型在「系统配置」页面或 YAML 中修改后保存生效；`app.yaml` 写入权唯一归后端 API 进程（调度器/CLI 只读）。
+新增供应商只需在 `providers` 下添加条目（含可选模型列表 `models`，作为「系统配置」页模型下拉的候选数据源）并配置对应的环境变量名即可；API key 也可在「系统配置 → 供应商」页面直接输入，后端会自动写入 `.env` 并同步环境变量（免重启生效）。切换模型在「系统配置」页面或 YAML 中修改后保存生效；`app.yaml` 写入权唯一归后端 API 进程（调度器/CLI 只读）。旧版单 `model:` 字段会自动迁移为 `models: [xxx]`。
 
 ## 项目状态
 
