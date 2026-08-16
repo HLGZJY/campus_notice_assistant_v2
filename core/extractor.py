@@ -29,7 +29,7 @@ from core.date_utils import (
     strip_deadline_noise,
 )
 from core.models import NoticeExtraction
-from utils.llm import get_model_for_task, run_agent
+from utils.llm import get_model_candidates, is_failover_worthy, run_agent
 
 logger = logging.getLogger(__name__)
 
@@ -120,14 +120,19 @@ def classify_status(ext: NoticeExtraction) -> str:
 
 
 class NoticeExtractor:
-    """基于 OpenAI Agents SDK 的提取器。"""
+    """基于 OpenAI Agents SDK 的提取器。
+
+    models 为有序候选列表（同供应商内失败切换）：首模型抛可恢复错误
+    （配额/网络/5xx/404 等）时自动切下一个；400/401/403 不切换直接失败。
+    """
 
     def __init__(self):
-        self.api_key, self.base_url, self.model = get_model_for_task("extraction")
-        self._agent: Optional[Agent] = None
+        self.api_key, self.base_url, self.models = get_model_candidates("extraction")
+        self._agents: dict[str, Agent] = {}
 
-    def _get_agent(self) -> Agent:
-        if self._agent is None:
+    def _get_agent(self, model: str) -> Agent:
+        agent = self._agents.get(model)
+        if agent is None:
             set_tracing_disabled(True)  # 不向 OpenAI 导出 trace
             client = AsyncOpenAI(
                 api_key=self.api_key,
@@ -135,16 +140,17 @@ class NoticeExtractor:
             )
             set_default_openai_client(client, use_for_tracing=False)
             set_default_openai_api("chat_completions")
-            self._agent = Agent(
+            agent = Agent(
                 name="通知提取助手",
                 instructions=EXTRACTOR_INSTRUCTIONS,
-                model=self.model,
+                model=model,
                 output_type=NoticeExtraction,
                 model_settings=ModelSettings(
                     extra_body={"response_format": {"type": "json_object"}}
                 ),
             )
-        return self._agent
+            self._agents[model] = agent
+        return agent
 
     async def extract_one(
         self,
@@ -154,27 +160,61 @@ class NoticeExtractor:
         crawled_at: Optional[str] = None,
         notice_id: Optional[int] = None,
     ) -> ExtractionOutcome:
-        """提取单条通知，带校验重试。400 类永久错误不重试，直接标记失败。"""
+        """提取单条通知，带校验重试 + 同供应商模型失败切换。
+
+        400 类永久错误不切换直接失败；可恢复错误切换下一个候选模型。
+        """
         reference: Optional[date] = extract_reference_date(published_at, crawled_at)
         prompt = build_prompt(title, content, published_at, crawled_at)
 
+        switched_errors: list[str] = []
+        for model in self.models:
+            outcome = await self._try_model(model, prompt, reference, title, notice_id)
+            if outcome is not None:
+                return outcome
+            switched_errors.append(f"模型 {model} 失败")
+            logger.warning("提取模型切换 %s → 下一个候选 %s", model, title[:40])
+
+        return ExtractionOutcome(
+            status="failed",
+            extraction=None,
+            error="；".join(switched_errors) or "所有候选模型均提取失败",
+        )
+
+    async def _try_model(
+        self,
+        model: str,
+        prompt: str,
+        reference: Optional[date],
+        title: str,
+        notice_id: Optional[int],
+    ) -> Optional[ExtractionOutcome]:
+        """在单个候选模型上执行「调用 + 校验重试」。
+
+        Returns:
+            None 表示该模型抛出可恢复错误，应切换到下一个候选模型。
+        """
         last_error: Optional[str] = None
         best: Optional[NoticeExtraction] = None
 
         for attempt in range(MAX_RETRIES + 1):
             try:
-                ext = await self._call(prompt, last_error, attempt=attempt, notice_id=notice_id)
+                ext = await self._call(model, prompt, last_error, attempt=attempt, notice_id=notice_id)
             except BadRequestError as e:
                 # 400 错误（prompt 被上游拒绝/内容过滤/token 超限等）不可恢复
                 msg = f"LLM 请求被拒绝: {type(e).__name__}: {e}"
                 logger.warning("提取失败(不可恢复) %s: %s", title, msg[:200])
                 return ExtractionOutcome(status="failed", extraction=None, error=msg)
             except Exception as e:
-                last_error = f"LLM 调用或输出解析失败: {type(e).__name__}: {e}"
+                if not is_failover_worthy(e):
+                    msg = f"LLM 调用失败(不可恢复): {type(e).__name__}: {e}"
+                    logger.warning("提取失败(不可恢复) %s: %s", title, msg[:200])
+                    return ExtractionOutcome(status="failed", extraction=None, error=msg)
+                last_error = f"模型 {model} 调用失败: {type(e).__name__}: {e}"
                 if len(last_error) > 500:
                     last_error = last_error[:500] + "..."
-                logger.warning("提取调用失败(%d/%d) %s: %s", attempt + 1, MAX_RETRIES + 1, title, last_error[:200])
-                continue
+                logger.warning("提取模型 %s 失败，尝试下一个: %s", model, last_error[:200])
+                return None
 
             best = ext
             ext, errors = self._resolve_and_validate(ext, reference)
@@ -185,23 +225,24 @@ class NoticeExtractor:
                 last_error = last_error[:500] + "..."
             logger.info("提取校验未通过(%d/%d) %s: %s", attempt + 1, MAX_RETRIES + 1, title, last_error)
 
-        # 重试耗尽：保留最后一次结果，但记录错误
+        # 校验重试耗尽：保留最后一次结果（不切换模型，校验失败切模型收益不大）
         if best is not None:
             return ExtractionOutcome(
                 status=classify_status(best),
                 extraction=best,
                 error=last_error,
             )
-        return ExtractionOutcome(status="failed", extraction=None, error=last_error)
+        return None
 
     async def _call(
         self,
+        model: str,
         prompt: str,
         error_msg: Optional[str],
         attempt: int = 0,
         notice_id: Optional[int] = None,
     ) -> NoticeExtraction:
-        agent = self._get_agent()
+        agent = self._get_agent(model)
         if error_msg:
             prompt = (
                 prompt
@@ -212,7 +253,7 @@ class NoticeExtractor:
             agent,
             prompt,
             task="extraction",
-            model=self.model,
+            model=model,
             attempt=attempt,
             notice_id=notice_id,
         )

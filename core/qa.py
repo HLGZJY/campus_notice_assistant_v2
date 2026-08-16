@@ -22,7 +22,7 @@ from agents import (
 from openai import AsyncOpenAI
 from pydantic import BaseModel, Field
 
-from utils.llm import get_model_for_task, run_agent, run_agent_stream
+from utils.llm import get_model_candidates, is_failover_worthy, run_agent, run_agent_stream
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +81,7 @@ class QAAgent:
 
             index = VectorIndex()
         self.index = index
-        self.api_key, self.base_url, self.model = get_model_for_task("qa")
+        self.api_key, self.base_url, self.models = get_model_candidates("qa")
         self.top_k = top_k
         self.max_sources = max_sources
         # 模块 2.3 过期策略（none/decay/filter）；默认 none=不过滤，实验结论落地后再切换
@@ -90,10 +90,11 @@ class QAAgent:
         # 模块 2.4 混合检索（vector/hybrid）；默认 vector，评测结论上/不上后再切换
         self.search_mode = search_mode
         self.search_kwargs = search_kwargs
-        self._agent: Optional[Agent] = None
+        self._agents: dict[str, Agent] = {}
 
-    def _get_agent(self) -> Agent:
-        if self._agent is None:
+    def _get_agent(self, model: str) -> Agent:
+        agent = self._agents.get(model)
+        if agent is None:
             set_tracing_disabled(True)
             client = AsyncOpenAI(
                 api_key=self.api_key,
@@ -101,12 +102,13 @@ class QAAgent:
             )
             set_default_openai_client(client, use_for_tracing=False)
             set_default_openai_api("chat_completions")
-            self._agent = Agent(
+            agent = Agent(
                 name="通知问答助手",
                 instructions=QA_INSTRUCTIONS,
-                model=self.model,
+                model=model,
             )
-        return self._agent
+            self._agents[model] = agent
+        return agent
 
     def _retrieve(self, question: str) -> list:
         """检索 Top-K chunks（可按模块 2.3 策略过滤/降权，或模块 2.4 混合检索）。"""
@@ -205,8 +207,22 @@ class QAAgent:
             f"请根据参考通知回答问题，并用 [编号] 引用来源。"
         )
 
-        agent = self._get_agent()
-        result = await run_agent(agent, prompt, task="qa", model=self.model)
+        result = None
+        last_error: Optional[str] = None
+        for model in self.models:
+            try:
+                agent = self._get_agent(model)
+                result = await run_agent(agent, prompt, task="qa", model=model)
+                break
+            except Exception as e:
+                if not is_failover_worthy(e):
+                    raise
+                last_error = f"模型 {model} 失败: {type(e).__name__}: {e}"
+                logger.warning("问答模型切换 %s → 下一个候选: %s", model, last_error[:200])
+                continue
+        else:
+            raise RuntimeError(last_error or "所有候选模型均失败")
+
         answer = str(result.final_output or "").strip()
         if not answer:
             answer = "根据已抓取的通知，没有找到相关信息。"
@@ -225,6 +241,8 @@ class QAAgent:
           - ("delta", str)：LLM 输出的文本增量
           - ("done", QAResult)：完整问答结果（含确定性导出的来源）
 
+        失败切换：只在产出首个 delta 之前失败才切下一个候选模型；
+        中途断流无法无缝续接，直接上抛（路由层发 error 事件）。
         空检索时直接产出 ("done", 兜底 QAResult)，不调用 LLM。
         """
         docs = self._retrieve(question)
@@ -246,11 +264,26 @@ class QAAgent:
             f"请根据参考通知回答问题，并用 [编号] 引用来源。"
         )
 
-        agent = self._get_agent()
         parts: list[str] = []
-        async for delta in run_agent_stream(agent, prompt, task="qa", model=self.model):
-            parts.append(delta)
-            yield ("delta", delta)
+        last_error: Optional[str] = None
+        for model in self.models:
+            started = False
+            try:
+                agent = self._get_agent(model)
+                async for delta in run_agent_stream(agent, prompt, task="qa", model=model):
+                    started = True
+                    parts.append(delta)
+                    yield ("delta", delta)
+                break  # 流正常结束
+            except Exception as e:
+                if started or not is_failover_worthy(e):
+                    raise
+                last_error = f"模型 {model} 失败: {type(e).__name__}: {e}"
+                logger.warning("问答流式模型切换 %s → 下一个候选: %s", model, last_error[:200])
+                parts = []
+                continue
+        else:
+            raise RuntimeError(last_error or "所有候选模型均失败")
 
         answer = "".join(parts).strip()
         if not answer:

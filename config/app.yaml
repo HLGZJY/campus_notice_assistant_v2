@@ -2,62 +2,73 @@
 # API Key 不在本文件保存，请通过 api_key_env 引用 .env 中的环境变量
 
 active_school: scuec
-# models:
-#   extraction:
-#     provider: opencode-zen
-#     model: kimi-k2.7-code
-#   qa:
-#     provider: opencode-zen
-#     model: kimi-k2.7-code
-#   todo:
-#     provider: opencode-zen
-#     model: kimi-k2.7-code
-#   embedding:
-#     provider: local
-#     model: sentence-transformers/all-MiniLM-L6-v2
-# providers:
-#   opencode-zen:
-#     name: opencode-zen
-#     base_url: https://opencode.ai/zen/go/v1
-#     api_key_env: OPENCODE_API_KEY
-
 models:
   extraction:
     provider: bailian
-    model: qwen3.7-max
+    models:
+    - qwen3.7-max-2026-05-20
+    - qwen3.7-flash-2026-07-15
+    - qwen3.7-max-preview
+    - qwen3.7-max-2026-05-17
   qa:
     provider: bailian
-    model: qwen3.7-max
+    models:
+    - qwen3.7-max-2026-05-20
+    - qwen3.7-flash-2026-07-15
+    - qwen3.7-max-preview
+    - qwen3.7-max-2026-05-17
   todo:
     provider: bailian
-    model: qwen3.7-max
+    models:
+    - qwen3.7-max-2026-05-20
+    - qwen3.7-flash-2026-07-15
+    - qwen3.7-max-preview
+    - qwen3.7-max-2026-05-17
   embedding:
     provider: local
-    model: models/bge-small-zh-v1.5
+    models:
+    - models/bge-small-zh-v1.5
 providers:
   opencode-zen:
     name: opencode-zen
     base_url: https://opencode.ai/zen/go/v1
     api_key_env: OPENCODE_API_KEY
+    models: []
   bailian:
     name: bailian
     base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
     api_key_env: DASHSCOPE_API_KEY
+    models: []
   local:
     name: local
-    base_url: ""
-    api_key_env: ""
+    base_url: ''
+    api_key_env: ''
+    models: []
 crawl:
   interval_minutes: 60
   user_agent: CampusAssistant/1.0
   max_pages: 5
-  expire_days: 90 # 无 deadline 通知的默认有效期（天），调度器每日体检用
-  cleanup_enabled: false # 过期清理默认只报告不删除（分类/时间线归档见 issue #3）
-
+  expire_days: 90
+  cleanup_enabled: false
+  stop_when_caught_up: true
+  request_timeout: 15
+  retry_times: 2
+  concurrency: 1
+  deep_check_interval_cycles: 24
+extract:
+  batch_limit: 10
+  max_age_days: 19
+  min_content_length: 100
+  keyword_filter: null
+  skip_keywords: null
+  require_time_hint: true
+  match_subscription_only: false
+  retry_failed: true
+  skip_llm: false
 scheduler:
-  enabled: true # API 进程是否随 lifespan 拉起调度器（CLI 显式启动不受此开关限制）
-  enable_daily: true # 每日过期清理 + 向量一致性检查
-  enable_extract: true # 抓取后提取
-  enable_reminder: true # 每日截止提醒扫描
-  enable_health: true # 每日体检（模块 4.2）
+  enabled: true
+  enable_daily: true
+  enable_extract: true
+  enable_reminder: true
+  enable_health: true
   log_file: data/logs/scheduler.log

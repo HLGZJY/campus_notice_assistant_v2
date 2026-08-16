@@ -5,7 +5,7 @@
 """
 from __future__ import annotations
 
-from typing import Literal, Optional
+from typing import Literal, Optional, Union
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -15,11 +15,13 @@ class ProviderConfig(BaseModel):
 
     不直接保存 api_key，而是通过 api_key_env 引用环境变量名，
     避免密钥写入版本控制的 YAML。
+    models: 该供应商可选的模型名列表（纯手动维护，供前端下拉选择）。
     """
 
     name: str
     base_url: str = ""
     api_key_env: str = ""  # 环境变量名，如 OPENCODE_API_KEY；本地模型可空
+    models: list[str] = []  # 可选模型名（纯手动维护；空 = 不提供下拉候选）
 
     @field_validator("name")
     @classmethod
@@ -29,19 +31,45 @@ class ProviderConfig(BaseModel):
             raise ValueError("供应商名称不能为空")
         return v
 
+    @field_validator("models")
+    @classmethod
+    def _models_strip(cls, v: list[str]) -> list[str]:
+        return [m.strip() for m in v if m and m.strip()]
+
 
 class ModelProfile(BaseModel):
-    """某个任务（extraction / qa / todo / embedding）使用的模型配置。"""
+    """某个任务（extraction / qa / todo / embedding）使用的模型配置。
+
+    models: 有序模型候选列表，先尝试在前。首模型失败（配额/网络/5xx 等可恢复错误）
+            时自动切换到下一个（同供应商内）。旧格式 model: "x" 自动迁移为 models: ["x"]。
+    """
 
     provider: str
-    model: str
+    models: list[str]
 
-    @field_validator("provider", "model")
+    @field_validator("provider")
     @classmethod
-    def _not_empty(cls, v: str) -> str:
+    def _provider_not_empty(cls, v: str) -> str:
         v = (v or "").strip()
         if not v:
-            raise ValueError("模型 provider / model 不能为空")
+            raise ValueError("模型 provider 不能为空")
+        return v
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_model(cls, data: Union[dict, "ModelProfile"]) -> Union[dict, "ModelProfile"]:
+        """兼容旧格式：model: "x" → models: ["x"]。"""
+        if isinstance(data, dict) and "model" in data and "models" not in data:
+            m = data.pop("model")
+            data["models"] = [m] if isinstance(m, str) and m.strip() else []
+        return data
+
+    @field_validator("models")
+    @classmethod
+    def _models_not_empty(cls, v: list[str]) -> list[str]:
+        v = [m.strip() for m in v if m and m.strip()]
+        if not v:
+            raise ValueError("任务模型列表不能为空（至少一个模型名）")
         return v
 
 

@@ -23,6 +23,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from agents import Runner
+from openai import BadRequestError
 
 from config.store import ConfigStore
 
@@ -46,7 +47,7 @@ class LLMConfig:
 
 
 def get_model_for_task(task: str) -> tuple[str, str, str]:
-    """获取指定任务的 LLM 连接参数。
+    """获取指定任务的 LLM 连接参数（候选列表第一个）。
 
     Args:
         task: "extraction" | "qa" | "todo" | "embedding"
@@ -58,6 +59,37 @@ def get_model_for_task(task: str) -> tuple[str, str, str]:
     provider, model_name = store.get_model(task)
     api_key = store.get_api_key(provider.name)
     return api_key, provider.base_url, model_name
+
+
+def get_model_candidates(task: str) -> tuple[Optional[str], str, list[str]]:
+    """获取指定任务的有序模型候选（同供应商内失败切换用）。
+
+    Args:
+        task: "extraction" | "qa" | "todo" | "embedding"
+
+    Returns:
+        (api_key, base_url, [model_name, ...])，按尝试优先级排序。
+    """
+    store = ConfigStore.get_instance()
+    provider, models = store.get_model_candidates(task)
+    api_key = store.get_api_key(provider.name)
+    return api_key, provider.base_url, models
+
+
+def is_failover_worthy(exc: Exception) -> bool:
+    """判断异常是否值得切换到下一个模型。
+
+    返回 False 的异常（切换模型也救不了）：
+      - 400 BadRequest（prompt 被上游拒绝 / 内容过滤 / token 超限 / json 模式不支持等）
+      - 401 / 403 鉴权（供应商级，切模型无用）
+    其余（429 配额/限流、5xx、404 模型不存在、网络错误等）都切换。
+    """
+    if isinstance(exc, BadRequestError):
+        return False
+    status = getattr(exc, "status_code", None)
+    if status in (400, 401, 403):
+        return False
+    return True
 
 
 def get_llm_config() -> LLMConfig:

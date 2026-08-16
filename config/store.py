@@ -85,16 +85,24 @@ class ConfigStore:
         return self._data
 
     def get_model(self, task: str) -> tuple[ProviderConfig, str]:
-        """获取指定任务的 (provider_config, model_name)。
+        """获取指定任务的 (provider_config, model_name)——取候选列表第一个。
 
         Args:
             task: "extraction" | "qa" | "todo" | "embedding"
+        """
+        provider, models = self.get_model_candidates(task)
+        return provider, models[0]
+
+    def get_model_candidates(self, task: str) -> tuple[ProviderConfig, list[str]]:
+        """获取指定任务的 (provider_config, 有序模型候选列表)。
+
+        失败切换按此列表顺序尝试（同供应商内）。
         """
         profile = getattr(self._data.models, task)
         provider = self._data.providers.get(profile.provider)
         if provider is None:
             raise RuntimeError(f"任务 {task} 引用的 provider '{profile.provider}' 不存在")
-        return provider, profile.model
+        return provider, list(profile.models)
 
     def get_provider(self, name: str) -> ProviderConfig:
         if name not in self._data.providers:
@@ -105,11 +113,10 @@ class ConfigStore:
         return list(self._data.providers.keys())
 
     def get_model_names(self) -> dict[str, str]:
+        """各任务当前生效模型（候选列表第一个）。"""
         return {
-            "extraction": self._data.models.extraction.model,
-            "qa": self._data.models.qa.model,
-            "todo": self._data.models.todo.model,
-            "embedding": self._data.models.embedding.model,
+            task: getattr(self._data.models, task).models[0]
+            for task in ("extraction", "qa", "todo", "embedding")
         }
 
     def get_school(self) -> SchoolConfig:
@@ -155,6 +162,7 @@ class ConfigStore:
                 "name": p.name,
                 "base_url": p.base_url,
                 "api_key_env": p.api_key_env,
+                "models": p.models,
                 "api_key_status": self.get_api_key_status(name),
             }
         return {
@@ -206,6 +214,41 @@ class ConfigStore:
                 scheduler=self._data.scheduler,
             )
             return self._save_app_config(new_data)
+
+    def save_api_key(self, provider_name: str, api_key: str) -> dict:
+        """把供应商 API Key 写入 .env（gitignore，不入库），并同步 os.environ 免重启生效。
+
+        若供应商未配置 api_key_env，自动补 <NAME>_API_KEY 并写回 app.yaml。
+        """
+        api_key = (api_key or "").strip()
+        with self._write_lock:
+            provider = self._data.providers.get(provider_name)
+            if provider is None:
+                return {"ok": False, "error": f"供应商 {provider_name} 不存在"}
+            if not api_key:
+                return {"ok": False, "error": "API Key 不能为空"}
+
+            env_var = (provider.api_key_env or "").strip()
+            if not env_var:
+                env_var = f"{provider_name.upper().replace('-', '_')}_API_KEY"
+                new_data = AppConfig(
+                    active_school=self._data.active_school,
+                    models=self._data.models,
+                    providers={
+                        **self._data.providers,
+                        provider_name: provider.model_copy(update={"api_key_env": env_var}),
+                    },
+                    crawl=self._data.crawl,
+                    extract=self._data.extract,
+                    scheduler=self._data.scheduler,
+                )
+                self._save_app_config(new_data)
+
+            env_path = self._config_dir.parent / ".env"
+            self._upsert_env(env_path, env_var, api_key)
+            os.environ[env_var] = api_key
+            logger.info("API Key 已写入 .env（%s）", env_var)
+            return {"ok": True, "env_var": env_var, "env_path": str(env_path)}
 
     def save_crawl(self, crawl: CrawlConfig) -> dict:
         """保存全局抓取参数。"""
@@ -321,6 +364,35 @@ class ConfigStore:
         if dotenv_path.exists():
             load_dotenv(dotenv_path)
             logger.debug("已加载 .env: %s", dotenv_path)
+
+    @staticmethod
+    def _upsert_env(path: Path, key: str, value: str) -> None:
+        """向 .env 写入 KEY=value：已存在则替换该行，否则追加；保留注释与其余行。"""
+        path = Path(path)
+        lines: list[str] = []
+        if path.exists():
+            with open(path, "r", encoding="utf-8") as f:
+                lines = f.readlines()
+
+        key_prefix = f"{key}="
+        out: list[str] = []
+        replaced = False
+        for ln in lines:
+            stripped = ln.strip()
+            if stripped.startswith(key_prefix) and not stripped.startswith("#"):
+                out.append(f"{key}={value}\n")
+                replaced = True
+            else:
+                out.append(ln)
+
+        if not replaced:
+            if out and not out[-1].endswith("\n"):
+                out[-1] += "\n"
+            out.append(f"{key}={value}\n")
+
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            f.writelines(out)
 
     # ---------- 便捷工厂方法（供 UI / 服务调用） ----------
 

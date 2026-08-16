@@ -28,7 +28,7 @@ from agents import (
 from openai import AsyncOpenAI, BadRequestError
 
 from core.models import ACTION_NOTICE_TYPES, TodoItem, TodoList
-from utils.llm import get_model_for_task, run_agent
+from utils.llm import get_model_candidates, is_failover_worthy, run_agent
 
 logger = logging.getLogger(__name__)
 
@@ -118,15 +118,20 @@ def template_fallback(notice: dict) -> TodoItem:
 
 
 class TodoGenerator:
-    """基于 OpenAI Agents SDK 的待办生成器。"""
+    """基于 OpenAI Agents SDK 的待办生成器。
+
+    models 为有序候选列表（同供应商内失败切换）：首模型抛可恢复错误时
+    自动切下一个；400/401/403 不切换直接上抛（由调用方 template_fallback 兜底）。
+    """
 
     def __init__(self, temperature: float = 0.0):
-        self.api_key, self.base_url, self.model = get_model_for_task("todo")
+        self.api_key, self.base_url, self.models = get_model_candidates("todo")
         self.temperature = temperature  # 默认 0 提升确定性；评估脚本固定 temperature=0
-        self._agent: Optional[Agent] = None
+        self._agents: dict[str, Agent] = {}
 
-    def _get_agent(self) -> Agent:
-        if self._agent is None:
+    def _get_agent(self, model: str) -> Agent:
+        agent = self._agents.get(model)
+        if agent is None:
             set_tracing_disabled(True)  # 不向 OpenAI 导出 trace
             client = AsyncOpenAI(
                 api_key=self.api_key,
@@ -134,28 +139,47 @@ class TodoGenerator:
             )
             set_default_openai_client(client, use_for_tracing=False)
             set_default_openai_api("chat_completions")
-            self._agent = Agent(
+            agent = Agent(
                 name="待办生成助手",
                 instructions=TODO_INSTRUCTIONS,
-                model=self.model,
+                model=model,
                 output_type=TodoList,
                 model_settings=ModelSettings(
                     temperature=self.temperature,
                     extra_body={"response_format": {"type": "json_object"}},
                 ),
             )
-        return self._agent
+            self._agents[model] = agent
+        return agent
 
     async def generate_one(self, notice: dict) -> list[TodoItem]:
-        """生成待办（后处理校验：限 1 条、due_at 对齐 deadline）。"""
+        """生成待办（后处理校验：限 1 条、due_at 对齐 deadline）+ 同供应商失败切换。"""
         prompt = _build_prompt(notice)
+        last_error: Optional[str] = None
+        for model in self.models:
+            try:
+                return await self._try_model(model, prompt, notice)
+            except BadRequestError:
+                # 400 错误不可恢复，直接抛出由调用方 fallback 兜底
+                raise
+            except Exception as e:
+                if not is_failover_worthy(e):
+                    raise
+                last_error = f"模型 {model} 失败: {type(e).__name__}: {e}"
+                if len(last_error) > 500:
+                    last_error = last_error[:500] + "..."
+                logger.warning("待办模型切换 %s → 下一个候选: %s", model, last_error[:160])
+                continue
+        raise RuntimeError(last_error or "所有候选模型均失败")
+
+    async def _try_model(self, model: str, prompt: str, notice: dict) -> list[TodoItem]:
+        """在单个候选模型上执行「调用 + 重试」。可恢复错误经此上抛由外层切模型。"""
         last_error: Optional[str] = None
         for attempt in range(MAX_RETRIES + 1):
             try:
-                result = await self._call(prompt, last_error, attempt=attempt, notice_id=notice.get("id"))
+                result = await self._call(model, prompt, last_error, attempt=attempt, notice_id=notice.get("id"))
                 return self._postprocess(result, notice)
             except BadRequestError:
-                # 400 错误不可恢复，直接抛出由调用方 fallback 兜底
                 raise
             except Exception as e:
                 last_error = f"{type(e).__name__}: {e}"
@@ -166,12 +190,13 @@ class TodoGenerator:
 
     async def _call(
         self,
+        model: str,
         prompt: str,
         error_msg: Optional[str],
         attempt: int = 0,
         notice_id: Optional[int] = None,
     ) -> TodoList:
-        agent = self._get_agent()
+        agent = self._get_agent(model)
         if error_msg:
             prompt = (
                 prompt
@@ -182,7 +207,7 @@ class TodoGenerator:
             agent,
             prompt,
             task="todo",
-            model=self.model,
+            model=model,
             attempt=attempt,
             notice_id=notice_id,
         )

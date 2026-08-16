@@ -17,25 +17,40 @@ DEFAULT_PROVIDER_ZEN = ProviderConfig(
     name="opencode-zen",
     base_url="https://opencode.ai/zen/go/v1",
     api_key_env="OPENCODE_API_KEY",
+    models=["kimi-k2.7-code", "deepseek-v4-pro", "kimi-k2.5-turbo"],
 )
 
 DEFAULT_PROVIDER_BAILIAN = ProviderConfig(
     name="bailian",
     base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
     api_key_env="DASHSCOPE_API_KEY",
+    models=["qwen3.7-flash", "qwen3.7-turbo", "qwen3.7-max"],
 )
 
 DEFAULT_PROVIDER_LOCAL = ProviderConfig(
     name="local",
     base_url="",
     api_key_env="",
+    models=["models/bge-small-zh-v1.5"],
 )
 
 DEFAULT_MODELS = ModelsConfig(
-    extraction=ModelProfile(provider="opencode-zen", model="kimi-k2.7-code"),
-    qa=ModelProfile(provider="opencode-zen", model="deepseek-v4-pro"),
-    todo=ModelProfile(provider="opencode-zen", model="kimi-k2.7-code"),
-    embedding=ModelProfile(provider="local", model="sentence-transformers/all-MiniLM-L6-v2"),
+    extraction=ModelProfile(
+        provider="opencode-zen",
+        models=["kimi-k2.7-code", "deepseek-v4-pro"],
+    ),
+    qa=ModelProfile(
+        provider="opencode-zen",
+        models=["deepseek-v4-pro", "kimi-k2.7-code"],
+    ),
+    todo=ModelProfile(
+        provider="opencode-zen",
+        models=["kimi-k2.7-code", "deepseek-v4-pro"],
+    ),
+    embedding=ModelProfile(
+        provider="local",
+        models=["sentence-transformers/all-MiniLM-L6-v2"],
+    ),
 )
 
 DEFAULT_CONFIG = AppConfig(

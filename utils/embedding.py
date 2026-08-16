@@ -194,20 +194,30 @@ def create_embeddings(provider_name: Optional[str] = None, model_name: Optional[
             local_model,
         )
 
-    # 2. 尝试 OpenAI-compatible embedding API
-    if api_key and _probe_embedding_endpoint(provider.base_url, api_key, model_name):
-        try:
-            logger.info(f"使用 OpenAI-compatible embedding 模型: {model_name} @ {provider.base_url}")
-            return _MeteredOpenAIEmbeddings(provider.base_url, api_key, model_name)
-        except Exception as e:
-            logger.warning(
-                f"embedding 探测成功但初始化失败 ({type(e).__name__}: {e})，"
-                f"切换为本地模型 {DEFAULT_LOCAL_EMBEDDING_MODEL}。"
-            )
-    else:
-        reason = "API key 未配置" if not api_key else "embedding 接口探测失败"
+    # 2. 尝试 OpenAI-compatible embedding API（按候选模型列表顺序探测）
+    if api_key:
+        if model_name:
+            candidates = [model_name]
+        else:
+            candidates = store.get_model_candidates("embedding")[1]
+        tried: list[str] = []
+        for cand in candidates:
+            tried.append(cand)
+            if _probe_embedding_endpoint(provider.base_url, api_key, cand):
+                try:
+                    logger.info(f"使用 OpenAI-compatible embedding 模型: {cand} @ {provider.base_url}")
+                    return _MeteredOpenAIEmbeddings(provider.base_url, api_key, cand)
+                except Exception as e:
+                    logger.warning(
+                        f"embedding 探测成功但初始化失败 ({type(e).__name__}: {e})，尝试下一个候选。"
+                    )
+                    continue
         logger.warning(
-            f"{reason}，自动 fallback 到本地模型 {DEFAULT_LOCAL_EMBEDDING_MODEL}。"
+            f"embedding 接口探测失败（候选: {tried}），自动 fallback 到本地模型 {DEFAULT_LOCAL_EMBEDDING_MODEL}。"
+        )
+    else:
+        logger.warning(
+            f"API key 未配置，自动 fallback 到本地模型 {DEFAULT_LOCAL_EMBEDDING_MODEL}。"
         )
 
     return _CountingEmbeddings(
