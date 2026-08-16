@@ -145,7 +145,37 @@ def run():
     crawler3.crawl()
     check("再抓一轮详情抓取仍为 0", len(crawler3.detail_fetches) == 0, f"fetches={crawler3.detail_fetches}")
 
-    print("== 4. 提取预筛：正文过短 → 跳过并落 extract_skipped_reason ==")
+    print("== 4. 预筛时效按发布时间（P0-1：max_age_days 语义修复） ==")
+    from config.schema import ExtractConfig
+    from services.notice_service import prefilter_notice
+
+    cfg17 = ExtractConfig(max_age_days=17, min_content_length=1)
+    old_pub = {
+        "title": "旧通知",
+        "raw_content": "长正文" * 20,
+        "published_at": (datetime.now() - timedelta(days=21)).isoformat(),
+        "crawled_at": datetime.now().isoformat(),
+    }
+    new_pub = {
+        "title": "新通知",
+        "raw_content": "长正文" * 20,
+        "published_at": (datetime.now() - timedelta(days=10)).isoformat(),
+        "crawled_at": datetime.now().isoformat(),
+    }
+    ok_old, reason_old = prefilter_notice(old_pub, cfg17)
+    ok_new, reason_new = prefilter_notice(new_pub, cfg17)
+    check("21 天前发布被拦截（即使当天抓取）", not ok_old and "发布时间" in reason_old, f"reason={reason_old}")
+    check("10 天前发布通过", ok_new, f"reason={reason_new}")
+    no_pub = {
+        "title": "无日期",
+        "raw_content": "长正文" * 20,
+        "published_at": None,
+        "crawled_at": (datetime.now() - timedelta(days=30)).isoformat(),
+    }
+    ok_np, reason_np = prefilter_notice(no_pub, cfg17)
+    check("无发布时间回退抓取时间并拦截", not ok_np and "抓取时间" in reason_np, f"reason={reason_np}")
+
+    print("== 5. 提取预筛：正文过短 → 跳过并落 extract_skipped_reason ==")
     from config.store import ConfigStore
     from services.notice_service import extract_batch, prefilter_notice
 
@@ -164,7 +194,7 @@ def run():
     insert_notice(conn, long)
     conn.close()
 
-    cfg = ConfigStore.get_instance().get_extract()
+    cfg = ExtractConfig()  # 默认宽松配置（不依赖用户持久化的真实配置）
     ok_s, reason_s = prefilter_notice({"raw_content": short.raw_content, "title": short.title, "published_at": None}, cfg)
     ok_l, reason_l = prefilter_notice({"raw_content": long.raw_content, "title": long.title, "published_at": None}, cfg)
     check("短正文被预筛拦截", not ok_s and "正文过短" in reason_s, f"reason={reason_s}")
@@ -186,7 +216,12 @@ def run():
 
             return ExtractionOutcome(status="extracted", extraction=self.extraction)
 
-    res = extract_batch(limit=50, auto_index=False, extractor=FakeExtractor())
+    res = extract_batch(
+        limit=50,
+        auto_index=False,
+        extractor=FakeExtractor(),
+        extract_cfg=ExtractConfig(min_content_length=100),
+    )
     check("预筛后只处理 1 条", res["processed"] == 1, f"processed={res['processed']}")
     check("prefiltered 计数=1", res["prefiltered"] == 1, f"prefiltered={res['prefiltered']}")
 
@@ -202,7 +237,7 @@ def run():
     check("通过项已提取", row2["status"] == "extracted", f"status={row2['status']}")
     conn.close()
 
-    print("== 5. prefilter=False 绕过预筛 ==")
+    print("== 6. prefilter=False 绕过预筛 ==")
     conn = get_connection()
     conn.execute("DELETE FROM notices")
     insert_notice(conn, short)
@@ -212,6 +247,57 @@ def run():
     conn = get_connection()
     row3 = conn.execute("SELECT * FROM notices WHERE url = ?", ("https://s.example/1.htm",)).fetchone()
     check("绕过预筛后正常提取", row3["status"] == "extracted", f"status={row3['status']}")
+    conn.close()
+
+    print("== 7. 分页/列表页 URL 排除（P0-2：分页页不再被当通知） ==")
+    pg_list = (
+        "<html><body><ul>"
+        '<li><a href="https://p.example/n/1.htm">通知一</a></li>'
+        '<li><a href="https://p.example/n/2.htm">通知二</a></li>'
+        '<li><a href="https://p.example/n/99.htm">2</a></li>'
+        '<li><a href="https://p.example/n/98.htm">下一页</a></li>'
+        '<li><a href="https://p.example/list.htm">首页</a></li>'
+        "</ul></body></html>"
+    )
+    crawler_p = FakeCrawler(
+        ListPageConfig(
+            list_url="https://p.example/list.htm",
+            source_name="测试来源",
+            url_pattern=r"/n/\d+\.htm",
+            max_pages=2,
+        ),
+        pages={"https://p.example/list.htm": pg_list},
+    )
+    rp = crawler_p.crawl()
+    check("分页页码 99.htm/98.htm 未被收录", rp.total_new == 2, f"new={rp.total_new}")
+    conn = get_connection()
+    row_99 = conn.execute("SELECT id FROM notices WHERE url = ?", ("https://p.example/n/99.htm",)).fetchone()
+    check("分页 URL 未入库", row_99 is None, f"row={row_99}")
+    conn.close()
+
+    print("== 8. skip_llm：不调 LLM，仅索引 + partial ==")
+    conn = get_connection()
+    conn.execute("DELETE FROM notices")
+    insert_notice(conn, long)
+    conn.close()
+    calls = {"n": 0}
+
+    class CountingExtractor(FakeExtractor):
+        async def extract_one(self, **kwargs):
+            calls["n"] += 1
+            return await super().extract_one(**kwargs)
+
+    res_skip = extract_batch(
+        limit=50,
+        auto_index=False,
+        extractor=CountingExtractor(),
+        extract_cfg=ExtractConfig(min_content_length=100, skip_llm=True),
+    )
+    check("skip_llm 不调 LLM", calls["n"] == 0, f"calls={calls['n']}")
+    conn = get_connection()
+    row_skip = conn.execute("SELECT * FROM notices WHERE url = ?", ("https://s.example/2.htm",)).fetchone()
+    check("skip_llm 状态置 partial", row_skip["status"] == "partial", f"status={row_skip['status']}")
+    check("skip_llm 未写结构化字段", row_skip["notice_type"] is None, f"type={row_skip['notice_type']}")
     conn.close()
 
     cleanup()
