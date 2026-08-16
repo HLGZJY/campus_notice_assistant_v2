@@ -164,7 +164,7 @@ class ExtractConfig(BaseModel):
 
     # 每轮最多提取条数（通过预筛后才调 LLM）
     batch_limit: int = 50
-    # 只提取最近 N 天抓取的通知（None=不限制）
+    # 只提取最近 N 天发布的通知（发布时间缺失时回退抓取时间；None=不限制）
     max_age_days: Optional[int] = None
     # 正文长度低于该值不提取（过滤无正文/纯标题快照）
     min_content_length: int = 100
@@ -178,6 +178,8 @@ class ExtractConfig(BaseModel):
     match_subscription_only: bool = False
     # failed 通知是否在下轮重试
     retry_failed: bool = True
+    # 跳过 LLM 提取（仅入库 + 建向量索引，状态置 partial；省 token 模式）
+    skip_llm: bool = False
 
     @field_validator("batch_limit", "min_content_length", "max_age_days")
     @classmethod
