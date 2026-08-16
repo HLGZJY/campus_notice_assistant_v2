@@ -163,11 +163,11 @@ function matchedKeywords(id: number): string[] {
   return matchMap.value[String(id)] ?? []
 }
 
-function openCrawlDialog(deep = false) {
+function openCrawlDialog() {
   crawlSources.value = []
   crawlMode.value = 'incremental'
   crawlMaxPages.value = null
-  crawlDeepCheck.value = deep
+  crawlDeepCheck.value = false
   crawlDialogOpen.value = true
 }
 
@@ -460,11 +460,8 @@ function keyDatesText(d: NoticeDetail): string {
           <n-button size="small" type="warning" secondary :loading="batchRunning" @click="onBatchReset">
             批量重置当前筛选
           </n-button>
-          <n-button size="small" type="primary" secondary :loading="taskRunning" @click="openCrawlDialog(false)">
+          <n-button size="small" type="primary" secondary :loading="taskRunning" @click="openCrawlDialog">
             抓取
-          </n-button>
-          <n-button size="small" type="primary" secondary :loading="taskRunning" @click="openCrawlDialog(true)">
-            深度抓取
           </n-button>
           <n-button size="small" type="primary" secondary :loading="taskRunning" @click="openExtractPreview">
             批量提取
@@ -586,6 +583,7 @@ function keyDatesText(d: NoticeDetail): string {
             placeholder="全部启用来源"
             style="width: 100%"
           />
+          <template #feedback>不选 = 抓取全部启用来源；停用来源始终跳过</template>
         </n-form-item>
         <n-form-item label="模式">
           <n-select
