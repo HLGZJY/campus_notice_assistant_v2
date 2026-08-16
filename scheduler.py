@@ -143,6 +143,8 @@ class NoticeScheduler:
         self._current_interval: Optional[int] = None
         # job_name -> 连续失败次数（进程内维护；每次运行随 scheduler_log 落库）
         self._consecutive_failures: dict[str, int] = {}
+        # 抓取轮次计数（阶段 7：deep_check_interval_cycles 定期深度变更检测）
+        self._crawl_cycles = 0
         self._scheduler = BackgroundScheduler()
 
     # ---------- 对外生命周期 ----------
@@ -325,9 +327,23 @@ class NoticeScheduler:
     # ---------- 内部：三个 job ----------
 
     def _crawl_job(self) -> dict:
-        """job 1：定时抓取所有数据源（间隔可热更新）。"""
+        """job 1：定时抓取所有数据源（间隔可热更新）。
+
+        阶段 7：每 deep_check_interval_cycles 轮自动做一次全来源深度变更检测
+        （重抓已入库详情页比对内容指纹），默认 24 轮（约每日一次）。
+        """
         self._reschedule_interval()
-        results = crawl_all_sources()
+        self._crawl_cycles += 1
+        deep_check = False
+        try:
+            interval_cycles = self._store.get_crawl().deep_check_interval_cycles
+            deep_check = interval_cycles > 0 and self._crawl_cycles % interval_cycles == 0
+        except Exception as e:
+            logger.warning("读取 crawl.deep_check_interval_cycles 失败: %s", e)
+        if deep_check:
+            logger.info("本轮为深度变更检测轮（第 %d 轮，每 %d 轮一次）", self._crawl_cycles, interval_cycles)
+
+        results = crawl_all_sources(deep_check=deep_check)
         summary = {
             "sources": len(results),
             "discovered": sum(r.get("discovered", 0) for r in results.values()),
@@ -337,28 +353,31 @@ class NoticeScheduler:
             "failed": sum(r.get("failed", 0) for r in results.values()),
         }
         logger.info(
-            "抓取汇总: 来源=%d 发现=%d 新增=%d 跳过=%d 变更=%d 失败=%d",
+            "抓取汇总: 来源=%d 发现=%d 新增=%d 跳过=%d 变更=%d 失败=%d%s",
             summary["sources"],
             summary["discovered"],
             summary["new"],
             summary["skipped"],
             summary["changed"],
             summary["failed"],
+            "（深度检测轮）" if deep_check else "",
         )
         for name, r in results.items():
             if r.get("errors"):
                 logger.warning("来源 %s 错误 %d 条: %s", name, len(r["errors"]), r["errors"][:2])
-        return {"summary": summary, "per_source": results}
+        return {"summary": summary, "per_source": results, "deep_check": deep_check}
 
     def _extract_job(self) -> dict:
-        """job 2：抓取完成后触发提取（处理 status=raw，成功后增量索引）。"""
+        """job 2：抓取完成后触发提取（处理 status=raw，预筛后增量索引）。"""
         result = extract_batch(limit=EXTRACT_BATCH_LIMIT, auto_index=True)
         processed = result.get("processed", 0)
+        prefiltered = result.get("prefiltered", 0)
         summary = result.get("summary", {})
         if processed:
             logger.info(
-                "提取完成: processed=%d extracted=%d partial=%d failed=%d",
+                "提取完成: processed=%d prefiltered=%d extracted=%d partial=%d failed=%d",
                 processed,
+                prefiltered,
                 summary.get("extracted", 0),
                 summary.get("partial", 0),
                 summary.get("failed", 0),
@@ -367,7 +386,10 @@ class NoticeScheduler:
                 if d["status"] == "failed":
                     logger.warning("提取失败 notice_id=%s: %s", d["id"], d.get("error"))
         else:
-            logger.info("没有待提取的通知（status=raw 为空）")
+            logger.info(
+                "没有待提取的通知（%s）",
+                f"预筛跳过 {prefiltered} 条" if prefiltered else "status=raw 为空或全部已预筛",
+            )
         return result
 
     def _daily_job(self) -> dict:
