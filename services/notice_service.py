@@ -389,12 +389,14 @@ def prefilter_notice(notice: dict, cfg: ExtractConfig) -> tuple[bool, Optional[s
     所有开关可关（默认宽松：只开时效与长度），关闭后行为接近现状。
     """
     if cfg.max_age_days:
-        crawled = notice.get("crawled_at")
-        if crawled:
+        # 优先按发布时间过滤（用户预期），发布时间缺失时回退抓取时间
+        age_src = notice.get("published_at") or notice.get("crawled_at")
+        if age_src:
             try:
-                crawled_dt = datetime.fromisoformat(crawled)
-                if crawled_dt < datetime.now() - timedelta(days=cfg.max_age_days):
-                    return False, f"抓取超过 {cfg.max_age_days} 天"
+                age_dt = datetime.fromisoformat(age_src)
+                if age_dt < datetime.now() - timedelta(days=cfg.max_age_days):
+                    label = "发布时间" if notice.get("published_at") else "抓取时间"
+                    return False, f"{label}超过 {cfg.max_age_days} 天"
             except ValueError:
                 pass
 
@@ -434,29 +436,21 @@ def prefilter_notice(notice: dict, cfg: ExtractConfig) -> tuple[bool, Optional[s
     return True, None
 
 
-def extract_batch(
+def _gather_extract_candidates(
+    cfg: ExtractConfig,
     limit: int = 50,
-    auto_index: bool = True,
-    extractor: NoticeExtractor | None = None,
-    progress_cb=None,
     prefilter: bool = True,
-) -> dict:
-    """批量提取所有 status=raw 的通知（断点续跑的提取游标 + 阶段 7 前置过滤）。
+    notice_ids: Optional[list[int]] = None,
+) -> tuple[list[dict], list[dict]]:
+    """收集提取候选并跑预筛判定（不落库）。返回 (待提取列表, 跳过列表)。
 
-    Args:
-        limit: 最大处理条数（预筛通过后才计入；<=0 时取 config.extract.batch_limit）
-        auto_index: 每条提取成功后是否自动加入向量索引
-        extractor: 可注入（测试用），默认真实 NoticeExtractor
-        progress_cb: 可选进度回调 (done:int, total:int) -> None，供任务管理器上报进度
-        prefilter: 是否启用规则预筛（读取 config.extract；跳过项写 extract_skipped_reason，
-                   状态保持 raw，下轮不再重复判定）
+    候选 = raw（排除已预筛）+ failed（retry_failed 开启时，供重试）。
+    notice_ids 非空时：显式勾选，仅取指定 id，且跳过预筛（用户已确认）。
     """
-    cfg = ConfigStore.get_instance().get_extract()
     effective_limit = limit if limit and limit > 0 else cfg.batch_limit
 
     conn = get_connection()
     try:
-        # 候选 = raw（排除已预筛）+ failed（retry_failed 开启时，供重试）
         raw_notices = get_notices_by_status(
             conn, "raw", limit=effective_limit * 3, exclude_prefiltered=True
         )
@@ -476,6 +470,11 @@ def extract_batch(
         seen.add(n["id"])
         candidates.append(n)
 
+    if notice_ids:
+        id_set = set(notice_ids)
+        candidates = [n for n in candidates if n["id"] in id_set]
+        prefilter = False
+
     skipped: list[dict] = []
     notices: list[dict] = []
     if prefilter:
@@ -487,15 +486,70 @@ def extract_batch(
                 skipped.append({"id": n["id"], "title": n["title"], "reason": reason})
             if len(notices) >= effective_limit:
                 break
-        if skipped:
-            conn = get_connection()
-            try:
-                for s in skipped:
-                    mark_prefiltered(conn, s["id"], s["reason"])
-            finally:
-                conn.close()
     else:
         notices = candidates[:effective_limit]
+    return notices, skipped
+
+
+def extract_preview(limit: int = 0) -> dict:
+    """提取前预览（dry-run）：对待提取候选跑预筛判定，不落库不改状态。
+
+    返回 {"passed": [...], "skipped": [...]}，每条含 id/title/url/source/
+    published_at/status，skipped 额外带 reason，供前端勾选后提交 notice_ids。
+    """
+    cfg = ConfigStore.get_instance().get_extract()
+    notices, skipped = _gather_extract_candidates(cfg, limit=limit, prefilter=True)
+
+    def _item(n: dict, reason: Optional[str] = None) -> dict:
+        return {
+            "id": n["id"],
+            "title": n.get("title") or "",
+            "url": n.get("url") or "",
+            "source": n.get("source") or "",
+            "published_at": n.get("published_at"),
+            "status": n.get("status") or "",
+            "reason": reason,
+        }
+
+    return {
+        "passed": [_item(n) for n in notices],
+        "skipped": [_item(s, s.get("reason")) for s in skipped],
+    }
+
+
+def extract_batch(
+    limit: int = 50,
+    auto_index: bool = True,
+    extractor: NoticeExtractor | None = None,
+    progress_cb=None,
+    prefilter: bool = True,
+    extract_cfg: ExtractConfig | None = None,
+    notice_ids: Optional[list[int]] = None,
+) -> dict:
+    """批量提取所有 status=raw 的通知（断点续跑的提取游标 + 阶段 7 前置过滤）。
+
+    Args:
+        limit: 最大处理条数（预筛通过后才计入；<=0 时取 config.extract.batch_limit）
+        auto_index: 每条提取成功后是否自动加入向量索引
+        extractor: 可注入（测试用），默认真实 NoticeExtractor
+        progress_cb: 可选进度回调 (done:int, total:int) -> None，供任务管理器上报进度
+        prefilter: 是否启用规则预筛（读取 config.extract；跳过项写 extract_skipped_reason，
+                   状态保持 raw，下轮不再重复判定）
+        extract_cfg: 可注入提取配置（测试用），默认读 ConfigStore
+        notice_ids: 显式指定要提取的通知 id（提取前预览勾选提交；命中即跳过预筛）
+    """
+    cfg = extract_cfg or ConfigStore.get_instance().get_extract()
+    notices, skipped = _gather_extract_candidates(
+        cfg, limit=limit, prefilter=prefilter, notice_ids=notice_ids
+    )
+
+    if skipped:
+        conn = get_connection()
+        try:
+            for s in skipped:
+                mark_prefiltered(conn, s["id"], s["reason"])
+        finally:
+            conn.close()
 
     if not notices:
         return {"processed": 0, "prefiltered": len(skipped), "summary": {}}
@@ -509,6 +563,36 @@ def extract_batch(
             if progress_cb is not None:
                 progress_cb(i, total)
             try:
+                if cfg.skip_llm:
+                    # 省 token 模式：不调 LLM，仅订阅匹配 + 建索引，状态置 partial（仅索引未结构化）
+                    status = "partial"
+                    conn2 = get_connection()
+                    try:
+                        update_extraction(conn2, notice["id"], {}, "partial")
+                        try:
+                            match_notice(notice["id"])
+                        except Exception as e:
+                            logger.warning("订阅匹配失败 notice_id=%s: %s", notice["id"], e)
+                        if auto_index:
+                            try:
+                                updated = get_notice_by_id(conn2, notice["id"])
+                                _get_vector_index().add_notice(dict(updated))
+                            except Exception as e:
+                                logger.warning("自动索引失败 notice_id=%s: %s", notice["id"], e)
+                    finally:
+                        conn2.close()
+                    summary["partial"] += 1
+                    summary["details"].append(
+                        {
+                            "id": notice["id"],
+                            "title": notice["title"],
+                            "status": status,
+                            "error": None,
+                            "skipped_llm": True,
+                        }
+                    )
+                    continue
+
                 outcome = await extractor.extract_one(
                     title=notice["title"],
                     content=notice["raw_content"],
