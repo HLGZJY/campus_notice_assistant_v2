@@ -105,6 +105,7 @@ def crawl_all_sources(
     deep_check: bool = False,
     mode: Optional[str] = None,
     max_pages: Optional[int] = None,
+    sources: Optional[list[str]] = None,
 ) -> dict:
     """按配置文件抓取所有数据源。返回 {source_name: result_dict}。
 
@@ -112,11 +113,18 @@ def crawl_all_sources(
         progress_cb: 可选进度回调 (done:int, total:int) -> None，供任务管理器上报进度。
         deep_check: 全局深度变更检测（调度器定期深检 / 手动"深度抓取"用）。
         mode / max_pages: 覆盖所有来源的抓取模式 / 翻页上限（手动批量抓取对话框用）。
+        sources: 只抓指定名称的来源（手动抓取对话框多选）；None = 全部启用来源。
     """
     school_config = get_school_config()
     results = {}
+    target_names = set(sources) if sources else None
     enabled_sources = [s for s in school_config.sources if s.enabled]
-    if len(enabled_sources) != len(school_config.sources):
+    if target_names:
+        enabled_sources = [s for s in enabled_sources if s.name in target_names]
+        skipped = len(school_config.sources) - len(enabled_sources)
+        if skipped:
+            logger.info("跳过 %d 个未选中/已停用来源", skipped)
+    elif len(enabled_sources) != len(school_config.sources):
         logger.info("跳过 %d 个已停用来源", len(school_config.sources) - len(enabled_sources))
     total = len(enabled_sources)
     for i, source in enumerate(enabled_sources, start=1):

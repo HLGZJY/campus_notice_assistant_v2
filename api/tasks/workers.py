@@ -47,10 +47,12 @@ def crawl_all(task: dict, progress_cb, deps: dict) -> dict:
         _on_progress(progress_cb, done, total)
 
     results = notice_service.crawl_all_sources(
-        progress_cb=_cb, deep_check=deep_check
+        progress_cb=_cb,
+        deep_check=deep_check,
+        mode=mode,
+        max_pages=max_pages,
+        sources=sources,
     )
-    if sources:
-        results = {k: v for k, v in results.items() if k in sources}
 
     summary = {
         "sources": len(results),
