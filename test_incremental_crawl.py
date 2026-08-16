@@ -300,6 +300,45 @@ def run():
     check("skip_llm 未写结构化字段", row_skip["notice_type"] is None, f"type={row_skip['notice_type']}")
     conn.close()
 
+    print("== 9. crawl_all_sources 来源过滤（P0-2 修复：勾选只抓选中来源） ==")
+    from config.schema import SchoolConfig, SourceConfig
+    import services.notice_service as ns
+
+    fake_cfg = SchoolConfig(
+        name="测试校",
+        code="test",
+        sources=[
+            SourceConfig(name="源A", list_url="https://a.example/list.htm"),
+            SourceConfig(name="源B", list_url="https://b.example/list.htm"),
+            SourceConfig(name="源C", list_url="https://c.example/list.htm", enabled=False),
+        ],
+    )
+    called: list[str] = []
+    real_get = ns.get_school_config
+    real_crawl = ns.crawl_source
+
+    def fake_get_school_config():
+        return fake_cfg
+
+    def fake_crawl_source(source, **kwargs):
+        called.append(source.name)
+        return {"source": source.name, "new": 1}
+
+    ns.get_school_config = fake_get_school_config
+    ns.crawl_source = fake_crawl_source
+    try:
+        ns.crawl_all_sources()
+        check("不选来源 = 全部启用来源（源A+源B）", called == ["源A", "源B"], f"called={called}")
+        called.clear()
+        ns.crawl_all_sources(sources=["源A"])
+        check("勾选源A 只抓源A", called == ["源A"], f"called={called}")
+        called.clear()
+        ns.crawl_all_sources(sources=["源A", "源C"])
+        check("勾选含停用源C 时仍只抓源A", called == ["源A"], f"called={called}")
+    finally:
+        ns.get_school_config = real_get
+        ns.crawl_source = real_crawl
+
     cleanup()
     print("=" * 60)
     if failures:
