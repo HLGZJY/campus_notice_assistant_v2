@@ -1,10 +1,11 @@
 """M2 入口：批量结构化提取 raw 通知，更新 SQLite。
 
 用法：
-    python extract.py                          # 提取所有 status=raw 的通知
+    python extract.py                          # 提取所有 status=raw 的通知（含前置过滤）
     python extract.py --limit 10               # 最多提取 10 条
     python extract.py --status failed          # 重试提取失败的
     python extract.py --source 创新创业学院-竞赛通知
+    python extract.py --no-prefilter           # 关闭提取前置过滤（全部调 LLM）
     python extract.py --dry-run                # 只跑不写库
 """
 import argparse
@@ -17,13 +18,16 @@ from pathlib import Path
 # 确保包能正确导入
 sys.path.insert(0, str(Path(__file__).parent))
 
+from config.store import ConfigStore
 from core.extractor import NoticeExtractor
 from core.models import NoticeExtraction
+from services.notice_service import prefilter_notice
 from storage.db import (
     count_notices_by_status,
     get_connection,
     get_notices_by_status,
     mark_failed,
+    mark_prefiltered,
     update_extraction,
 )
 
@@ -100,6 +104,7 @@ def main():
     parser.add_argument("--limit", type=int, default=50, help="最多提取条数")
     parser.add_argument("--status", type=str, default="raw", help="处理的初始状态(raw/failed)")
     parser.add_argument("--source", type=str, default=None, help="只处理指定来源")
+    parser.add_argument("--no-prefilter", action="store_true", help="关闭提取前置过滤（全部调 LLM）")
     parser.add_argument("--dry-run", action="store_true", help="只跑不写库")
     args = parser.parse_args()
 
@@ -109,10 +114,38 @@ def main():
         before = count_notices_by_status(conn)
         logger.info("当前各状态数量: %s", before)
 
-        notices = get_notices_by_status(
-            conn, args.status, limit=args.limit, source=args.source
+        prefilter = not args.no_prefilter
+        if prefilter:
+            from config.schema import ExtractConfig
+
+            cfg: ExtractConfig = ConfigStore.get_instance().get_extract()
+
+        candidates = get_notices_by_status(
+            conn,
+            args.status,
+            limit=args.limit * 3,
+            source=args.source,
+            exclude_prefiltered=prefilter,
         )
-        logger.info("待提取通知: %d 条 (status=%s)", len(notices), args.status)
+
+        notices = []
+        skipped = 0
+        if prefilter:
+            for n in candidates:
+                ok, reason = prefilter_notice(n, cfg)
+                if ok:
+                    notices.append(n)
+                else:
+                    skipped += 1
+                    if not args.dry_run:
+                        mark_prefiltered(conn, n["id"], reason)
+                if len(notices) >= args.limit:
+                    break
+        else:
+            notices = candidates[: args.limit]
+
+        logger.info("待提取通知: %d 条 (status=%s%s)", len(notices), args.status,
+                    f"，预筛跳过 {skipped} 条" if skipped else "")
 
         if not notices:
             print("没有待提取的通知。")
