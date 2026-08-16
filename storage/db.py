@@ -169,6 +169,8 @@ _MIGRATIONS = [
     "ALTER TABLE crawl_log ADD COLUMN total_changed INTEGER",
     # 待办中心：备注列（编辑/延期后记进展）
     "ALTER TABLE todos ADD COLUMN notes TEXT",
+    # 阶段 7 提取前置过滤：预筛跳过原因（非 NULL 表示不参与 LLM 提取）
+    "ALTER TABLE notices ADD COLUMN extract_skipped_reason TEXT",
 ]
 
 
@@ -267,14 +269,18 @@ def update_notice_content(
     raw_content: str,
     content_hash: str,
 ) -> bool:
-    """正文变更：更新正文/标题/指纹/抓取时间，并重置 status='raw' 等待重新提取。"""
+    """正文变更：更新正文/标题/指纹/抓取时间，并重置 status='raw' 等待重新提取。
+
+    同时清除 extract_skipped_reason（阶段 7：内容已变，预筛需重新判定）。
+    """
     cur = conn.execute(
         """UPDATE notices SET
                title = ?,
                raw_content = ?,
                content_hash = ?,
                crawled_at = ?,
-               status = 'raw'
+               status = 'raw',
+               extract_skipped_reason = NULL
            WHERE url = ?""",
         (title, raw_content, content_hash, datetime.now().isoformat(), url),
     )
@@ -311,6 +317,7 @@ def get_notices_by_status(
     status: str,
     limit: int = 100,
     source: Optional[str] = None,
+    exclude_prefiltered: bool = False,
 ) -> list[dict]:
     """按状态查询通知（断点续跑的游标）。
 
@@ -318,21 +325,23 @@ def get_notices_by_status(
         status: 游标状态，如 raw（待提取）/ failed（待重试）
         limit: 单批上限
         source: 可选来源过滤（在 SQL 内做，避免 LIMIT 先截断再过滤）
+        exclude_prefiltered: 排除已预筛跳过的通知（extract_skipped_reason 非空）
 
     按 id 升序返回，保证游标单调推进：无论中断多少次，未完成项始终按
     相同顺序被取出，不会因排序抖动而重复或漏取。
     """
+    prefilter_sql = " AND extract_skipped_reason IS NULL" if exclude_prefiltered else ""
     if source:
         rows = conn.execute(
-            """SELECT * FROM notices
-               WHERE status = ? AND source = ?
+            f"""SELECT * FROM notices
+               WHERE status = ? AND source = ?{prefilter_sql}
                ORDER BY id ASC LIMIT ?""",
             (status, source, limit),
         ).fetchall()
     else:
         rows = conn.execute(
-            """SELECT * FROM notices
-               WHERE status = ?
+            f"""SELECT * FROM notices
+               WHERE status = ?{prefilter_sql}
                ORDER BY id ASC LIMIT ?""",
             (status, limit),
         ).fetchall()
@@ -388,6 +397,28 @@ def mark_failed(conn: sqlite3.Connection, notice_id: int, error: str) -> None:
         (datetime.now().isoformat(), notice_id),
     )
     conn.commit()
+
+
+def mark_prefiltered(conn: sqlite3.Connection, notice_id: int, reason: str) -> None:
+    """记录提取预筛跳过原因（阶段 7）。状态保持 raw，跳过项不再参与提取。"""
+    conn.execute(
+        "UPDATE notices SET extract_skipped_reason = ? WHERE id = ?",
+        (reason, notice_id),
+    )
+    conn.commit()
+
+
+def clear_prefiltered(conn: sqlite3.Connection, notice_id: Optional[int] = None) -> int:
+    """清除预筛跳过标记（全部或单条）。返回更新条数。"""
+    if notice_id is None:
+        cur = conn.execute("UPDATE notices SET extract_skipped_reason = NULL")
+    else:
+        cur = conn.execute(
+            "UPDATE notices SET extract_skipped_reason = NULL WHERE id = ?",
+            (notice_id,),
+        )
+    conn.commit()
+    return cur.rowcount
 
 
 def count_notices_by_status(conn: sqlite3.Connection) -> dict[str, int]:
@@ -448,9 +479,9 @@ def delete_notices_by_status(conn: sqlite3.Connection, status: str) -> tuple[lis
 
 
 def reset_notice_status(conn: sqlite3.Connection, notice_id: int, status: str = "raw") -> bool:
-    """重置通知状态（用于重新提取）。"""
+    """重置通知状态（用于重新提取），同时清除提取预筛跳过标记。"""
     cur = conn.execute(
-        "UPDATE notices SET status = ? WHERE id = ?",
+        "UPDATE notices SET status = ?, extract_skipped_reason = NULL WHERE id = ?",
         (status, notice_id),
     )
     conn.commit()
@@ -549,12 +580,12 @@ def delete_notices_by_filter(conn: sqlite3.Connection, f: dict) -> tuple[list[in
 def reset_notices_by_filter(
     conn: sqlite3.Connection, f: dict, target_status: str = "raw"
 ) -> tuple[list[int], int]:
-    """按筛选条件批量重置通知状态（供重新提取）。返回 (命中的 ID, 更新条数)。"""
+    """按筛选条件批量重置通知状态（供重新提取），同时清除预筛跳过标记。返回 (命中的 ID, 更新条数)。"""
     ids = get_notice_ids_by_filter(conn, f)
     if not ids:
         return [], 0
     where, params = build_notice_where(f)
-    sql = f"UPDATE notices SET status = ?"
+    sql = "UPDATE notices SET status = ?, extract_skipped_reason = NULL"
     if where:
         sql += " WHERE " + " AND ".join(where)
     cur = conn.execute(sql, [target_status] + params)
