@@ -123,10 +123,15 @@ class WebCrawler:
 
             known_urls = self._load_known_urls(conn)
             all_notices: dict[str, NoticeItem] = {}  # url -> NoticeItem（去重）
+            # 分页页码 / 列表页自身 URL 排除集：防止分页页被当成通知收录（P0-2）
+            exclude_urls: set[str] = {self.config.list_url}
 
             parser = ListPageParser(html, self.config.list_url)
             pagination = parser.discover_pagination()
-            added, discovered = self._collect_notices(parser, all_notices, known_urls)
+            exclude_urls.update(pagination.page_urls)
+            added, discovered = self._collect_notices(
+                parser, all_notices, known_urls, exclude_urls
+            )
             result.total_discovered = len(all_notices)
 
             # ---------- 2. 遍历翻页（增量早停 / 全量） ----------
@@ -141,8 +146,10 @@ class WebCrawler:
                     result.errors.append(f"翻页抓取失败 {page_url}: {e}")
                     continue
                 page_parser = ListPageParser(page_html, page_url)
+                page_pagination = page_parser.discover_pagination()
+                exclude_urls.update(page_pagination.page_urls)
                 added, discovered = self._collect_notices(
-                    page_parser, all_notices, known_urls
+                    page_parser, all_notices, known_urls, exclude_urls
                 )
                 pages_fetched += 1
 
@@ -256,13 +263,19 @@ class WebCrawler:
         parser: ListPageParser,
         all_notices: dict[str, NoticeItem],
         known_urls: dict[str, dict],
+        exclude_urls: Optional[set[str]] = None,
     ) -> tuple[int, int]:
-        """收集一页的通知链接（含时效过滤），返回 (本页新增数, 本页发现数)。"""
+        """收集一页的通知链接（含时效过滤），返回 (本页新增数, 本页发现数)。
+
+        exclude_urls: 分页页码/列表页自身 URL 集合，命中则不入通知池（P0-2）。
+        """
         notices = parser.discover_notice_links(self.config.url_pattern)
         if self.config.max_age_days:
             notices = [n for n in notices if self._age_ok(n)]
         added = 0
         for n in notices:
+            if exclude_urls and n.url in exclude_urls:
+                continue
             if n.url not in all_notices and n.url not in known_urls:
                 added += 1
             all_notices[n.url] = n
