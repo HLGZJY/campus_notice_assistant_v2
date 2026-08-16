@@ -133,6 +133,25 @@ class NoticeBatchResult(BaseModel):
     chunk_warnings: Optional[list] = None
 
 
+class ExtractPreviewItem(BaseModel):
+    """提取前预览明细项（passed 无 reason；skipped 带跳过原因）。"""
+
+    id: int
+    title: str = ""
+    url: str = ""
+    source: str = ""
+    published_at: Optional[str] = None
+    status: str = ""
+    reason: Optional[str] = None
+
+
+class ExtractPreviewResponse(BaseModel):
+    """提取前预览结果：将提取 / 跳过明细。"""
+
+    passed: list[ExtractPreviewItem] = Field(default_factory=list)
+    skipped: list[ExtractPreviewItem] = Field(default_factory=list)
+
+
 class NoticeResetRequest(BaseModel):
     """单条重置状态请求体。"""
 

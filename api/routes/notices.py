@@ -16,6 +16,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from api.deps import require_auth
 from api.routes.tasks import get_task_manager
 from api.schemas import (
+    ExtractPreviewItem,
+    ExtractPreviewResponse,
     NoticeBatchFilter,
     NoticeBatchRequest,
     NoticeDetail,
@@ -29,6 +31,7 @@ from api.schemas import (
 )
 from services import admin_service
 from services.notice_service import (
+    extract_preview,
     get_notice_detail,
     get_notice_meta,
     get_notices,
@@ -110,6 +113,16 @@ def list_notices(
         total=data["total"],
         page=data["page"],
         page_size=data["page_size"],
+    )
+
+
+@router.post("/extract-preview", response_model=ExtractPreviewResponse)
+def extract_preview_route() -> ExtractPreviewResponse:
+    """提取前预览（dry-run）：展示将提取/跳过明细及原因，供勾选后提交 notice_ids。"""
+    result = extract_preview()
+    return ExtractPreviewResponse(
+        passed=[ExtractPreviewItem(**item) for item in result["passed"]],
+        skipped=[ExtractPreviewItem(**item) for item in result["skipped"]],
     )
 
 

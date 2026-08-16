@@ -2976,6 +2976,56 @@
         }
       }
     },
+    "/api/v1/notices/extract-preview": {
+      "post": {
+        "tags": [
+          "notices"
+        ],
+        "summary": "Extract Preview Route",
+        "description": "提取前预览（dry-run）：展示将提取/跳过明细及原因，供勾选后提交 notice_ids。",
+        "operationId": "extract_preview_route_api_v1_notices_extract_preview_post",
+        "parameters": [
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExtractPreviewResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/notices/batch-delete": {
       "post": {
         "tags": [
@@ -3769,11 +3819,93 @@
             "type": "boolean",
             "title": "Retry Failed",
             "default": true
+          },
+          "skip_llm": {
+            "type": "boolean",
+            "title": "Skip Llm",
+            "default": false
           }
         },
         "type": "object",
         "title": "ExtractConfig",
         "description": "提取前置过滤配置（阶段 7：零 LLM 成本的规则预检，全部可关=行为接近现状）。"
+      },
+      "ExtractPreviewItem": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "default": ""
+          },
+          "url": {
+            "type": "string",
+            "title": "Url",
+            "default": ""
+          },
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "default": ""
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published At"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "default": ""
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "title": "ExtractPreviewItem",
+        "description": "提取前预览明细项（passed 无 reason；skipped 带跳过原因）。"
+      },
+      "ExtractPreviewResponse": {
+        "properties": {
+          "passed": {
+            "items": {
+              "$ref": "#/components/schemas/ExtractPreviewItem"
+            },
+            "type": "array",
+            "title": "Passed"
+          },
+          "skipped": {
+            "items": {
+              "$ref": "#/components/schemas/ExtractPreviewItem"
+            },
+            "type": "array",
+            "title": "Skipped"
+          }
+        },
+        "type": "object",
+        "title": "ExtractPreviewResponse",
+        "description": "提取前预览结果：将提取 / 跳过明细。"
       },
       "HTTPValidationError": {
         "properties": {
