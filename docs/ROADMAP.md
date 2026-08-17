@@ -176,6 +176,20 @@
 
 ---
 
+## 阶段 7.3 供应商卡片 UI 重构 ✅
+
+> 依据用户视角 + 设计师视角评审：信息过载（.env 长文重复）、Key 状态语义模糊、可选模型交互缺失、
+> 连通性测试分区混乱、实例名/类型混淆（含改名 rekey bug）、删除按钮误触、环境变量映射不直观。
+
+- [x] 数据模型：`ProviderConfig` 新增 `display_name`（实例名）+ `type`（类型徽章，留空按 base_url 自动推断 local/bailian/opencode-zen/custom）；`name` 语义收敛为只读唯一标识（任务引用它），移除 `onNameBlur` 改名逻辑（消除 rekey 不同步 bug）
+- [x] 卡片三重分区：基础（实例名 + 类型徽章 + Base URL + API Key 掩码 + 保存密钥 + 绿/红状态点 + ⓘ .env 提示）/ 可用模型（内置建议下拉 MODEL_PRESETS ∪ 已添加 + 添加按钮 + 标签式 ×）/ 高级折叠（连通性测试内联结果 + 环境变量名 + 只读标识）
+- [x] 删除供应商改 header 弱按钮 + `useDialog` 二次确认（复用 NoticesView 模式），远离测试按钮
+- [x] 前端「模型」tab provider 下拉改用 `display_name` 标签 / `name` 值
+- [x] 契约：ProviderView/ProviderConfig 补 display_name/type，重导 openapi.json + gen:api
+- [x] 测试：`test_model_failover.py` 补 group 9（推断/持久化/显式保留/默认值）+ `test_api_smoke.py` 补 GET display_name/type 断言；前端 vue-tsc+vite build 过；回归 suite 全过
+
+---
+
 ### Phase 0：仓库初始化 ✅
 
 - 新仓库 `campus_notice_assistant_v2`；旧仓库封存只读（`legacy/main`）。

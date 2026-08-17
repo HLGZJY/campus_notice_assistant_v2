@@ -242,6 +242,27 @@ def main() -> None:
     res = update_providers({k: v.model_dump() for k, v in new_provs.items()})
     check("删除未引用的供应商成功", res["ok"], f"{res}")
 
+    print("\n== 9. 供应商 display_name / type ==")
+    from config.defaults import DEFAULT_PROVIDER_BAILIAN  # noqa: PLC0415
+    from config.schema import ProviderConfig, infer_provider_type  # noqa: PLC0415
+
+    check("推断:空 base_url → local", infer_provider_type("") == "local")
+    check("推断:dashscope → bailian", infer_provider_type("https://dashscope.aliyuncs.com/compatible-mode/v1") == "bailian")
+    check("推断:opencode.ai → opencode-zen", infer_provider_type("https://opencode.ai/zen/go/v1") == "opencode-zen")
+    check("推断:其余 → custom", infer_provider_type("https://api.openai.com/v1") == "custom")
+
+    pc = ProviderConfig(name="p1", base_url="https://dashscope.aliyuncs.com/compatible-mode/v1")
+    check("type 留空自动推断并持久化", pc.type == "bailian", pc.type)
+    pc2 = ProviderConfig(name="p2", base_url="https://api.x.com", type="custom")
+    check("显式 type 保留", pc2.type == "custom", pc2.type)
+    pc3 = ProviderConfig(name="p3", base_url="", display_name="")
+    check("display_name 留空不报错", pc3.display_name == "" and pc3.type == "local", f"{pc3.display_name} {pc3.type}")
+    check(
+        "默认 bailian 带 display_name/type",
+        DEFAULT_PROVIDER_BAILIAN.display_name == "阿里云百炼" and DEFAULT_PROVIDER_BAILIAN.type == "bailian",
+        f"{DEFAULT_PROVIDER_BAILIAN.display_name} {DEFAULT_PROVIDER_BAILIAN.type}",
+    )
+
     print()
     if failures:
         print(f"失败 {len(failures)} 项: {failures}")

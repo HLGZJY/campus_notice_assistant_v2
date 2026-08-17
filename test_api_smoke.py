@@ -547,6 +547,13 @@ def _smoke(client, db_mod, config_dir, tmpdir, real_config_path, real_config_sna
         r.json()["opencode-zen"]["base_url"] == "https://new.example.com/v1",
         f"{r.json()}",
     )
+    check(
+        "GET providers 含 display_name/type（推断+回退）",
+        r.json()["opencode-zen"]["display_name"] == "opencode-zen"
+        and r.json()["opencode-zen"]["type"] == "custom"
+        and r.json()["local"]["type"] == "local",
+        f"{r.json()}",
+    )
 
     # PUT providers/{name}/api-key → 写入临时 .env（gitignore，免重启生效）
     r = client.put(

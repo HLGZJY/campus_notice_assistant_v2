@@ -321,8 +321,8 @@ models:
   todo:       { provider: bailian, models: [qwen3.7-flash, qwen3.7-max] }
   embedding:  { provider: local, models: [models/bge-small-zh-v1.5] }
 providers:
-  bailian:  { name: bailian,  base_url: https://dashscope.aliyuncs.com/compatible-mode/v1, api_key_env: DASHSCOPE_API_KEY, models: [qwen3.7-flash, qwen3.7-turbo, qwen3.7-max] }
-  local:    { name: local,    base_url: "", api_key_env: "", models: [models/bge-small-zh-v1.5] }
+  bailian:  { name: bailian,  display_name: 阿里云百炼, base_url: https://dashscope.aliyuncs.com/compatible-mode/v1, api_key_env: DASHSCOPE_API_KEY, models: [qwen3.7-flash, qwen3.7-turbo, qwen3.7-max], type: bailian }
+  local:    { name: local,    display_name: 本地模型,   base_url: "", api_key_env: "", models: [models/bge-small-zh-v1.5], type: local }
 crawl:
   interval_minutes: 60
   cleanup_enabled: false
