@@ -105,7 +105,8 @@ CREATE INDEX idx_todos_due ON todos(due_at);
 ```sql
 CREATE TABLE token_usage (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    task TEXT NOT NULL,                  -- extraction / qa / todo / embedding
+    task TEXT NOT NULL,                  -- extraction / qa / todo / embedding / test（连通性测试）
+    provider TEXT,                       -- 供应商编码（如 opencode-zen）；老数据经迁移为 NULL
     model TEXT,
     notice_id INTEGER,                   -- 关联通知（提取任务），可空
     input_tokens INTEGER DEFAULT 0,
@@ -121,8 +122,19 @@ CREATE INDEX idx_token_usage_notice ON token_usage(notice_id);
 CREATE INDEX idx_token_usage_created ON token_usage(created_at);
 ```
 
-> **设计要点**：`utils/llm.py:run_agent` 是唯一 LLM 调用点，四条链路（提取/待办/问答/embedding）
-> 统一记账；失败也记录（success=0 + error），供 token 用量页统计。
+> **设计要点**：`utils/llm.py:run_agent` 是唯一 LLM 调用点，五条链路（提取/待办/问答/embedding/连通性测试）
+> 统一记账；失败也记录（success=0 + error），供 token 用量页统计。连通性测试
+> （`services/config_service.py:test_model_connection`）记 `task=test`，成功取响应 usage 的
+> prompt/completion tokens，失败记 success=0 + error。
+>
+> **provider 溯源**：`core/extractor.py` / `core/todo.py` / `core/qa.py` 构造时从配置抓取
+> `provider_name`（`utils/llm.py:get_model_candidates` 4 元组返回），全链路透传到记账。
+> 迁移：`_MIGRATIONS` 追加 `ALTER TABLE token_usage ADD COLUMN provider TEXT`，老记录为 NULL，
+> 汇总分组按 `COALESCE(provider, '')` 归到空供应商。
+>
+> **汇总**：`storage/db.py:get_token_usage_summary(days)` 按 `task × provider × model` 分组，
+> `services/usage_service.py` 补 `task_label`（中文标签单一事实源在后端），暴露为
+> `GET /api/v1/usage/tokens?days=N`（默认 7，1–365）。
 
 ### 1.6 subscriptions（订阅表，W3 模块 3.1）
 

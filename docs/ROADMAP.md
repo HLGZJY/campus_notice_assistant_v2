@@ -89,7 +89,7 @@
 - [x] 崩溃恢复：从库中恢复运行状态，URL UNIQUE 防重复
 - [x] 内容指纹变更检测（`storage/db.py:compute_content_hash`，SHA-256 折叠空白）
 - [x] 断点续跑（`extract.py:run_batch` + status 游标 + source 参数）
-- [x] token 计量表（`utils/llm.py:record_llm_usage`，四条链路统一记账）
+- [x] token 计量表（`utils/llm.py:record_llm_usage`，统一记账点；提取/待办/问答/embedding/连通性测试五条链路 + provider 溯源，`GET /usage/tokens` 汇总）
 - [x] Tool Calling 演练（`tool_call_drill.py`：max_turns 守卫 + tool_call_id 去重）
 
 ### W2：检索质量

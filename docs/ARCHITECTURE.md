@@ -383,7 +383,8 @@ sources:
 | reminders | `GET /reminders`、`GET /reminders/stats`、`GET /reminders/pending-count`、`POST /reminders/{id}/status` | 截止提醒 |
 | subscriptions | `GET /subscriptions`、`GET /subscriptions/stats`、`POST /subscriptions/preview`、`POST /subscriptions`（任务）、`PUT /subscriptions/{id}`（任务）、`POST /subscriptions/{id}/toggle`（任务）、`DELETE /subscriptions/{id}`、`POST /subscriptions/match-all`（任务）、`GET /subscriptions/{id}/notices` | 两步式订阅 |
 | notices 订阅 | `GET /notices/count`、`GET /notices/matched-ids`、`POST /notices/match-map` | 浏览页命中徽标 |
-| config | `GET/PUT /config/{models,providers,sources,crawl,extract}`、`GET /config/disk`、`POST /config/reload`、`POST /config/test-source`（含 `suggested_pattern` 自动填充）、`POST /config/test-model`、`PUT /config/providers/{name}/api-key`（写入 `.env` + 同步环境变量） | 配置 |
+| config | `GET/PUT /config/{models,providers,sources,crawl,extract}`、`GET /config/disk`、`POST /config/reload`、`POST /config/test-source`（含 `suggested_pattern` 自动填充）、`POST /config/test-model`（成功/失败均记 `token_usage task=test`）、`PUT /config/providers/{name}/api-key`（写入 `.env` + 同步环境变量） | 配置 |
+| usage | `GET /usage/tokens?days=N`（默认 7，1–365；按 task×provider×model 分组，含 `task_label`） | Token 用量 |
 | qa | `GET /qa/ask/stream`（SSE）、`GET /qa/index-stats` | 问答 |
 | events | `POST /events` | 埋点 |
 | tasks | `POST /tasks`（202）、`GET /tasks/{id}`、`GET /tasks` | 异步任务 |
