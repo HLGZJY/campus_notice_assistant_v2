@@ -18,6 +18,10 @@ from pathlib import Path
 # 确保包能正确导入
 sys.path.insert(0, str(Path(__file__).parent))
 
+# Windows 控制台默认 cp1252 无法打印中文，统一用 UTF-8
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+
 from config.store import ConfigStore
 from core.extractor import NoticeExtractor
 from core.models import NoticeExtraction
