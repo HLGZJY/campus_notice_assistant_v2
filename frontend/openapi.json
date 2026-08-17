@@ -4153,6 +4153,34 @@
         "title": "IndexStatsView",
         "description": "向量索引统计（问答页索引状态角标）。"
       },
+      "KeyDateItem": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label",
+            "default": ""
+          },
+          "date_raw": {
+            "type": "string",
+            "title": "Date Raw",
+            "default": ""
+          },
+          "datetime": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Datetime"
+          }
+        },
+        "type": "object",
+        "title": "KeyDateItem",
+        "description": "一条关键日期（对应 core.models.KeyDate，经 /openapi.json 下发强类型）。"
+      },
       "MatchMapRequest": {
         "properties": {
           "notice_ids": {
@@ -4610,8 +4638,7 @@
           },
           "key_dates": {
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/components/schemas/KeyDateItem"
             },
             "type": "array",
             "title": "Key Dates",

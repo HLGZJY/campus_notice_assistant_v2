@@ -47,6 +47,14 @@ class NoticeSummary(BaseModel):
     extract_skipped_reason: Optional[str] = None  # 提取预筛跳过原因（阶段 7）
 
 
+class KeyDateItem(BaseModel):
+    """一条关键日期（对应 core.models.KeyDate，经 /openapi.json 下发强类型）。"""
+
+    label: str = ""
+    date_raw: str = ""
+    datetime: Optional[str] = None
+
+
 class NoticeDetail(BaseModel):
     """通知详情（含正文与关键日期）。"""
 
@@ -66,7 +74,7 @@ class NoticeDetail(BaseModel):
     location_type: Optional[str] = None
     deadline: Optional[str] = None
     deadline_raw: Optional[str] = None
-    key_dates: list[dict] = []
+    key_dates: list[KeyDateItem] = []
     summary: Optional[str] = None
     extracted_at: Optional[str] = None
     keywords: list[str] = []

@@ -448,9 +448,9 @@ function keyDatesText(d: NoticeDetail): string {
   if (!d.key_dates || !d.key_dates.length) return ''
   return d.key_dates
     .map((k) => {
-      const label = (k as { label?: string })?.label ?? (k as { date?: string })?.date ?? ''
-      const date = (k as { date?: string })?.date ?? ''
-      return date ? `${label} ${date}` : String(k)
+      const label = k.label ?? ''
+      const date = k.datetime ? fmtDate(k.datetime) : (k.date_raw ?? '')
+      return [label, date].filter(Boolean).join(' ')
     })
     .join('；')
 }

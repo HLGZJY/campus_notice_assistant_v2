@@ -1329,6 +1329,24 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * KeyDateItem
+         * @description 一条关键日期（对应 core.models.KeyDate，经 /openapi.json 下发强类型）。
+         */
+        KeyDateItem: {
+            /**
+             * Label
+             * @default
+             */
+            label: string;
+            /**
+             * Date Raw
+             * @default
+             */
+            date_raw: string;
+            /** Datetime */
+            datetime?: string | null;
+        };
+        /**
          * MatchMapRequest
          * @description 批量查询命中订阅词请求体。
          */
@@ -1483,9 +1501,7 @@ export interface components {
              * Key Dates
              * @default []
              */
-            key_dates: {
-                [key: string]: unknown;
-            }[];
+            key_dates: components["schemas"]["KeyDateItem"][];
             /** Summary */
             summary?: string | null;
             /** Extracted At */
