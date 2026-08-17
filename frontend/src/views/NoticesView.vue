@@ -1,6 +1,19 @@
 <script setup lang="ts">
 import { computed, ref, onMounted } from 'vue'
 import { useDialog, useMessage } from 'naive-ui'
+import {
+  ArrowUndoOutline,
+  CheckmarkDoneCircleOutline,
+  CloudDownloadOutline,
+  GlobeOutline,
+  NewspaperOutline,
+  RefreshOutline,
+  SearchOutline,
+  SparklesOutline,
+  TimeOutline,
+  TrashBinOutline,
+  TrashOutline,
+} from '@vicons/ionicons5'
 import { useNoticesStore } from '../stores/useNoticesStore'
 import { useConfigStore } from '../stores/useConfigStore'
 import { useTaskPoll } from '../composables/useTaskPoll'
@@ -458,35 +471,48 @@ function keyDatesText(d: NoticeDetail): string {
 
 <template>
   <n-space vertical size="large">
-    <n-card title="通知列表">
+    <n-card :bordered="false">
+      <template #header>
+        <div class="section-title">
+          <n-icon size="18" color="var(--primary)"><NewspaperOutline /></n-icon>
+          通知列表
+        </div>
+      </template>
       <template #header-extra>
-        <n-space align="center">
-          <n-tooltip trigger="hover">
-            <template #trigger>
-              <n-input-number v-model:value="oldDays" :min="1" :max="3650" :style="{ width: oldDaysWidth }">
-                <template #suffix>天</template>
-              </n-input-number>
-            </template>
-            清理天数：删除抓取时间在 {{ oldDays }} 天前的通知
-          </n-tooltip>
-          <n-tooltip trigger="hover">
-            <template #trigger>
-              <n-button size="small" type="error" secondary :loading="batchRunning" @click="onDeleteOld">
-                清理 {{ oldDays }} 天前抓取
-              </n-button>
-            </template>
-            删除抓取时间 ≤ {{ oldCutDay }} 的通知（含关联待办/提醒），删除后不可恢复
-          </n-tooltip>
+        <n-space align="center" wrap>
+          <div class="action-group">
+            <n-tooltip trigger="hover" placement="top">
+              <template #trigger>
+                <n-input-number v-model:value="oldDays" :min="1" :max="3650" :style="{ width: oldDaysWidth }">
+                  <template #suffix>天</template>
+                </n-input-number>
+              </template>
+              清理天数：删除抓取时间在 {{ oldDays }} 天前的通知
+            </n-tooltip>
+            <n-tooltip trigger="hover" placement="top">
+              <template #trigger>
+                <n-button size="small" type="error" secondary :loading="batchRunning" @click="onDeleteOld">
+                  <template #icon><n-icon><TrashBinOutline /></n-icon></template>
+                  清理 {{ oldDays }} 天前
+                </n-button>
+              </template>
+              删除抓取时间 ≤ {{ oldCutDay }} 的通知（含关联待办/提醒），删除后不可恢复
+            </n-tooltip>
+          </div>
           <n-button size="small" type="error" secondary :loading="batchRunning" @click="onBatchDelete">
+            <template #icon><n-icon><TrashOutline /></n-icon></template>
             批量删除当前筛选
           </n-button>
           <n-button size="small" type="warning" secondary :loading="batchRunning" @click="onBatchReset">
+            <template #icon><n-icon><ArrowUndoOutline /></n-icon></template>
             批量重置当前筛选
           </n-button>
           <n-button size="small" type="primary" secondary :loading="taskRunning" @click="openCrawlDialog">
+            <template #icon><n-icon><CloudDownloadOutline /></n-icon></template>
             抓取
           </n-button>
           <n-button size="small" type="primary" secondary :loading="taskRunning" @click="openExtractPreview">
+            <template #icon><n-icon><SparklesOutline /></n-icon></template>
             批量提取
           </n-button>
           <n-progress
@@ -499,7 +525,7 @@ function keyDatesText(d: NoticeDetail): string {
         </n-space>
       </template>
 
-      <n-form inline @submit.prevent="refresh">
+      <n-form inline class="filter-form" @submit.prevent="refresh">
         <n-form-item label="数据源">
           <n-select
             v-model:value="filterSource"
@@ -539,52 +565,66 @@ function keyDatesText(d: NoticeDetail): string {
           <n-checkbox v-model:checked="filterMatched">只看行动型</n-checkbox>
         </n-form-item>
         <n-form-item>
-          <n-button type="primary" attr-type="submit" :loading="loading">查询</n-button>
+          <n-button type="primary" attr-type="submit" :loading="loading">
+            <template #icon><n-icon><SearchOutline /></n-icon></template>
+            查询
+          </n-button>
         </n-form-item>
       </n-form>
 
       <n-spin :show="loading">
-        <div v-if="notices.list.length === 0">暂无通知</div>
-        <n-list v-else>
-          <n-list-item v-for="item in notices.list" :key="item.id">
-            <template #default>
-              <n-space vertical size="small">
-                <n-space align="center" size="small">
-                  <n-tag size="small" :bordered="false" :type="statusTagType[item.status] ?? 'default'">
-                    {{ statusLabel(item.status) }}
-                  </n-tag>
-                  <n-tag size="small" :bordered="false" type="info">{{ typeLabel(item.notice_type) }}</n-tag>
-                  <a href="#" @click.prevent="openDetail(item)">{{ item.title }}</a>
-                  <template v-for="kw in matchedKeywords(item.id)" :key="`${item.id}-${kw}`">
-                    <n-tag size="small" :bordered="false" type="warning" round>订阅命中 · {{ kw }}</n-tag>
+        <n-empty v-if="notices.list.length === 0" description="暂无通知" style="padding: 40px 0" />
+        <div v-else class="notice-list">
+          <div v-for="item in notices.list" :key="item.id" class="notice-row" @click="openDetail(item)">
+            <div class="notice-bar" :class="`bar--${item.status}`" />
+            <div class="notice-content">
+              <div class="notice-top">
+                <n-tag size="small" :bordered="false" :type="statusTagType[item.status] ?? 'default'" round>
+                  {{ statusLabel(item.status) }}
+                </n-tag>
+                <span class="notice-type">{{ typeLabel(item.notice_type) }}</span>
+                <a href="#" class="notice-title" @click.prevent="openDetail(item)">{{ item.title }}</a>
+                <template v-for="kw in matchedKeywords(item.id)" :key="`${item.id}-${kw}`">
+                  <n-tag size="small" :bordered="false" type="warning" round class="kw-tag">订阅命中 · {{ kw }}</n-tag>
+                </template>
+                <n-tooltip v-if="item.extract_skipped_reason" trigger="hover">
+                  <template #trigger>
+                    <n-tag size="small" :bordered="false" type="default">已跳过提取</n-tag>
                   </template>
-                  <n-tooltip v-if="item.extract_skipped_reason" trigger="hover">
-                    <template #trigger>
-                      <n-tag size="small" :bordered="false" type="default">已跳过提取</n-tag>
-                    </template>
-                    {{ item.extract_skipped_reason }}
-                  </n-tooltip>
-                </n-space>
-                <div>
-                  {{ item.source }} · {{ fmtDate(item.published_at ?? item.crawled_at) }}
-                  <span v-if="item.deadline">，截止 {{ fmtDate(item.deadline) }}</span>
-                </div>
-              </n-space>
-            </template>
-            <template #suffix>
-              <n-space>
-                <n-button size="small" :loading="generating === item.id" @click="generateTodos(item)">
-                  生成待办
-                </n-button>
-                <n-button size="small" :loading="reExtracting === item.id" @click="onReExtract(item)">
-                  重新提取
-                </n-button>
-                <n-button size="small" @click="onReset(item)">重置</n-button>
-                <n-button size="small" type="error" secondary @click="onDelete(item)">删除</n-button>
-              </n-space>
-            </template>
-          </n-list-item>
-        </n-list>
+                  {{ item.extract_skipped_reason }}
+                </n-tooltip>
+              </div>
+              <div class="notice-meta">
+                <n-icon size="14" class="meta-icon"><GlobeOutline /></n-icon>
+                {{ item.source }}
+                <span class="meta-dot">·</span>
+                {{ fmtDate(item.published_at ?? item.crawled_at) }}
+                <span v-if="item.deadline" class="deadline">
+                  <n-icon size="14"><TimeOutline /></n-icon>
+                  截止 {{ fmtDate(item.deadline) }}
+                </span>
+              </div>
+            </div>
+            <div class="notice-actions" @click.stop>
+              <n-button size="small" :loading="generating === item.id" @click="generateTodos(item)">
+                <template #icon><n-icon><CheckmarkDoneCircleOutline /></n-icon></template>
+                生成待办
+              </n-button>
+              <n-button size="small" :loading="reExtracting === item.id" @click="onReExtract(item)">
+                <template #icon><n-icon><RefreshOutline /></n-icon></template>
+                重新提取
+              </n-button>
+              <n-button size="small" @click="onReset(item)">
+                <template #icon><n-icon><ArrowUndoOutline /></n-icon></template>
+                重置
+              </n-button>
+              <n-button size="small" type="error" secondary @click="onDelete(item)">
+                <template #icon><n-icon><TrashOutline /></n-icon></template>
+                删除
+              </n-button>
+            </div>
+          </div>
+        </div>
       </n-spin>
 
       <n-space justify="end" style="margin-top: 16px">
@@ -741,3 +781,134 @@ function keyDatesText(d: NoticeDetail): string {
     </n-drawer>
   </n-space>
 </template>
+
+<style scoped>
+.action-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.filter-form {
+  padding: 16px 16px 4px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-soft);
+  margin-bottom: 16px;
+}
+.notice-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.notice-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-card);
+  cursor: pointer;
+  transition: box-shadow 0.15s ease, transform 0.15s ease, border-color 0.15s ease;
+}
+.notice-row:hover {
+  box-shadow: var(--shadow-2);
+  transform: translateY(-1px);
+  border-color: var(--primary);
+}
+.notice-bar {
+  flex-shrink: 0;
+  width: 4px;
+  align-self: stretch;
+  border-radius: 2px;
+}
+.bar--raw {
+  background: var(--info);
+}
+.bar--extracted {
+  background: var(--success);
+}
+.bar--partial {
+  background: var(--warning);
+}
+.bar--failed {
+  background: var(--error);
+}
+.bar--default {
+  background: var(--text-3);
+}
+.notice-content {
+  flex: 1;
+  min-width: 0;
+}
+.notice-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.notice-type {
+  font-size: 12px;
+  color: var(--primary);
+  background: var(--primary-soft);
+  padding: 2px 8px;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+.notice-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-1);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-decoration: none;
+}
+.notice-row:hover .notice-title {
+  color: var(--primary);
+}
+.kw-tag {
+  flex-shrink: 0;
+}
+.notice-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-3);
+  margin-top: 6px;
+  font-variant-numeric: tabular-nums;
+  flex-wrap: wrap;
+}
+.meta-icon {
+  color: var(--text-3);
+}
+.meta-dot {
+  color: var(--text-3);
+}
+.deadline {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--warning);
+}
+.notice-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+@media (max-width: 720px) {
+  .notice-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .notice-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
+</style>

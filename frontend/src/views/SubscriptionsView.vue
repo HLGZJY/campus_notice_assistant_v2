@@ -1,8 +1,22 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useDialog, useMessage } from 'naive-ui'
+import {
+  AddOutline,
+  CheckmarkCircleOutline,
+  ChevronDownOutline,
+  ChevronUpOutline,
+  CreateOutline,
+  FlashOutline,
+  LinkOutline,
+  NotificationsOutline,
+  PauseOutline,
+  PlayOutline,
+  TrashOutline,
+} from '@vicons/ionicons5'
 import { useSubscriptionsStore } from '../stores/useSubscriptionsStore'
 import { useNoticesStore } from '../stores/useNoticesStore'
+import StatCard from '../components/StatCard.vue'
 import { useTaskPoll } from '../composables/useTaskPoll'
 import type {
   NoticeDetail,
@@ -282,7 +296,13 @@ async function openDetailById(id: number) {
 
 <template>
   <n-space vertical size="large">
-    <n-card title="订阅管理">
+    <n-card :bordered="false">
+      <template #header>
+        <div class="section-title">
+          <n-icon size="18" color="var(--primary)"><NotificationsOutline /></n-icon>
+          订阅管理
+        </div>
+      </template>
       <template #header-extra>
         <n-space align="center" size="small">
           <n-tooltip trigger="hover" placement="bottom">
@@ -293,51 +313,27 @@ async function openDetailById(id: number) {
           </n-tooltip>
           <n-tooltip trigger="hover" placement="bottom">
             <template #trigger>
-              <n-button size="small" secondary :loading="matchingAll" @click="matchAll">全库重匹配</n-button>
+              <n-button size="small" secondary :loading="matchingAll" @click="matchAll">
+                <template #icon><n-icon><FlashOutline /></n-icon></template>
+                全库重匹配
+              </n-button>
             </template>
             按当前订阅词重新扫描全部通知，重算命中关系（数据量大时较慢）。
           </n-tooltip>
-          <n-button type="primary" @click="openCreate">新增订阅</n-button>
+          <n-button type="primary" @click="openCreate">
+            <template #icon><n-icon><AddOutline /></n-icon></template>
+            新增订阅
+          </n-button>
         </n-space>
       </template>
 
-      <n-grid :cols="3" :x-gap="24" style="margin-bottom: 8px">
-        <n-grid-item>
-          <n-statistic>
-            <template #label>
-              <n-tooltip trigger="hover" placement="top">
-                <template #trigger><span>订阅总数</span></template>
-                已配置的订阅词数量（含已停用）。
-              </n-tooltip>
-            </template>
-            <template #default>{{ subs.stats.total }}</template>
-          </n-statistic>
-        </n-grid-item>
-        <n-grid-item>
-          <n-statistic>
-            <template #label>
-              <n-tooltip trigger="hover" placement="top">
-                <template #trigger><span>启用中</span></template>
-                当前生效、会对新通知自动标记的订阅词数量。
-              </n-tooltip>
-            </template>
-            <template #default>{{ subs.stats.enabled }}</template>
-          </n-statistic>
-        </n-grid-item>
-        <n-grid-item>
-          <n-statistic>
-            <template #label>
-              <n-tooltip trigger="hover" placement="top">
-                <template #trigger><span>命中总数</span></template>
-                全库所有历史通知（含已读）与启用订阅词的匹配总数；点击各订阅卡片的“命中 N 条”可查看明细。
-              </n-tooltip>
-            </template>
-            <template #default>{{ subs.stats.matches }}</template>
-          </n-statistic>
-        </n-grid-item>
-      </n-grid>
+      <div class="stats">
+        <StatCard :icon="NotificationsOutline" label="订阅总数" :value="subs.stats.total" color="primary" hint="已配置的订阅词数量（含已停用）" />
+        <StatCard :icon="CheckmarkCircleOutline" label="启用中" :value="subs.stats.enabled" color="success" hint="当前生效、会对新通知自动标记的订阅词数量" />
+        <StatCard :icon="LinkOutline" label="命中总数" :value="subs.stats.matches" color="violet" hint="全库所有历史通知与启用订阅词的匹配总数；点击各订阅卡片的「命中 N 条」可查看明细" />
+      </div>
 
-      <div style="font-size: 12px; color: #888; margin-bottom: 16px">
+      <div class="muted" style="font-size: 12px; margin-bottom: 16px">
         口径说明：命中基于全库历史通知（含已读）做标题/摘要包含匹配（大小写不敏感，可选限定类型）；修改订阅词后自动全库重匹配；停用不清历史命中记录。
       </div>
 
@@ -354,40 +350,30 @@ async function openDetailById(id: number) {
           </template>
         </n-empty>
 
-        <n-space v-else vertical>
-          <n-card
-            v-for="s in subs.list"
-            :key="s.id"
-            size="small"
-            :bordered="true"
-            content-style="padding-top: 12px"
-          >
+        <div v-else class="sub-list">
+          <n-card v-for="s in subs.list" :key="s.id" size="small" :bordered="false" class="sub-card" content-style="padding-top: 12px">
             <template #header>
-              <n-space align="center" size="small">
+              <div class="sub-header">
+                <span class="sub-keyword">{{ s.keyword }}</span>
                 <n-tag :bordered="false" :type="s.enabled === 1 ? 'success' : 'default'" size="small">
                   {{ s.enabled === 1 ? '已启用' : '已停用' }}
                 </n-tag>
-                <span style="font-weight: 600">{{ s.keyword }}</span>
                 <n-tag v-if="s.type_label" :bordered="false" type="info" size="small">{{ s.type_label }}</n-tag>
-              </n-space>
+              </div>
             </template>
 
             <template #default>
-              <n-space vertical size="small">
-                <n-button
-                  text
-                  type="primary"
-                  :loading="!!matchedLoading[s.id] && expandedId === s.id"
-                  @click="toggleExpand(s)"
-                >
-                  {{ expandedId === s.id ? '收起命中明细 ▾' : `命中 ${s.match_count} 条通知` }}
+              <div class="sub-body">
+                <n-button text type="primary" :loading="!!matchedLoading[s.id] && expandedId === s.id" @click="toggleExpand(s)">
+                  <template #icon>
+                    <n-icon><component :is="expandedId === s.id ? ChevronUpOutline : ChevronDownOutline" /></n-icon>
+                  </template>
+                  {{ expandedId === s.id ? '收起命中明细' : `命中 ${s.match_count} 条通知` }}
                 </n-button>
 
-                <div v-if="expandedId === s.id">
+                <div v-if="expandedId === s.id" class="sub-matched">
                   <n-spin :show="!!matchedLoading[s.id]">
-                    <div v-if="matchedError[s.id]" style="color: #d03050; font-size: 13px">
-                      加载失败：{{ matchedError[s.id] }}
-                    </div>
+                    <div v-if="matchedError[s.id]" class="sub-error">加载失败：{{ matchedError[s.id] }}</div>
                     <n-empty
                       v-else-if="!matchedLoading[s.id] && matchedState(s)?.items.length === 0"
                       size="small"
@@ -399,59 +385,53 @@ async function openDetailById(id: number) {
                         </n-space>
                       </template>
                     </n-empty>
-                    <n-list v-else-if="matchedState(s)">
-                      <n-list-item v-for="n in matchedState(s)!.items" :key="n.id">
-                        <template #default>
-                          <n-space vertical size="small">
-                            <n-space align="center" size="small">
-                              <n-tag size="small" :bordered="false" type="info">{{ typeLabel(n.notice_type) }}</n-tag>
-                              <a href="#" @click.prevent="openDetail(n)">{{ n.title }}</a>
-                              <n-tag
-                                v-for="kw in n.keywords"
-                                :key="kw"
-                                size="small"
-                                :bordered="false"
-                                type="warning"
-                                round
-                              >
-                                命中 · {{ kw }}
-                              </n-tag>
-                            </n-space>
-                            <div style="font-size: 13px; color: #888">
-                              {{ n.source }} · {{ fmtDate(n.published_at ?? n.crawled_at) }}
-                            </div>
-                          </n-space>
+                    <div v-else-if="matchedState(s)" class="matched-list">
+                      <div v-for="n in matchedState(s)!.items" :key="n.id" class="matched-row">
+                        <span class="matched-type">{{ typeLabel(n.notice_type) }}</span>
+                        <a href="#" class="matched-title" @click.prevent="openDetail(n)">{{ n.title }}</a>
+                        <template v-for="kw in n.keywords" :key="kw">
+                          <n-tag size="small" :bordered="false" type="warning" round>命中 · {{ kw }}</n-tag>
                         </template>
-                      </n-list-item>
-                      <template #footer>
-                        <n-space justify="end" style="padding-top: 8px">
-                          <n-pagination
-                            v-if="(matchedState(s)?.total ?? 0) > (matchedState(s)?.pageSize ?? 10)"
-                            size="small"
-                            :page="matchedState(s)!.page"
-                            :page-size="matchedState(s)!.pageSize"
-                            :item-count="matchedState(s)!.total"
-                            @update:page="(p: number) => handleMatchedPage(s, p)"
-                          />
-                        </n-space>
-                      </template>
-                    </n-list>
+                        <span class="matched-meta">{{ n.source }} · {{ fmtDate(n.published_at ?? n.crawled_at) }}</span>
+                      </div>
+                      <div
+                        v-if="(matchedState(s)?.total ?? 0) > (matchedState(s)?.pageSize ?? 10)"
+                        class="matched-pager"
+                      >
+                        <n-pagination
+                          size="small"
+                          :page="matchedState(s)!.page"
+                          :page-size="matchedState(s)!.pageSize"
+                          :item-count="matchedState(s)!.total"
+                          @update:page="(p: number) => handleMatchedPage(s, p)"
+                        />
+                      </div>
+                    </div>
                   </n-spin>
                 </div>
-              </n-space>
+              </div>
             </template>
 
             <template #footer>
-              <n-space justify="end">
+              <div class="sub-footer">
                 <n-button size="small" secondary @click="toggleSubscription(s)">
+                  <template #icon>
+                    <n-icon><component :is="s.enabled === 1 ? PauseOutline : PlayOutline" /></n-icon>
+                  </template>
                   {{ s.enabled === 1 ? '停用' : '启用' }}
                 </n-button>
-                <n-button size="small" secondary @click="openEdit(s)">编辑</n-button>
-                <n-button size="small" quaternary type="error" @click="onDelete(s)">删除</n-button>
-              </n-space>
+                <n-button size="small" secondary @click="openEdit(s)">
+                  <template #icon><n-icon><CreateOutline /></n-icon></template>
+                  编辑
+                </n-button>
+                <n-button size="small" quaternary type="error" @click="onDelete(s)">
+                  <template #icon><n-icon><TrashOutline /></n-icon></template>
+                  删除
+                </n-button>
+              </div>
             </template>
           </n-card>
-        </n-space>
+        </div>
       </n-spin>
     </n-card>
 
@@ -538,3 +518,106 @@ async function openDetailById(id: number) {
     </n-drawer>
   </n-space>
 </template>
+
+<style scoped>
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.sub-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.sub-card {
+  box-shadow: var(--shadow-1);
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+.sub-card:hover {
+  box-shadow: var(--shadow-2);
+  transform: translateY(-1px);
+}
+.sub-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sub-keyword {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-1);
+}
+.sub-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sub-matched {
+  margin-top: 4px;
+}
+.sub-error {
+  color: var(--error);
+  font-size: 13px;
+}
+.matched-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+  background: var(--bg-soft);
+}
+.matched-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+}
+.matched-type {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--info);
+  background: var(--info-soft);
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+.matched-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-1);
+  text-decoration: none;
+}
+.matched-title:hover {
+  color: var(--primary);
+}
+.matched-meta {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+.matched-pager {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 8px;
+}
+.sub-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+@media (max-width: 720px) {
+  .matched-meta {
+    margin-left: 0;
+    width: 100%;
+  }
+}
+</style>

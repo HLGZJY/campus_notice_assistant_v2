@@ -9,13 +9,13 @@ import MarketView from '../views/MarketView.vue'
 import { trackEvent } from '../api/events'
 
 const routes = [
-  { path: '/', component: HomeView, meta: { title: '首页' } },
-  { path: '/notices', component: NoticesView, meta: { title: '通知浏览' } },
-  { path: '/todos', component: TodosView, meta: { title: '待办清单' } },
-  { path: '/qa', component: QaView, meta: { title: '智能问答' } },
-  { path: '/config', component: ConfigView, meta: { title: '系统配置' } },
-  { path: '/subscriptions', component: SubscriptionsView, meta: { title: '订阅管理' } },
-  { path: '/market', component: MarketView, meta: { title: '服务市场' } },
+  { path: '/', component: HomeView, meta: { title: '首页', subtitle: '数据概览与快捷入口' } },
+  { path: '/notices', component: NoticesView, meta: { title: '通知浏览', subtitle: '抓取 · 提取 · 检索与管理' } },
+  { path: '/todos', component: TodosView, meta: { title: '待办清单', subtitle: '行动跟踪与临期提醒' } },
+  { path: '/qa', component: QaView, meta: { title: '智能问答', subtitle: '基于已入库通知的语义问答' } },
+  { path: '/config', component: ConfigView, meta: { title: '系统配置', subtitle: '模型 · 供应商 · 数据源' } },
+  { path: '/subscriptions', component: SubscriptionsView, meta: { title: '订阅管理', subtitle: '关键词订阅与命中跟踪' } },
+  { path: '/market', component: MarketView, meta: { title: '服务市场', subtitle: '可扩展服务' } },
 ]
 
 const router = createRouter({

@@ -1,7 +1,25 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import { useDialog, useMessage } from 'naive-ui'
+import {
+  CheckmarkCircleOutline,
+  ChevronDownOutline,
+  ChevronUpOutline,
+  CloseCircleOutline,
+  CloudDownloadOutline,
+  DiscOutline,
+  FilterOutline,
+  InformationCircleOutline,
+  KeyOutline,
+  PaperPlaneOutline,
+  PencilOutline,
+  PulseOutline,
+  ReloadOutline,
+  ServerOutline,
+  SettingsOutline,
+} from '@vicons/ionicons5'
 import { useConfigStore } from '../stores/useConfigStore'
+import StatCard from '../components/StatCard.vue'
 import type {
   ConfigMutationResult,
   CrawlConfig,
@@ -582,7 +600,13 @@ async function reloadConfig() {
 </script>
 
 <template>
-  <n-card title="系统配置">
+  <n-card :bordered="false">
+    <template #header>
+      <div class="section-title">
+        <n-icon size="18" color="var(--primary)"><SettingsOutline /></n-icon>
+        系统配置
+      </div>
+    </template>
     <n-spin :show="loading">
       <n-tabs v-model:value="activeTab" type="line" animated>
         <n-tab-pane name="models" tab="模型">
@@ -657,6 +681,7 @@ async function reloadConfig() {
             >
               <template #header>
                 <div class="card-header-bar">
+                  <n-icon size="16" color="var(--text-3)"><ServerOutline /></n-icon>
                   <span class="card-header-title">{{ p.display_name || name }}</span>
                   <n-tag size="small" :bordered="false" :type="badgeType(p.type)">{{ typeLabel(p.type) }}</n-tag>
                   <n-tag size="small" :bordered="false" :type="keyStatus(name) ? 'success' : 'warning'">
@@ -664,7 +689,9 @@ async function reloadConfig() {
                   </n-tag>
                   <span class="header-spacer" />
                   <n-button size="small" quaternary type="error" @click.stop="confirmRemoveProvider(name)">删除</n-button>
-                  <span class="collapse-arrow">{{ provShow(name) ? '▲' : '▼' }}</span>
+                  <n-icon size="14" color="var(--text-3)">
+                    <component :is="provShow(name) ? ChevronUpOutline : ChevronDownOutline" />
+                  </n-icon>
                 </div>
               </template>
               <n-collapse-transition :show="provShow(name)">
@@ -691,15 +718,18 @@ async function reloadConfig() {
                       :loading="savingKey[name]"
                       @click="saveProviderKey(name)"
                     >
+                      <template #icon><n-icon><KeyOutline /></n-icon></template>
                       保存密钥
                     </n-button>
                     <span class="key-dot" :class="keyStatus(name) ? 'ok' : 'bad'" />
                     <span style="font-size: 12px; color: #999">{{ keyStatus(name) ? '已就绪' : '未就绪' }}</span>
                   </n-space>
                   <template #feedback>
-                    <span style="color: #999">密钥仅写入项目根 .env（已忽略 Git，即时生效）</span>
+                    <span class="muted">密钥仅写入项目根 .env（已忽略 Git，即时生效）</span>
                     <n-tooltip trigger="hover" placement="right">
-                      <template #trigger><span class="help-icon">ⓘ</span></template>
+                      <template #trigger>
+                        <span class="help-icon"><n-icon size="14"><InformationCircleOutline /></n-icon></span>
+                      </template>
                       保存后自动 upsert 到项目根目录 .env，不落库、不进 YAML；若环境变量名为空会自动生成
                       &lt;标识&gt;_API_KEY。写入后进程内立即生效，无需重启。
                     </n-tooltip>
@@ -735,7 +765,8 @@ async function reloadConfig() {
                   </n-space>
                 </n-form-item>
                 <n-button size="small" quaternary style="margin: 2px 0 8px" @click="toggleAdvanced(name)">
-                    {{ advancedOpen[name] ? '收起高级选项 ▲' : '⚙️ 连通性测试 · 环境变量 · 标识 ▼' }}
+                    <template #icon><n-icon><component :is="advancedOpen[name] ? ChevronUpOutline : ChevronDownOutline" /></n-icon></template>
+                    {{ advancedOpen[name] ? '收起高级选项' : '连通性测试 · 环境变量 · 标识' }}
                   </n-button>
                   <div v-show="advancedOpen[name]">
                     <n-form label-placement="left" label-width="100">
@@ -756,17 +787,17 @@ async function reloadConfig() {
                               :loading="testBusy[name]"
                               @click="testProvider(name)"
                             >
+                              <template #icon><n-icon><PulseOutline /></n-icon></template>
                               开始测试
                             </n-button>
                           </n-space>
                           <span
                             v-if="testResult[name]"
-                            :style="{
-                              color: testResult[name].ok ? '#18a058' : '#d03050',
-                              fontSize: '12px',
-                            }"
+                            :class="testResult[name].ok ? 'test-ok' : 'test-bad'"
                           >
-                            {{ testResult[name].ok ? `✅ 连接成功（${testResult[name].latency}ms）` : `❌ ${testResult[name].error}` }}
+                            <n-icon v-if="testResult[name].ok"><CheckmarkCircleOutline /></n-icon>
+                            <n-icon v-else><CloseCircleOutline /></n-icon>
+                            {{ testResult[name].ok ? `连接成功（${testResult[name].latency}ms）` : testResult[name].error }}
                           </span>
                         </n-space>
                       </n-form-item>
@@ -826,7 +857,9 @@ async function reloadConfig() {
                   <span v-else class="header-muted">未填写列表地址</span>
                   <span class="header-spacer" />
                   <n-button size="small" quaternary type="error" @click.stop="removeSource(idx)">删除</n-button>
-                  <span class="collapse-arrow">{{ srcShow(idx) ? '▲' : '▼' }}</span>
+                  <n-icon size="14" color="var(--text-3)">
+                    <component :is="srcShow(idx) ? ChevronUpOutline : ChevronDownOutline" />
+                  </n-icon>
                 </div>
               </template>
               <n-collapse-transition :show="srcShow(idx)">
@@ -914,9 +947,12 @@ async function reloadConfig() {
             >
               <template #header>
                 <div class="card-header-bar">
+                  <n-icon size="16" color="var(--text-3)"><CloudDownloadOutline /></n-icon>
                   <span class="card-header-title">全局抓取参数</span>
                   <span class="header-spacer" />
-                  <span class="collapse-arrow">{{ crawlExpanded || crawlHovered ? '▲' : '▼' }}</span>
+                  <n-icon size="14" color="var(--text-3)">
+                    <component :is="crawlExpanded || crawlHovered ? ChevronUpOutline : ChevronDownOutline" />
+                  </n-icon>
                 </div>
               </template>
               <n-collapse-transition :show="crawlExpanded || crawlHovered">
@@ -965,9 +1001,12 @@ async function reloadConfig() {
             >
               <template #header>
                 <div class="card-header-bar">
+                  <n-icon size="16" color="var(--text-3)"><FilterOutline /></n-icon>
                   <span class="card-header-title">提取前置过滤</span>
                   <span class="header-spacer" />
-                  <span class="collapse-arrow">{{ extractExpanded || extractHovered ? '▲' : '▼' }}</span>
+                  <n-icon size="14" color="var(--text-3)">
+                    <component :is="extractExpanded || extractHovered ? ChevronUpOutline : ChevronDownOutline" />
+                  </n-icon>
                 </div>
               </template>
               <n-collapse-transition :show="extractExpanded || extractHovered">
@@ -1032,23 +1071,13 @@ async function reloadConfig() {
 
             <n-spin :show="usageLoading">
               <template v-if="usageTotal.calls">
-                <n-grid :cols="5" x-gap="12">
-                  <n-grid-item>
-                    <n-statistic label="调用次数" :value="usageTotal.calls ?? 0" />
-                  </n-grid-item>
-                  <n-grid-item>
-                    <n-statistic label="输入 tokens" :value="usageTotal.input_tokens ?? 0" />
-                  </n-grid-item>
-                  <n-grid-item>
-                    <n-statistic label="输出 tokens" :value="usageTotal.output_tokens ?? 0" />
-                  </n-grid-item>
-                  <n-grid-item>
-                    <n-statistic label="成功" :value="usageTotal.success ?? 0" />
-                  </n-grid-item>
-                  <n-grid-item>
-                    <n-statistic label="失败" :value="usageTotal.failed ?? 0" />
-                  </n-grid-item>
-                </n-grid>
+                <div class="usage-stats">
+                  <StatCard :icon="PulseOutline" label="调用次数" :value="Number(usageTotal.calls ?? 0)" color="primary" />
+                  <StatCard :icon="PencilOutline" label="输入 tokens" :value="Number(usageTotal.input_tokens ?? 0)" color="info" />
+                  <StatCard :icon="PaperPlaneOutline" label="输出 tokens" :value="Number(usageTotal.output_tokens ?? 0)" color="violet" />
+                  <StatCard :icon="CheckmarkCircleOutline" label="成功" :value="Number(usageTotal.success ?? 0)" color="success" />
+                  <StatCard :icon="CloseCircleOutline" label="失败" :value="Number(usageTotal.failed ?? 0)" color="error" />
+                </div>
                 <n-data-table
                   :columns="usageColumns"
                   :data="usageRows"
@@ -1066,9 +1095,18 @@ async function reloadConfig() {
         <n-tab-pane name="reload" tab="重载与磁盘">
           <n-space vertical size="large">
             <n-space>
-              <n-button type="primary" :loading="reloading" @click="reloadConfig">强制重载配置</n-button>
+              <n-button type="primary" :loading="reloading" @click="reloadConfig">
+                <template #icon><n-icon><ReloadOutline /></n-icon></template>
+                强制重载配置
+              </n-button>
             </n-space>
-            <n-card title="磁盘信息" size="small" v-if="cfg.disk">
+            <n-card size="small" v-if="cfg.disk">
+              <template #header>
+                <div class="section-title">
+                  <n-icon size="16" color="var(--text-3)"><DiscOutline /></n-icon>
+                  磁盘信息
+                </div>
+              </template>
               <n-descriptions :column="1" size="small">
                 <n-descriptions-item label="路径">{{ cfg.disk.path }}</n-descriptions-item>
                 <n-descriptions-item label="存在">{{ cfg.disk.exists ? '是' : '否' }}</n-descriptions-item>
@@ -1085,6 +1123,26 @@ async function reloadConfig() {
 </template>
 
 <style scoped>
+.usage-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.test-ok {
+  color: var(--success);
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.test-bad {
+  color: var(--error);
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
 .key-dot {
   display: inline-block;
   width: 8px;
@@ -1092,15 +1150,15 @@ async function reloadConfig() {
   border-radius: 50%;
 }
 .key-dot.ok {
-  background: #18a058;
+  background: var(--success);
 }
 .key-dot.bad {
-  background: #d03050;
+  background: var(--error);
 }
 .help-icon {
   margin-left: 4px;
   cursor: help;
-  color: #999;
+  color: var(--text-3);
 }
 .card-header-bar {
   display: flex;
@@ -1116,13 +1174,13 @@ async function reloadConfig() {
   transition: box-shadow 0.2s ease;
 }
 .collapsible-card:hover {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--shadow-2);
 }
 .card-header-bar:hover {
   opacity: 0.88;
 }
 .header-index {
-  color: #999;
+  color: var(--text-3);
   font-size: 13px;
   font-weight: 600;
 }
@@ -1134,7 +1192,7 @@ async function reloadConfig() {
   white-space: nowrap;
 }
 .header-link {
-  color: #2080f0;
+  color: var(--primary);
   text-decoration: none;
   font-size: 13px;
   max-width: 340px;
@@ -1146,18 +1204,18 @@ async function reloadConfig() {
   text-decoration: underline;
 }
 .header-muted {
-  color: #bbb;
+  color: var(--text-3);
   font-size: 12px;
 }
 .header-spacer {
   flex: 1;
 }
 .collapse-arrow {
-  color: #999;
+  color: var(--text-3);
   font-size: 12px;
 }
 .input-suffix-link {
-  color: #2080f0;
+  color: var(--primary);
   cursor: pointer;
   text-decoration: none;
   font-size: 14px;
@@ -1167,7 +1225,7 @@ async function reloadConfig() {
   text-decoration: underline;
 }
 .input-suffix-disabled {
-  color: #ccc;
+  color: var(--border);
   cursor: not-allowed;
   font-size: 14px;
   padding: 0 2px;
