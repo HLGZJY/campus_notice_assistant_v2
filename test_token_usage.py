@@ -99,12 +99,14 @@ def run():
         output_tokens=30,
         retry_count=2,
         notice_id=1,
+        provider="p1",
     )
     conn = get_connection()
     row = conn.execute("SELECT * FROM token_usage WHERE notice_id = 1").fetchone()
     check(
         "字段完整且数值正确",
         row and row["task"] == "extraction" and row["model"] == "m1"
+        and row["provider"] == "p1"
         and row["input_tokens"] == 120 and row["output_tokens"] == 30
         and row["retry_count"] == 2 and row["success"] == 1,
         f"task={row['task'] if row else None}",
@@ -115,7 +117,7 @@ def run():
         FakeResult([FakeResponse(100, 50), FakeResponse(30, 20)], final_output="ok")
     )
     result = asyncio.run(
-        run_agent(None, "p", task="extraction", model="m2", attempt=2, notice_id=2)
+        run_agent(None, "p", task="extraction", model="m2", attempt=2, notice_id=2, provider="p2")
     )
     check("返回 RunResult", result.final_output == "ok")
     row = conn.execute(
@@ -127,15 +129,16 @@ def run():
         f"in={row['input_tokens']} out={row['output_tokens']}",
     )
     check(
-        "task/model/notice_id/retry_count 正确",
-        row and row["model"] == "m2" and row["retry_count"] == 2 and row["success"] == 1,
+        "task/model/notice_id/retry_count/provider 正确",
+        row and row["model"] == "m2" and row["retry_count"] == 2 and row["success"] == 1
+        and row["provider"] == "p2",
     )
 
     print("\n== 3. run_agent 失败：记账 success=0 + 异常上抛 ==")
     utils_llm.Runner = FakeRunner(error=RuntimeError("boom"))
     raised = False
     try:
-        asyncio.run(run_agent(None, "p", task="qa", model="m3", attempt=1))
+        asyncio.run(run_agent(None, "p", task="qa", model="m3", attempt=1, provider="p3"))
     except RuntimeError as e:
         raised = "boom" in str(e)
     check("异常照常上抛", raised)
@@ -143,9 +146,9 @@ def run():
         "SELECT * FROM token_usage WHERE task = 'qa' AND model = 'm3'"
     ).fetchone()
     check(
-        "失败记账：success=0、error 含 RuntimeError、tokens=0",
+        "失败记账：success=0、error 含 RuntimeError、tokens=0、provider 保留",
         row and row["success"] == 0 and row["error"].startswith("RuntimeError")
-        and row["input_tokens"] == 0 and row["retry_count"] == 1,
+        and row["input_tokens"] == 0 and row["retry_count"] == 1 and row["provider"] == "p3",
         f"success={row['success'] if row else None}",
     )
 
@@ -163,14 +166,24 @@ def run():
 
     core_extractor.run_agent = fake_extract_run
     extractor = core_extractor.NoticeExtractor.__new__(core_extractor.NoticeExtractor)
+    extractor.provider = "extract-prov"
     extractor.models = ["extract-model"]
     extractor._agents = {}
     extractor._get_agent = lambda model: object()
     out = asyncio.run(extractor._call("extract-model", "prompt", None, attempt=1, notice_id=7))
     check("返回 NoticeExtraction", isinstance(out, NoticeExtraction))
     check(
-        "task/attempt/notice_id 传入统一调用点",
-        calls == [{"task": "extraction", "model": "extract-model", "attempt": 1, "notice_id": 7}],
+        "task/attempt/notice_id/provider 传入统一调用点",
+        calls
+        == [
+            {
+                "task": "extraction",
+                "model": "extract-model",
+                "attempt": 1,
+                "notice_id": 7,
+                "provider": "extract-prov",
+            }
+        ],
         f"{calls}",
     )
 
@@ -196,6 +209,7 @@ def run():
 
     core_todo.run_agent = FlakyRun()
     gen = core_todo.TodoGenerator.__new__(core_todo.TodoGenerator)
+    gen.provider = "todo-prov"
     gen.models = ["todo-model"]
     gen._agents = {}
     gen._get_agent = lambda model: object()
@@ -235,6 +249,7 @@ def run():
 
     core_qa.run_agent = fake_qa_run
     qa = core_qa.QAAgent.__new__(core_qa.QAAgent)
+    qa.provider = "qa-prov"
     qa.models = ["qa-model"]
     qa._agents = {}
     qa.top_k = 6
@@ -262,8 +277,8 @@ def run():
     res = asyncio.run(qa.ask("有哪些比赛？"))
     check("回答返回", res.answer == "测试回答")
     check(
-        "qa 链路 task/model 正确（attempt/notice_id 走 run_agent 默认值）",
-        calls == [{"task": "qa", "model": "qa-model"}],
+        "qa 链路 task/model/provider 正确（attempt/notice_id 走 run_agent 默认值）",
+        calls == [{"task": "qa", "model": "qa-model", "provider": "qa-prov"}],
         f"{calls}",
     )
 
@@ -288,7 +303,7 @@ def run():
         return FakeResp()
 
     requests.post = fake_post
-    emb = _MeteredOpenAIEmbeddings("https://fake.emb/v1", "k", "emb-model")
+    emb = _MeteredOpenAIEmbeddings("https://fake.emb/v1", "k", "emb-model", "emb-prov")
     vecs = emb.embed_documents(["a", "b"])
     check("向量按 index 排序返回", vecs == [[0.1, 0.2], [0.3, 0.4]])
     check(
@@ -299,7 +314,10 @@ def run():
     row = conn.execute(
         "SELECT * FROM token_usage WHERE task='embedding' AND model='emb-model' AND success=1"
     ).fetchone()
-    check("embedding 记账 input_tokens=200", row and row["input_tokens"] == 200)
+    check(
+        "embedding 记账 input_tokens=200 + provider",
+        row and row["input_tokens"] == 200 and row["provider"] == "emb-prov",
+    )
 
     v = emb.embed_query("q")
     check("embed_query 返回单个向量", v == [0.1, 0.2])
@@ -333,15 +351,19 @@ def run():
         def embed_query(self, text):
             return [1.0, 1.0]
 
-    ce = _CountingEmbeddings(FakeLocal(), "local-model")
+    ce = _CountingEmbeddings(FakeLocal(), "local-model", "local-prov")
     ce.embed_documents(["a"])
     ce.embed_query("q")
     rows = conn.execute(
         "SELECT * FROM token_usage WHERE task='embedding' AND model='local-model'"
     ).fetchall()
     check(
-        "本地 embedding 记 count-only 两条（input/output=0）",
-        len(rows) == 2 and all(r["input_tokens"] == 0 and r["output_tokens"] == 0 for r in rows),
+        "本地 embedding 记 count-only 两条（input/output=0）+ provider",
+        len(rows) == 2
+        and all(
+            r["input_tokens"] == 0 and r["output_tokens"] == 0 and r["provider"] == "local-prov"
+            for r in rows
+        ),
     )
 
     print("\n== 10. get_token_usage_summary 近 7 天分组汇总 ==")
@@ -349,18 +371,33 @@ def run():
     summary = get_token_usage_summary(conn, days=7)
     check("summary.total.calls == 表内全部记录数", summary["total"]["calls"] == total_all, f"{summary['total']['calls']} vs {total_all}")
     check(
-        "按任务×模型分组行数与 (task,model) 组合数一致",
+        "按任务×供应商×模型分组行数与 (task,provider,model) 组合数一致",
         len(summary["rows"]) == conn.execute(
-            "SELECT COUNT(*) AS n FROM (SELECT DISTINCT task, model FROM token_usage)"
+            "SELECT COUNT(*) AS n FROM (SELECT DISTINCT task, COALESCE(provider,''), model FROM token_usage)"
         ).fetchone()["n"],
         f"rows={len(summary['rows'])}",
     )
     # 各分组 input 之和 == 总 input
     group_input = sum(r["input_tokens"] for r in summary["rows"])
     check("分组 input 之和 == total.input_tokens", group_input == summary["total"]["input_tokens"])
-    # embedding 分组包含模型维度
-    emb_groups = [r for r in summary["rows"] if r["task"] == "embedding"]
-    check("embedding 分组含 emb-model 与 local-model", len(emb_groups) == 2, f"{[r['model'] for r in emb_groups]}")
+    # 分组行含 provider 与 task_label（服务层补中文标签）
+    emb_group = next((r for r in summary["rows"] if r["task"] == "embedding" and r["model"] == "emb-model"), None)
+    check(
+        "分组行带 provider",
+        emb_group is not None and emb_group["provider"] == "emb-prov",
+        f"{emb_group}",
+    )
+    from services.usage_service import get_token_usage_summary as service_summary
+
+    svc = service_summary(days=7)
+    svc_emb = next((r for r in svc["rows"] if r["task"] == "embedding" and r["model"] == "emb-model"), None)
+    check(
+        "服务层 task_label 中文标签",
+        svc_emb is not None
+        and svc_emb["task_label"] == "Embedding"
+        and svc["total"]["calls"] == summary["total"]["calls"],
+        f"{svc_emb}",
+    )
     conn.close()
 
     cleanup()

@@ -123,6 +123,7 @@ def main() -> None:
     extractor = core_extractor.NoticeExtractor.__new__(core_extractor.NoticeExtractor)
     extractor.api_key = "k"
     extractor.base_url = "https://example.com/v1"
+    extractor.provider = "test-prov"
     extractor.models = ["model-a", "model-b"]
     extractor._agents = {}
     extractor._get_agent = lambda model: object()
@@ -158,6 +159,7 @@ def main() -> None:
 
     core_todo.run_agent = fake_todo_run
     gen = core_todo.TodoGenerator.__new__(core_todo.TodoGenerator)
+    gen.provider = "test-prov"
     gen.models = ["todo-a", "todo-b"]
     gen._agents = {}
     gen._get_agent = lambda model: object()
@@ -177,6 +179,7 @@ def main() -> None:
 
     core_qa.run_agent = fake_qa_run
     qa = core_qa.QAAgent.__new__(core_qa.QAAgent)
+    qa.provider = "test-prov"
     qa.models = ["qa-a", "qa-b"]
     qa._agents = {}
     qa.top_k = 6

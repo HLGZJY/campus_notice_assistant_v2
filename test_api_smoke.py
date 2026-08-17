@@ -868,9 +868,119 @@ def _smoke(client, db_mod, config_dir, tmpdir, real_config_path, real_config_sna
     r = client.get("/api/v1/notices")
     check("batch-delete 后 total=1", r.json()["total"] == 1, f"total={r.json()['total']}")
 
+    # Token 用量（阶段 7 遗留项：GET /usage/tokens + 连通性测试记账）
+    _smoke_usage(client, db_mod)
+
     # 真实 config/app.yaml 未被修改
     now_snapshot = real_config_path.read_text(encoding="utf-8") if real_config_path.exists() else None
     check("真实 app.yaml 未修改", now_snapshot == real_config_snapshot)
+
+
+def _smoke_usage(client, db_mod) -> None:
+    """Token 用量（GET /usage/tokens）+ 连通性测试记账（阶段 7 遗留项落地）。"""
+    from datetime import timedelta
+    from types import SimpleNamespace
+    from unittest.mock import patch
+
+    print("== 15. Token 用量（GET /usage/tokens + 连通性测试记账） ==")
+    conn = db_mod.get_connection()
+    conn.execute("DELETE FROM token_usage")
+    conn.commit()
+
+    # 15.1 连通性测试记账：mock AsyncOpenAI → POST /config/test-model → token_usage task=test
+    class FakeChatResp:
+        def __init__(self):
+            self.choices = [SimpleNamespace(message=SimpleNamespace(content="hi"))]
+            self.usage = SimpleNamespace(prompt_tokens=7, completion_tokens=3)
+
+    class FakeChatCompletions:
+        async def create(self, **kwargs):
+            return FakeChatResp()
+
+    def _fake_openai(api_key, base_url):
+        return SimpleNamespace(chat=SimpleNamespace(completions=FakeChatCompletions()))
+
+    with patch("services.config_service.AsyncOpenAI", _fake_openai):
+        r = client.post(
+            "/api/v1/config/test-model",
+            json={"provider": "opencode-zen", "model": "model-a"},
+        )
+    check(
+        "连通性测试 ok",
+        r.status_code == 200 and r.json()["ok"] is True and r.json()["completion"] == "hi",
+        f"{r.json()}",
+    )
+    test_row = conn.execute("SELECT * FROM token_usage WHERE task='test'").fetchone()
+    check(
+        "连通性测试已记账 task=test/provider/model/usage",
+        test_row is not None
+        and test_row["provider"] == "opencode-zen"
+        and test_row["model"] == "model-a"
+        and test_row["input_tokens"] == 7
+        and test_row["output_tokens"] == 3
+        and test_row["success"] == 1,
+        f"{dict(test_row) if test_row else None}",
+    )
+
+    # 15.2 种子固定记录：近 7 天内 2 条（extraction/qa）+ 10 天前 1 条（验证 days 过滤：7 天内排除、30 天内包含）
+    now_iso = datetime.now().isoformat()
+    old_iso = (datetime.now() - timedelta(days=10)).isoformat()
+    conn.execute(
+        "INSERT INTO token_usage (task, provider, model, input_tokens, output_tokens, success, retry_count, created_at)"
+        " VALUES ('extraction', 'opencode-zen', 'model-a', 100, 50, 1, 0, ?)",
+        (now_iso,),
+    )
+    conn.execute(
+        "INSERT INTO token_usage (task, provider, model, input_tokens, output_tokens, success, retry_count, created_at)"
+        " VALUES ('qa', 'opencode-zen', 'model-a', 20, 30, 1, 0, ?)",
+        (now_iso,),
+    )
+    conn.execute(
+        "INSERT INTO token_usage (task, provider, model, input_tokens, output_tokens, success, retry_count, created_at)"
+        " VALUES ('extraction', 'old-prov', 'old-model', 1, 1, 0, 0, ?)",
+        (old_iso,),
+    )
+    conn.commit()
+    conn.close()
+
+    # 15.3 默认 days=7
+    r = client.get("/api/v1/usage/tokens")
+    body = r.json()
+    check("usage/tokens 200 + 字段", r.status_code == 200 and {"days", "rows", "total"} <= set(body), f"{list(body)}")
+    check("days=7 默认 total.calls=3（test+extraction+qa）", body["total"]["calls"] == 3, f"{body['total']}")
+    check(
+        "分组行数=3（task×provider×model）",
+        len(body["rows"]) == 3,
+        f"rows={len(body['rows'])}",
+    )
+    ext_row = next(
+        (x for x in body["rows"] if x["task"] == "extraction" and x["provider"] == "opencode-zen"),
+        None,
+    )
+    check(
+        "extraction 分组 input=100/output=50 + task_label",
+        ext_row is not None
+        and ext_row["input_tokens"] == 100
+        and ext_row["output_tokens"] == 50
+        and ext_row["task_label"] == "结构化提取",
+        f"{ext_row}",
+    )
+    test_row2 = next((x for x in body["rows"] if x["task"] == "test"), None)
+    check(
+        "test 分组 task_label=连通性测试",
+        test_row2 is not None and test_row2["task_label"] == "连通性测试",
+        f"{test_row2}",
+    )
+
+    # 15.4 days=30 包含 10 天前的旧记录
+    r = client.get("/api/v1/usage/tokens", params={"days": 30})
+    check("days=30 total.calls=4（含旧记录）", r.json()["total"]["calls"] == 4, f"{r.json()['total']}")
+
+    # 15.5 非法 days → 422
+    r = client.get("/api/v1/usage/tokens", params={"days": 0})
+    check("days=0 → 422", r.status_code == 422, f"status={r.status_code}")
+    r = client.get("/api/v1/usage/tokens", params={"days": 999})
+    check("days=999 → 422", r.status_code == 422, f"status={r.status_code}")
 
 
 if __name__ == "__main__":
