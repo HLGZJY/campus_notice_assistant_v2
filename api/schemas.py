@@ -369,10 +369,12 @@ class ProviderView(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     name: str
+    display_name: str = ""
     base_url: str = ""
     api_key_env: str = ""
     api_key_status: bool = False
     models: list[str] = []  # 可选模型名列表（纯手动维护）
+    type: str = ""  # 提供商类型徽章（local/bailian/opencode-zen/custom）
 
 
 class ModelProfileView(BaseModel):

@@ -4838,6 +4838,11 @@
             "type": "string",
             "title": "Name"
           },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name",
+            "default": ""
+          },
           "base_url": {
             "type": "string",
             "title": "Base Url",
@@ -4855,6 +4860,11 @@
             "type": "array",
             "title": "Models",
             "default": []
+          },
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "default": ""
           }
         },
         "type": "object",
@@ -4869,6 +4879,11 @@
           "name": {
             "type": "string",
             "title": "Name"
+          },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name",
+            "default": ""
           },
           "base_url": {
             "type": "string",
@@ -4892,6 +4907,11 @@
             "type": "array",
             "title": "Models",
             "default": []
+          },
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "default": ""
           }
         },
         "additionalProperties": true,

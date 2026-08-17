@@ -160,9 +160,11 @@ class ConfigStore:
         for name, p in self._data.providers.items():
             providers[name] = {
                 "name": p.name,
+                "display_name": p.display_name or p.name,
                 "base_url": p.base_url,
                 "api_key_env": p.api_key_env,
                 "models": p.models,
+                "type": p.type,
                 "api_key_status": self.get_api_key_status(name),
             }
         return {

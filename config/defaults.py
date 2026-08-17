@@ -15,23 +15,29 @@ from config.schema import (
 
 DEFAULT_PROVIDER_ZEN = ProviderConfig(
     name="opencode-zen",
+    display_name="OpenCode Zen",
     base_url="https://opencode.ai/zen/go/v1",
     api_key_env="OPENCODE_API_KEY",
     models=["kimi-k2.7-code", "deepseek-v4-pro", "kimi-k2.5-turbo"],
+    type="opencode-zen",
 )
 
 DEFAULT_PROVIDER_BAILIAN = ProviderConfig(
     name="bailian",
+    display_name="阿里云百炼",
     base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
     api_key_env="DASHSCOPE_API_KEY",
     models=["qwen3.7-flash", "qwen3.7-turbo", "qwen3.7-max"],
+    type="bailian",
 )
 
 DEFAULT_PROVIDER_LOCAL = ProviderConfig(
     name="local",
+    display_name="本地模型",
     base_url="",
     api_key_env="",
     models=["models/bge-small-zh-v1.5"],
+    type="local",
 )
 
 DEFAULT_MODELS = ModelsConfig(

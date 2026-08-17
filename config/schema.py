@@ -10,6 +10,22 @@ from typing import Literal, Optional, Union
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 
+def infer_provider_type(base_url: str) -> str:
+    """按 base_url 推断供应商类型（用于 type 留空时自动补全）。
+
+    已知映射：空 = local（本地模型）、阿里云百炼 = bailian、
+    opencode.ai = opencode-zen；其余一律 custom。
+    """
+    b = (base_url or "").strip().lower()
+    if not b:
+        return "local"
+    if "dashscope.aliyuncs.com" in b:
+        return "bailian"
+    if "opencode.ai" in b:
+        return "opencode-zen"
+    return "custom"
+
+
 class ProviderConfig(BaseModel):
     """LLM / Embedding 供应商配置。
 
@@ -19,9 +35,11 @@ class ProviderConfig(BaseModel):
     """
 
     name: str
+    display_name: str = ""  # 实例名（卡片标题）；空 = 视图回退用 name
     base_url: str = ""
     api_key_env: str = ""  # 环境变量名，如 OPENCODE_API_KEY；本地模型可空
     models: list[str] = []  # 可选模型名（纯手动维护；空 = 不提供下拉候选）
+    type: str = ""  # 提供商类型徽章；留空 = 按 base_url 自动推断（local/bailian/opencode-zen/custom）
 
     @field_validator("name")
     @classmethod
@@ -31,10 +49,27 @@ class ProviderConfig(BaseModel):
             raise ValueError("供应商名称不能为空")
         return v
 
+    @field_validator("display_name")
+    @classmethod
+    def _display_name_strip(cls, v: str) -> str:
+        return (v or "").strip()
+
     @field_validator("models")
     @classmethod
     def _models_strip(cls, v: list[str]) -> list[str]:
         return [m.strip() for m in v if m and m.strip()]
+
+    @field_validator("type")
+    @classmethod
+    def _type_strip(cls, v: str) -> str:
+        return (v or "").strip()
+
+    @model_validator(mode="after")
+    def _infer_type(self) -> "ProviderConfig":
+        """type 留空时按 base_url 推断并持久化，保证视图/任务无需二次推断。"""
+        if not self.type:
+            self.type = infer_provider_type(self.base_url)
+        return self
 
 
 class ModelProfile(BaseModel):

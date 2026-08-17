@@ -1596,6 +1596,11 @@ export interface components {
             /** Name */
             name: string;
             /**
+             * Display Name
+             * @default
+             */
+            display_name: string;
+            /**
              * Base Url
              * @default
              */
@@ -1610,6 +1615,11 @@ export interface components {
              * @default []
              */
             models: string[];
+            /**
+             * Type
+             * @default
+             */
+            type: string;
         };
         /**
          * ProviderView
@@ -1618,6 +1628,11 @@ export interface components {
         ProviderView: {
             /** Name */
             name: string;
+            /**
+             * Display Name
+             * @default
+             */
+            display_name: string;
             /**
              * Base Url
              * @default
@@ -1638,6 +1653,11 @@ export interface components {
              * @default []
              */
             models: string[];
+            /**
+             * Type
+             * @default
+             */
+            type: string;
         } & {
             [key: string]: unknown;
         };
