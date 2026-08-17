@@ -25,6 +25,21 @@ _TIME = re.compile(r"(?P<h>\d{1,2})[:：](?P<min>\d{2})")
 # 表示"时间点"的关键词，用于定位截止/报名时间
 _DEADLINE_KEYWORDS = ("截止", "报名截止", "提交", "前", "止")
 
+# 公示期区间："公示期为8月8日-8月14日" / "公示期从2025年11月3日至2025年11月10日" /
+# "公示期：2025年11月3日至11月10日" / "公示异议期：2026年7月1日--7月4日" /
+# "公示期自X日起至X日止"（年可缺，止以起为参考推断）
+_GONGSHI_PERIOD = re.compile(
+    r"公示(?:异议)?期(?:为|从|自|是)?[：:,、，]?"
+    r"(?P<s_yr>\d{4})?年?(?P<s_m>\d{1,2})月(?P<s_d>\d{1,2})[日号]?(?:起)?"
+    r"(?:至|到|—|–|~|～|-{1,2})"
+    r"(?:(?P<e_yr>\d{4})年?)?(?P<e_m>\d{1,2})月(?P<e_d>\d{1,2})[日号]?止?"
+)
+# 公示期单日兜底："公示期为2025年12月31日"
+_GONGSHI_SINGLE = re.compile(
+    r"公示(?:异议)?期(?:为|从|自|是)?[：:,、，]?"
+    r"(?P<y>\d{4})?年?(?P<m>\d{1,2})月(?P<d>\d{1,2})[日号]?"
+)
+
 
 def _normalize(text: str) -> str:
     text = text.translate(_FULLWIDTH)
@@ -112,3 +127,63 @@ def extract_reference_date(published_at: Optional[str], crawled_at: Optional[str
             except ValueError:
                 continue
     return None
+
+
+def _format_date_fragment(year: Optional[str], month: str, day: str) -> str:
+    """把正则捕获的年/月/日重组为原文片段，如 "2025年11月3日" 或 "8月14日"。"""
+    if year:
+        return f"{year}年{month}月{day}日"
+    return f"{month}月{day}日"
+
+
+def extract_gongshi_period(text: Optional[str], reference: Optional[date] = None) -> list[dict]:
+    """确定性提取公示期（结果公示类通知的固定内容），返回 key_dates 条目列表。
+
+    Args:
+        text: 通知正文原文。
+        reference: 参考日期（通知发布时间），用于缺失年份的推断。
+
+    Returns:
+        区间格式返回两条：{"label": "公示期开始"/"公示期结束", "date_raw", "datetime"}；
+        单日格式返回一条：{"label": "公示期", ...}；无公示期返回 []。
+    """
+    if not text:
+        return []
+    t = _normalize(text)
+
+    m = _GONGSHI_PERIOD.search(t)
+    if m:
+        g = m.groupdict()
+        start_raw = _format_date_fragment(g["s_yr"], g["s_m"], g["s_d"])
+        end_raw = _format_date_fragment(g["e_yr"], g["e_m"], g["e_d"])
+        start_dt = parse_chinese_datetime(start_raw, reference)
+        # 止缺年份时以起日为参考推断，跨年（如 12月28日 至 1月3日）能正确进到下一年
+        end_ref = start_dt.date() if start_dt else (reference or date.today())
+        end_dt = parse_chinese_datetime(end_raw, end_ref)
+        return [
+            {
+                "label": "公示期开始",
+                "date_raw": start_raw,
+                "datetime": start_dt.isoformat() if start_dt else None,
+            },
+            {
+                "label": "公示期结束",
+                "date_raw": end_raw,
+                "datetime": end_dt.isoformat() if end_dt else None,
+            },
+        ]
+
+    m = _GONGSHI_SINGLE.search(t)
+    if m:
+        g = m.groupdict()
+        raw = _format_date_fragment(g["y"], g["m"], g["d"])
+        dt = parse_chinese_datetime(raw, reference)
+        return [
+            {
+                "label": "公示期",
+                "date_raw": raw,
+                "datetime": dt.isoformat() if dt else None,
+            }
+        ]
+
+    return []

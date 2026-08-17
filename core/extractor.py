@@ -24,11 +24,12 @@ from agents import (
 from openai import AsyncOpenAI, BadRequestError
 
 from core.date_utils import (
+    extract_gongshi_period,
     extract_reference_date,
     resolve_datetime,
     strip_deadline_noise,
 )
-from core.models import NoticeExtraction
+from core.models import KeyDate, NoticeExtraction
 from utils.llm import get_model_candidates, is_failover_worthy, run_agent
 
 logger = logging.getLogger(__name__)
@@ -61,8 +62,8 @@ EXTRACTOR_INSTRUCTIONS = """你是一名校园通知结构化提取助手。你�
 - location_type：online（纯线上）/ offline（纯线下）/ hybrid（线上线下结合）。不确定填 null。
 - deadline_raw：最关键的行动截止时间【原文片段】，只包含日期时间本身，不包含"即日起至""前""截止"等前缀词。例如原文"报名时间：即日起至7月16日17：00"，deadline_raw 应为"7月16日17：00"。
 - deadline：把 deadline_raw 转成 ISO 8601 完整字符串（含年份），例如"2026-07-16T17:00:00"。年份推断规则：正文没写年份就用发布时间(published_at)的年份；若推断出的日期早于发布时间，则用下一年。此字段由你尽力给出，之后系统会再次校准。
-- key_dates：通知中所有其他重要时间点（报名截止之外的初赛、决赛、颁奖、结果公布等），每项包含：
-  - label：时间点含义，如"初赛""决赛""颁奖"
+- key_dates：通知中所有其他重要时间点（报名截止之外的初赛、决赛、颁奖、结果公布、公示期等），每项包含：
+  - label：时间点含义，如"初赛""决赛""颁奖""公示期开始""公示期结束"
   - date_raw：该时间点的原文片段，如"5月23日12:00-17:00"
   - datetime：ISO 8601，尽力给出，可先为 null
 - summary：1-2 句中文摘要，概括通知讲什么。
@@ -72,7 +73,7 @@ EXTRACTOR_INSTRUCTIONS = """你是一名校园通知结构化提取助手。你�
 2. 找不到某字段就填 null 或空数组，严禁编造。
 3. signup_url 只填真实网页链接；QQ群号、邮箱、二维码一律放到 signup_method。
 4. 纯线上活动 location 填 null、location_type 填 online。
-5. 政策/新闻/结果公示类通知没有报名和截止时间，deadline_raw/deadline/signup_method 填 null。
+5. 政策/新闻/结果公示类通知没有报名和截止时间，deadline_raw/deadline/signup_method 填 null。结果公示类若有"公示期为8月8日-8月14日"等公示期，拆成两条 key_dates：label 为"公示期开始"和"公示期结束"，date_raw 各自填起止日期原文。
 6. 输出必须是严格的 JSON 对象，字段名和上面的完全一致。"""
 
 
@@ -169,7 +170,7 @@ class NoticeExtractor:
 
         switched_errors: list[str] = []
         for model in self.models:
-            outcome = await self._try_model(model, prompt, reference, title, notice_id)
+            outcome = await self._try_model(model, prompt, reference, title, notice_id, content)
             if outcome is not None:
                 return outcome
             switched_errors.append(f"模型 {model} 失败")
@@ -188,6 +189,7 @@ class NoticeExtractor:
         reference: Optional[date],
         title: str,
         notice_id: Optional[int],
+        content: Optional[str] = None,
     ) -> Optional[ExtractionOutcome]:
         """在单个候选模型上执行「调用 + 校验重试」。
 
@@ -217,7 +219,7 @@ class NoticeExtractor:
                 return None
 
             best = ext
-            ext, errors = self._resolve_and_validate(ext, reference)
+            ext, errors = self._resolve_and_validate(ext, reference, content)
             if not errors:
                 return ExtractionOutcome(status=classify_status(ext), extraction=ext, error=None)
             last_error = "；".join(errors)
@@ -267,6 +269,7 @@ class NoticeExtractor:
         self,
         ext: NoticeExtraction,
         reference: Optional[date],
+        content: Optional[str] = None,
     ) -> tuple[NoticeExtraction, list[str]]:
         """时间规范化 + 语义校验。返回 (修正后的模型, 错误列表)。"""
         errors: list[str] = []
@@ -292,5 +295,14 @@ class NoticeExtractor:
                 kd.date_raw, reference
             )
             kd.datetime = resolved
+
+        # 3. 公示期：结果公示类关键内容固定，用确定性正则重算（移除 LLM 重复条目后前置）
+        if content:
+            gongshi = extract_gongshi_period(content, reference)
+            if gongshi:
+                ext.key_dates = [
+                    kd for kd in ext.key_dates if "公示期" not in (kd.label or "")
+                ]
+                ext.key_dates = [KeyDate(**item) for item in gongshi] + ext.key_dates
 
         return ext, errors
