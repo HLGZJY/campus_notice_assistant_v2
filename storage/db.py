@@ -88,7 +88,8 @@ CREATE INDEX IF NOT EXISTS idx_reminders_due ON reminders(due_at);
 
 CREATE TABLE IF NOT EXISTS token_usage (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    task TEXT NOT NULL,                  -- extraction / qa / todo / embedding
+    task TEXT NOT NULL,                  -- extraction / qa / todo / embedding / test
+    provider TEXT,                       -- 供应商名（多供应商阶段 7.2 起记录）
     model TEXT,
     notice_id INTEGER,                   -- 关联通知（提取任务），可空
     input_tokens INTEGER DEFAULT 0,
@@ -171,6 +172,8 @@ _MIGRATIONS = [
     "ALTER TABLE todos ADD COLUMN notes TEXT",
     # 阶段 7 提取前置过滤：预筛跳过原因（非 NULL 表示不参与 LLM 提取）
     "ALTER TABLE notices ADD COLUMN extract_skipped_reason TEXT",
+    # 阶段 7 Token 用量：记录调用供应商（多供应商候选列表 + 连通性测试）
+    "ALTER TABLE token_usage ADD COLUMN provider TEXT",
 ]
 
 
@@ -193,10 +196,12 @@ def _migrate(conn: sqlite3.Connection) -> None:
     notices_cols = _table_cols("notices")
     crawl_log_cols = _table_cols("crawl_log")
     todos_cols = _table_cols("todos")
+    token_usage_cols = _table_cols("token_usage")
     cols_by_table = {
         "notices": notices_cols,
         "crawl_log": crawl_log_cols,
         "todos": todos_cols,
+        "token_usage": token_usage_cols,
     }
     for stmt in _MIGRATIONS:
         table = stmt.split("ALTER TABLE ")[1].split(" ")[0]
@@ -927,6 +932,7 @@ def log_llm_usage(
     retry_count: int = 0,
     error: Optional[str] = None,
     notice_id: Optional[int] = None,
+    provider: Optional[str] = None,
 ) -> int:
     """记录一次 LLM 调用到 token 计量表，返回新 id。
 
@@ -935,10 +941,11 @@ def log_llm_usage(
     """
     cur = conn.execute(
         """INSERT INTO token_usage
-           (task, model, notice_id, input_tokens, output_tokens, success, retry_count, error, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+           (task, provider, model, notice_id, input_tokens, output_tokens, success, retry_count, error, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             task,
+            provider,
             model,
             notice_id,
             input_tokens,
@@ -991,18 +998,19 @@ def count_token_usage_by_task(
 def get_token_usage_summary(
     conn: sqlite3.Connection, days: int = 7
 ) -> dict:
-    """近 N 天 token 计量汇总：按任务 × 模型分组 + 总计（供配置页展示）。
+    """近 N 天 token 计量汇总：按任务 × 供应商 × 模型分组 + 总计（供配置页展示）。
 
     Args:
         days: 统计最近 N 天
 
     Returns:
-        rows: [{task, model, calls, success, failed, retry_calls, input_tokens, output_tokens}]
+        rows: [{task, provider, model, calls, success, failed, retry_calls, input_tokens, output_tokens}]
         total: 上述各指标的合计
     """
     cutoff = (datetime.now() - timedelta(days=days)).isoformat()
     rows = conn.execute(
         """SELECT task,
+                  COALESCE(provider, '') AS provider,
                   COALESCE(model, '') AS model,
                   COUNT(*) AS calls,
                   SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END) AS success,
@@ -1012,8 +1020,8 @@ def get_token_usage_summary(
                   COALESCE(SUM(output_tokens), 0) AS output_tokens
            FROM token_usage
            WHERE created_at >= ?
-           GROUP BY task, model
-           ORDER BY task, model""",
+           GROUP BY task, provider, model
+           ORDER BY task, provider, model""",
         (cutoff,),
     ).fetchall()
 

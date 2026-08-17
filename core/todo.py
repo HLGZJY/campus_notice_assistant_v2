@@ -125,7 +125,7 @@ class TodoGenerator:
     """
 
     def __init__(self, temperature: float = 0.0):
-        self.api_key, self.base_url, self.models = get_model_candidates("todo")
+        self.api_key, self.base_url, self.provider, self.models = get_model_candidates("todo")
         self.temperature = temperature  # 默认 0 提升确定性；评估脚本固定 temperature=0
         self._agents: dict[str, Agent] = {}
 
@@ -210,6 +210,7 @@ class TodoGenerator:
             model=model,
             attempt=attempt,
             notice_id=notice_id,
+            provider=self.provider,
         )
         output = result.final_output
         if not isinstance(output, TodoList):

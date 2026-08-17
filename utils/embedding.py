@@ -62,10 +62,12 @@ def _log_embedding_usage(
     input_tokens: int = 0,
     success: bool = True,
     error: Optional[str] = None,
+    provider: Optional[str] = None,
 ) -> None:
     """把一次 embedding 调用写入 token 计量表（task=embedding）。"""
     record_llm_usage(
         task="embedding",
+        provider=provider,
         model=model,
         input_tokens=input_tokens,
         output_tokens=0,
@@ -82,9 +84,10 @@ class _MeteredOpenAIEmbeddings:
     storage/vectorstore.py 无需改动。
     """
 
-    def __init__(self, base_url: str, api_key: str, model: str):
+    def __init__(self, base_url: str, api_key: str, model: str, provider: Optional[str] = None):
         self.base_url = base_url
         self.model = model
+        self.provider = provider
         self._headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
@@ -113,11 +116,11 @@ class _MeteredOpenAIEmbeddings:
                 if resp.status_code != 200 or "data" not in data:
                     raise RuntimeError(f"embedding 接口返回异常: HTTP {resp.status_code} {data}")
             except Exception as e:  # noqa: BLE001 —— 失败也要记一次计量
-                _log_embedding_usage(self.model, success=False, error=f"{type(e).__name__}: {e}")
+                _log_embedding_usage(self.model, success=False, error=f"{type(e).__name__}: {e}", provider=self.provider)
                 raise
             usage = data.get("usage") or {}
             input_tokens = int(usage.get("prompt_tokens") or usage.get("total_tokens") or 0)
-            _log_embedding_usage(self.model, input_tokens=input_tokens)
+            _log_embedding_usage(self.model, input_tokens=input_tokens, provider=self.provider)
             # 按 index 排序返回，保证与输入顺序一致
             batch_embeddings = [
                 d["embedding"] for d in sorted(data["data"], key=lambda d: d["index"])
@@ -129,26 +132,27 @@ class _MeteredOpenAIEmbeddings:
 class _CountingEmbeddings:
     """本地 embedding 包装：不产生 API 成本，仅记录调用次数（tokens=0）。"""
 
-    def __init__(self, inner, model: str):
+    def __init__(self, inner, model: str, provider: Optional[str] = None):
         self._inner = inner
         self.model = model
+        self.provider = provider
 
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
         try:
             vectors = self._inner.embed_documents(texts)
         except Exception as e:  # noqa: BLE001
-            _log_embedding_usage(self.model, success=False, error=f"{type(e).__name__}: {e}")
+            _log_embedding_usage(self.model, success=False, error=f"{type(e).__name__}: {e}", provider=self.provider)
             raise
-        _log_embedding_usage(self.model)
+        _log_embedding_usage(self.model, provider=self.provider)
         return vectors
 
     def embed_query(self, text: str) -> list[float]:
         try:
             vector = self._inner.embed_query(text)
         except Exception as e:  # noqa: BLE001
-            _log_embedding_usage(self.model, success=False, error=f"{type(e).__name__}: {e}")
+            _log_embedding_usage(self.model, success=False, error=f"{type(e).__name__}: {e}", provider=self.provider)
             raise
-        _log_embedding_usage(self.model)
+        _log_embedding_usage(self.model, provider=self.provider)
         return vector
 
 
@@ -192,6 +196,7 @@ def create_embeddings(provider_name: Optional[str] = None, model_name: Optional[
                 model_kwargs={"local_files_only": True},
             ),
             local_model,
+            provider.name,
         )
 
     # 2. 尝试 OpenAI-compatible embedding API（按候选模型列表顺序探测）
@@ -206,7 +211,7 @@ def create_embeddings(provider_name: Optional[str] = None, model_name: Optional[
             if _probe_embedding_endpoint(provider.base_url, api_key, cand):
                 try:
                     logger.info(f"使用 OpenAI-compatible embedding 模型: {cand} @ {provider.base_url}")
-                    return _MeteredOpenAIEmbeddings(provider.base_url, api_key, cand)
+                    return _MeteredOpenAIEmbeddings(provider.base_url, api_key, cand, provider.name)
                 except Exception as e:
                     logger.warning(
                         f"embedding 探测成功但初始化失败 ({type(e).__name__}: {e})，尝试下一个候选。"
@@ -226,6 +231,7 @@ def create_embeddings(provider_name: Optional[str] = None, model_name: Optional[
             model_kwargs={"local_files_only": True},
         ),
         DEFAULT_LOCAL_EMBEDDING_MODEL,
+        provider.name,
     )
 
 

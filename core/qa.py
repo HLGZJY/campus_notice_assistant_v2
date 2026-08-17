@@ -81,7 +81,7 @@ class QAAgent:
 
             index = VectorIndex()
         self.index = index
-        self.api_key, self.base_url, self.models = get_model_candidates("qa")
+        self.api_key, self.base_url, self.provider, self.models = get_model_candidates("qa")
         self.top_k = top_k
         self.max_sources = max_sources
         # 模块 2.3 过期策略（none/decay/filter）；默认 none=不过滤，实验结论落地后再切换
@@ -212,7 +212,7 @@ class QAAgent:
         for model in self.models:
             try:
                 agent = self._get_agent(model)
-                result = await run_agent(agent, prompt, task="qa", model=model)
+                result = await run_agent(agent, prompt, task="qa", model=model, provider=self.provider)
                 break
             except Exception as e:
                 if not is_failover_worthy(e):
@@ -270,7 +270,7 @@ class QAAgent:
             started = False
             try:
                 agent = self._get_agent(model)
-                async for delta in run_agent_stream(agent, prompt, task="qa", model=model):
+                async for delta in run_agent_stream(agent, prompt, task="qa", model=model, provider=self.provider):
                     started = True
                     parts.append(delta)
                     yield ("delta", delta)

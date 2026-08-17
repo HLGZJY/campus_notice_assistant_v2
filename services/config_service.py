@@ -217,6 +217,37 @@ def test_source_url(url: str, timeout: int = 15) -> dict:
         }
 
 
+def _record_connection_test(
+    provider_name: str,
+    model_name: str,
+    response,
+    error: Optional[str] = None,
+) -> None:
+    """把一次连通性测试写入 token 计量表（task=test）。
+
+    成功读 response.usage 记账；失败记 success=0 + error。
+    计量失败不影响主流程（record_llm_usage 内部已兜底）。
+    """
+    from utils.llm import record_llm_usage
+
+    input_tokens = 0
+    output_tokens = 0
+    if error is None and response is not None:
+        usage = getattr(response, "usage", None) or None
+        if usage is not None:
+            input_tokens = int(getattr(usage, "prompt_tokens", 0) or 0)
+            output_tokens = int(getattr(usage, "completion_tokens", 0) or 0)
+    record_llm_usage(
+        task="test",
+        provider=provider_name,
+        model=model_name,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        success=error is None,
+        error=error,
+    )
+
+
 def test_model_connection(provider_name: str, model_name: str, timeout: int = 30) -> dict:
     """测试模型连接是否可用。
 
@@ -249,6 +280,7 @@ def test_model_connection(provider_name: str, model_name: str, timeout: int = 30
             )
         )
         latency_ms = int((time.time() - start) * 1000)
+        _record_connection_test(provider_name, model_name, response)
         return {
             "ok": True,
             "latency_ms": latency_ms,
@@ -256,6 +288,7 @@ def test_model_connection(provider_name: str, model_name: str, timeout: int = 30
             "error": None,
         }
     except Exception as e:
+        _record_connection_test(provider_name, model_name, None, error=f"{type(e).__name__}: {e}")
         return {"ok": False, "latency_ms": 0, "error": f"{type(e).__name__}: {e}"}
 
 

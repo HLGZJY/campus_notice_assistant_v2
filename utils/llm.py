@@ -61,19 +61,19 @@ def get_model_for_task(task: str) -> tuple[str, str, str]:
     return api_key, provider.base_url, model_name
 
 
-def get_model_candidates(task: str) -> tuple[Optional[str], str, list[str]]:
+def get_model_candidates(task: str) -> tuple[Optional[str], str, Optional[str], list[str]]:
     """获取指定任务的有序模型候选（同供应商内失败切换用）。
 
     Args:
         task: "extraction" | "qa" | "todo" | "embedding"
 
     Returns:
-        (api_key, base_url, [model_name, ...])，按尝试优先级排序。
+        (api_key, base_url, provider_name, [model_name, ...])，按尝试优先级排序。
     """
     store = ConfigStore.get_instance()
     provider, models = store.get_model_candidates(task)
     api_key = store.get_api_key(provider.name)
-    return api_key, provider.base_url, models
+    return api_key, provider.base_url, provider.name, models
 
 
 def is_failover_worthy(exc: Exception) -> bool:
@@ -116,6 +116,7 @@ def record_llm_usage(
     retry_count: int = 0,
     error: Optional[str] = None,
     notice_id: Optional[int] = None,
+    provider: Optional[str] = None,
 ) -> None:
     """把一次 LLM 调用写入 token_usage 计量表（成功/失败都记账）。
 
@@ -129,6 +130,7 @@ def record_llm_usage(
             log_llm_usage(
                 conn,
                 task=task,
+                provider=provider,
                 model=model,
                 input_tokens=input_tokens,
                 output_tokens=output_tokens,
@@ -166,6 +168,7 @@ async def run_agent(
     model: str,
     attempt: int = 0,
     notice_id: Optional[int] = None,
+    provider: Optional[str] = None,
 ):
     """统一 LLM 调用点：Runner.run + token 计量。
 
@@ -178,6 +181,7 @@ async def run_agent(
         model: 实际使用模型名
         attempt: 本次是第几次尝试（0 = 首调），用于区分首调与重试
         notice_id: 关联通知 ID（提取/待办），问答为 None
+        provider: 供应商名（用量分析按供应商分组）
 
     Returns:
         RunResult。调用失败时先写 success=0 的计量记录，再重新抛出异常，
@@ -188,6 +192,7 @@ async def run_agent(
     except Exception as e:  # noqa: BLE001 —— 失败也要记一次计量
         record_llm_usage(
             task=task,
+            provider=provider,
             model=model,
             success=False,
             retry_count=attempt,
@@ -198,6 +203,7 @@ async def run_agent(
     input_tokens, output_tokens = _extract_usage(result)
     record_llm_usage(
         task=task,
+        provider=provider,
         model=model,
         input_tokens=input_tokens,
         output_tokens=output_tokens,
@@ -216,6 +222,7 @@ async def run_agent_stream(
     model: str,
     attempt: int = 0,
     notice_id: Optional[int] = None,
+    provider: Optional[str] = None,
 ):
     """统一 LLM 流式调用点：Runner.run_streamed + 逐 delta 产出 + token 计量。
 
@@ -244,6 +251,7 @@ async def run_agent_stream(
     except Exception as e:  # noqa: BLE001 —— 失败也要记一次计量
         record_llm_usage(
             task=task,
+            provider=provider,
             model=model,
             success=False,
             retry_count=attempt,
@@ -253,6 +261,7 @@ async def run_agent_stream(
         raise
     record_llm_usage(
         task=task,
+        provider=provider,
         model=model,
         input_tokens=int(getattr(usage, "input_tokens", 0) or 0),
         output_tokens=int(getattr(usage, "output_tokens", 0) or 0),

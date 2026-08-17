@@ -127,7 +127,7 @@ class NoticeExtractor:
     """
 
     def __init__(self):
-        self.api_key, self.base_url, self.models = get_model_candidates("extraction")
+        self.api_key, self.base_url, self.provider, self.models = get_model_candidates("extraction")
         self._agents: dict[str, Agent] = {}
 
     def _get_agent(self, model: str) -> Agent:
@@ -256,6 +256,7 @@ class NoticeExtractor:
             model=model,
             attempt=attempt,
             notice_id=notice_id,
+            provider=self.provider,
         )
         output = result.final_output
         if not isinstance(output, NoticeExtraction):
