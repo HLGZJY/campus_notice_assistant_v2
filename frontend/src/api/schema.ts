@@ -71,6 +71,8 @@ export type SchedulerStatus = components['schemas']['SchedulerStatus']
 export type SchedulerJobView = components['schemas']['SchedulerJobView']
 export type EventCreateRequest = components['schemas']['EventCreateRequest']
 export type EventCreateResult = components['schemas']['EventCreateResult']
+export type TokenUsageRow = components['schemas']['TokenUsageRow']
+export type TokenUsageSummary = components['schemas']['TokenUsageSummary']
 
 /**
  * SSE done 事件负载里的来源引用（QAResult 的 as_source 转换后契约形态）。

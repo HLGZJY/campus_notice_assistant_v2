@@ -20,6 +20,7 @@ import type {
   TestModelResult,
   TestSourceRequest,
   TestSourceResult,
+  TokenUsageSummary,
 } from '../api/schema'
 
 export const useConfigStore = defineStore('config', () => {
@@ -30,6 +31,7 @@ export const useConfigStore = defineStore('config', () => {
   const crawl = ref<CrawlConfig | null>(null)
   const extract = ref<ExtractConfig | null>(null)
   const disk = ref<DiskInfo | undefined>(undefined)
+  const tokenUsage = ref<TokenUsageSummary | null>(null)
   const loading = ref(false)
 
   async function fetchConfig() {
@@ -63,6 +65,12 @@ export const useConfigStore = defineStore('config', () => {
 
   async function fetchDisk() {
     disk.value = await get<DiskInfo>(endpoints.config.disk)
+  }
+
+  async function fetchTokenUsage(days: number) {
+    const summary = await get<TokenUsageSummary>(endpoints.usage.tokens, { days })
+    tokenUsage.value = summary
+    return summary
   }
 
   async function updateModels(body: ModelsConfig) {
@@ -110,6 +118,7 @@ export const useConfigStore = defineStore('config', () => {
     crawl,
     extract,
     disk,
+    tokenUsage,
     loading,
     fetchConfig,
     fetchModels,
@@ -118,6 +127,7 @@ export const useConfigStore = defineStore('config', () => {
     fetchCrawl,
     fetchExtract,
     fetchDisk,
+    fetchTokenUsage,
     updateModels,
     updateProviders,
     updateSources,

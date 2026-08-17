@@ -3530,6 +3530,68 @@
         }
       }
     },
+    "/api/v1/usage/tokens": {
+      "get": {
+        "tags": [
+          "usage"
+        ],
+        "summary": "Get Tokens",
+        "description": "近 N 天 token 用量汇总（按任务 × 供应商 × 模型分组 + 总计）。",
+        "operationId": "get_tokens_api_v1_usage_tokens_get",
+        "parameters": [
+          {
+            "name": "days",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 365,
+              "minimum": 1,
+              "default": 7,
+              "title": "Days"
+            }
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenUsageSummary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/health": {
       "get": {
         "tags": [
@@ -6099,6 +6161,89 @@
         "type": "object",
         "title": "TodoUpdateRequest",
         "description": "待办更新请求体（PATCH）：缺失字段 = 不修改；显式 null = 清空。"
+      },
+      "TokenUsageRow": {
+        "properties": {
+          "task": {
+            "type": "string",
+            "title": "Task"
+          },
+          "provider": {
+            "type": "string",
+            "title": "Provider",
+            "default": ""
+          },
+          "model": {
+            "type": "string",
+            "title": "Model",
+            "default": ""
+          },
+          "calls": {
+            "type": "integer",
+            "title": "Calls",
+            "default": 0
+          },
+          "success": {
+            "type": "integer",
+            "title": "Success",
+            "default": 0
+          },
+          "failed": {
+            "type": "integer",
+            "title": "Failed",
+            "default": 0
+          },
+          "retry_calls": {
+            "type": "integer",
+            "title": "Retry Calls",
+            "default": 0
+          },
+          "input_tokens": {
+            "type": "integer",
+            "title": "Input Tokens",
+            "default": 0
+          },
+          "output_tokens": {
+            "type": "integer",
+            "title": "Output Tokens",
+            "default": 0
+          },
+          "task_label": {
+            "type": "string",
+            "title": "Task Label",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "task"
+        ],
+        "title": "TokenUsageRow",
+        "description": "token 计量分组行（按 task × provider × model）。"
+      },
+      "TokenUsageSummary": {
+        "properties": {
+          "days": {
+            "type": "integer",
+            "title": "Days",
+            "default": 7
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/TokenUsageRow"
+            },
+            "type": "array",
+            "title": "Rows"
+          },
+          "total": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Total"
+          }
+        },
+        "type": "object",
+        "title": "TokenUsageSummary",
+        "description": "token 用量汇总：近 N 天分组明细 + 总计。"
       },
       "ValidationError": {
         "properties": {

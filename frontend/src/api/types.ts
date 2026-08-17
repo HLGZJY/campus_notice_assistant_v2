@@ -999,6 +999,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/usage/tokens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Tokens
+         * @description 近 N 天 token 用量汇总（按任务 × 供应商 × 模型分组 + 总计）。
+         */
+        get: operations["get_tokens_api_v1_usage_tokens_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/health": {
         parameters: {
             query?: never;
@@ -2245,6 +2265,76 @@ export interface components {
             due_at?: string | null;
             /** Notes */
             notes?: string | null;
+        };
+        /**
+         * TokenUsageRow
+         * @description token 计量分组行（按 task × provider × model）。
+         */
+        TokenUsageRow: {
+            /** Task */
+            task: string;
+            /**
+             * Provider
+             * @default
+             */
+            provider: string;
+            /**
+             * Model
+             * @default
+             */
+            model: string;
+            /**
+             * Calls
+             * @default 0
+             */
+            calls: number;
+            /**
+             * Success
+             * @default 0
+             */
+            success: number;
+            /**
+             * Failed
+             * @default 0
+             */
+            failed: number;
+            /**
+             * Retry Calls
+             * @default 0
+             */
+            retry_calls: number;
+            /**
+             * Input Tokens
+             * @default 0
+             */
+            input_tokens: number;
+            /**
+             * Output Tokens
+             * @default 0
+             */
+            output_tokens: number;
+            /**
+             * Task Label
+             * @default
+             */
+            task_label: string;
+        };
+        /**
+         * TokenUsageSummary
+         * @description token 用量汇总：近 N 天分组明细 + 总计。
+         */
+        TokenUsageSummary: {
+            /**
+             * Days
+             * @default 7
+             */
+            days: number;
+            /** Rows */
+            rows?: components["schemas"]["TokenUsageRow"][];
+            /** Total */
+            total?: {
+                [key: string]: unknown;
+            };
         };
         /** ValidationError */
         ValidationError: {
@@ -4170,6 +4260,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EventCreateResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_tokens_api_v1_usage_tokens_get: {
+        parameters: {
+            query?: {
+                days?: number;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenUsageSummary"];
                 };
             };
             /** @description Validation Error */

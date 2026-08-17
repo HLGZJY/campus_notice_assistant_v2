@@ -62,6 +62,9 @@ export const endpoints = {
     detail: (id: number) => `${API_BASE}/tasks/${id}`,
   },
   events: `${API_BASE}/events`,
+  usage: {
+    tokens: `${API_BASE}/usage/tokens`,
+  },
   scheduler: {
     status: `${API_BASE}/scheduler/status`,
   },

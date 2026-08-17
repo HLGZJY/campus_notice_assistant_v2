@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useDialog, useMessage } from 'naive-ui'
 import { useConfigStore } from '../stores/useConfigStore'
 import type {
@@ -11,6 +11,8 @@ import type {
   ProviderConfig,
   ReloadResult,
   SourceConfig,
+  TokenUsageRow,
+  TokenUsageSummary,
 } from '../api/schema'
 
 const message = useMessage()
@@ -42,6 +44,41 @@ const crawlExpanded = ref(false)
 const crawlHovered = ref(false)
 const extractExpanded = ref(false)
 const extractHovered = ref(false)
+
+// ---- Token 用量 Tab（GET /usage/tokens，阶段 7 遗留项落地） ----
+const usageDays = ref(7)
+const usageLoading = ref(false)
+const usageSummary = ref<TokenUsageSummary | null>(null)
+
+async function loadUsage() {
+  usageLoading.value = true
+  try {
+    usageSummary.value = await cfg.fetchTokenUsage(usageDays.value)
+  } catch {
+    message.error('Token 用量加载失败')
+  } finally {
+    usageLoading.value = false
+  }
+}
+
+const usageRows = computed<TokenUsageRow[]>(() => usageSummary.value?.rows ?? [])
+const usageTotal = computed(() => usageSummary.value?.total ?? {})
+const usageColumns = [
+  { title: '任务', key: 'task_label' },
+  { title: '供应商', key: 'provider' },
+  { title: '模型', key: 'model' },
+  { title: '调用', key: 'calls' },
+  { title: '成功', key: 'success' },
+  { title: '失败', key: 'failed' },
+  { title: '重试', key: 'retry_calls' },
+  { title: '输入 tokens', key: 'input_tokens' },
+  { title: '输出 tokens', key: 'output_tokens' },
+]
+
+watch(usageDays, () => loadUsage())
+watch(activeTab, (tab) => {
+  if (tab === 'usage') loadUsage()
+})
 
 function isInteractiveTarget(e: MouseEvent): boolean {
   const el = e.target as HTMLElement | null
@@ -980,9 +1017,50 @@ async function reloadConfig() {
         </n-tab-pane>
 
         <n-tab-pane name="usage" tab="Token 用量">
-          <n-alert type="info" :bordered="false">
-            Token 用量分析依赖 <code>GET /usage/tokens</code> 端点，后端暂未实现（§7 遗留项），后续版本提供。
-          </n-alert>
+          <n-space vertical size="large">
+            <n-space align="center">
+              <n-radio-group v-model:value="usageDays" size="small">
+                <n-radio-button :value="7">近 7 天</n-radio-button>
+                <n-radio-button :value="30">近 30 天</n-radio-button>
+                <n-radio-button :value="90">近 90 天</n-radio-button>
+              </n-radio-group>
+              <n-button size="small" :loading="usageLoading" @click="loadUsage">刷新</n-button>
+              <span style="color: #999; font-size: 12px">
+                统计近 {{ usageDays }} 天所有 LLM 调用（提取 / 问答 / 待办 / Embedding / 连通性测试）
+              </span>
+            </n-space>
+
+            <n-spin :show="usageLoading">
+              <template v-if="usageTotal.calls">
+                <n-grid :cols="5" x-gap="12">
+                  <n-grid-item>
+                    <n-statistic label="调用次数" :value="usageTotal.calls ?? 0" />
+                  </n-grid-item>
+                  <n-grid-item>
+                    <n-statistic label="输入 tokens" :value="usageTotal.input_tokens ?? 0" />
+                  </n-grid-item>
+                  <n-grid-item>
+                    <n-statistic label="输出 tokens" :value="usageTotal.output_tokens ?? 0" />
+                  </n-grid-item>
+                  <n-grid-item>
+                    <n-statistic label="成功" :value="usageTotal.success ?? 0" />
+                  </n-grid-item>
+                  <n-grid-item>
+                    <n-statistic label="失败" :value="usageTotal.failed ?? 0" />
+                  </n-grid-item>
+                </n-grid>
+                <n-data-table
+                  :columns="usageColumns"
+                  :data="usageRows"
+                  size="small"
+                  :bordered="false"
+                  :max-height="380"
+                  style="margin-top: 12px"
+                />
+              </template>
+              <n-empty v-else-if="!usageLoading" description="暂无 Token 调用记录" />
+            </n-spin>
+          </n-space>
         </n-tab-pane>
 
         <n-tab-pane name="reload" tab="重载与磁盘">
