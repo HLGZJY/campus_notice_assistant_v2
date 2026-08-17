@@ -28,6 +28,7 @@ const filterMatched = ref(false)
 const publishedRange = ref<[number, number] | null>(null)
 const crawledRange = ref<[number, number] | null>(null)
 const oldDays = ref(30)
+const sortBy = ref<'published' | 'crawled'>('published')
 
 const matchMap = ref<Record<string, string[]>>({})
 const detail = ref<NoticeDetail | null>(null)
@@ -116,6 +117,7 @@ async function refresh() {
   loading.value = true
   try {
     const params: Record<string, unknown> = { page: notices.page, page_size: notices.pageSize }
+    params.sort_by = sortBy.value
     if (filterSource.value) params.source = filterSource.value
     if (filterType.value) params.notice_type = filterType.value
     if (filterStatus.value) params.status = filterStatus.value
@@ -500,6 +502,17 @@ function keyDatesText(d: NoticeDetail): string {
         </n-form-item>
         <n-form-item label="抓取时间">
           <n-date-picker v-model:value="crawledRange" type="daterange" clearable style="width: 250px" />
+        </n-form-item>
+        <n-form-item label="排序">
+          <n-select
+            v-model:value="sortBy"
+            :options="[
+              { label: '发布时间 ↓', value: 'published' },
+              { label: '抓取时间 ↓', value: 'crawled' },
+            ]"
+            @update:value="refresh"
+            style="width: 130px"
+          />
         </n-form-item>
         <n-form-item>
           <n-checkbox v-model:checked="filterMatched">只看行动型</n-checkbox>

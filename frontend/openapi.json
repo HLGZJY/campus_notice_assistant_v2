@@ -2818,7 +2818,7 @@
           "notices"
         ],
         "summary": "List Notices",
-        "description": "多条件分页查询通知列表（含时间范围筛选，返回分页信封）。",
+        "description": "多条件分页查询通知列表（含时间范围筛选，返回分页信封；sort_by 控制排序字段）。",
         "operationId": "list_notices_api_v1_notices_get",
         "parameters": [
           {
@@ -2979,6 +2979,17 @@
                 }
               ],
               "title": "Crawled To"
+            }
+          },
+          {
+            "name": "sort_by",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^(published|crawled)$",
+              "default": "published",
+              "title": "Sort By"
             }
           },
           {

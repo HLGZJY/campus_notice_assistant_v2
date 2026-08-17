@@ -238,6 +238,24 @@ def _smoke(client, db_mod, config_dir, tmpdir, real_config_path, real_config_sna
     r = client.get("/api/v1/notices", params={"page_size": 1})
     check("page_size=1 返回 1 条", len(r.json()["items"]) == 1 and r.json()["total"] == 3, f"{r.json()}")
 
+    print("== 3.5 排序 ==")
+    r = client.get("/api/v1/notices", params={"sort_by": "published"})
+    published_order = [it["published_at"] for it in r.json()["items"] if it["published_at"]]
+    check(
+        "sort_by=published 发布时间倒序",
+        published_order == sorted(published_order, reverse=True),
+        f"{published_order}",
+    )
+    r = client.get("/api/v1/notices", params={"sort_by": "crawled"})
+    crawled_order = [it["crawled_at"] for it in r.json()["items"]]
+    check(
+        "sort_by=crawled 抓取时间倒序",
+        crawled_order == sorted(crawled_order, reverse=True),
+        f"{crawled_order}",
+    )
+    r = client.get("/api/v1/notices", params={"sort_by": "foo"})
+    check("sort_by 非法值 422", r.status_code == 422, f"status={r.status_code}")
+
     print("== 4. 统计 / 来源 / 类型 ==")
     r = client.get("/api/v1/notices/status-counts")
     counts = r.json()

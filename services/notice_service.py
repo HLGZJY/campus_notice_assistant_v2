@@ -206,6 +206,7 @@ def get_notices(
     crawled_to: Optional[str] = None,
     page: int = 1,
     page_size: int = 20,
+    sort_by: str = "published",
 ) -> dict:
     """多条件分页查询通知列表。
 
@@ -219,6 +220,7 @@ def get_notices(
         published_before: 发布时间严格早于该日期（清理预设）
         page: 页码（从 1 起）
         page_size: 每页条数
+        sort_by: published（默认，按发布时间倒序，无发布时间用抓取时间兜底）/ crawled（按抓取时间倒序）
 
     Returns:
         {"items": [...], "total": int, "page": int, "page_size": int}
@@ -252,9 +254,14 @@ def get_notices(
         w = (" WHERE " + " AND ".join(where)) if where else ""
         total = conn.execute(f"SELECT COUNT(*) AS n FROM notices{w}", params).fetchone()["n"]
 
+        if sort_by == "crawled":
+            order = "ORDER BY crawled_at DESC, id DESC"
+        else:
+            order = "ORDER BY COALESCE(published_at, crawled_at) DESC, id DESC"
+
         offset = max(0, (page - 1) * page_size)
         rows = conn.execute(
-            f"SELECT * FROM notices{w} ORDER BY crawled_at DESC, id DESC LIMIT ? OFFSET ?",
+            f"SELECT * FROM notices{w} {order} LIMIT ? OFFSET ?",
             params + [page_size, offset],
         ).fetchall()
         return {

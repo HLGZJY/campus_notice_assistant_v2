@@ -844,7 +844,7 @@ export interface paths {
         };
         /**
          * List Notices
-         * @description 多条件分页查询通知列表（含时间范围筛选，返回分页信封）。
+         * @description 多条件分页查询通知列表（含时间范围筛选，返回分页信封；sort_by 控制排序字段）。
          */
         get: operations["list_notices_api_v1_notices_get"];
         put?: never;
@@ -3879,6 +3879,7 @@ export interface operations {
                 published_before?: string | null;
                 crawled_from?: string | null;
                 crawled_to?: string | null;
+                sort_by?: string;
                 page?: number;
                 page_size?: number;
             };

@@ -46,16 +46,16 @@ onMounted(() => {
 <template>
   <n-message-provider>
     <n-dialog-provider>
-      <n-layout has-sider style="min-height: 100vh">
-        <n-layout-sider bordered width="220" :native-scrollbar="false">
+      <n-layout position="absolute" has-sider style="inset: 0">
+        <n-layout-sider bordered width="220">
           <n-menu
             :value="route.path"
             :options="menuItems.map(item => ({ key: item.key, label: () => renderMenuItem(item) }))"
             @update:value="onMenuUpdate"
           />
         </n-layout-sider>
-        <n-layout style="padding: 24px">
-          <n-layout-content>
+        <n-layout :native-scrollbar="false" style="height: 100%">
+          <n-layout-content content-style="padding: 24px" :native-scrollbar="false">
             <router-view />
           </n-layout-content>
         </n-layout>
@@ -63,3 +63,12 @@ onMounted(() => {
     </n-dialog-provider>
   </n-message-provider>
 </template>
+
+<style>
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+}
+</style>

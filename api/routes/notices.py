@@ -84,10 +84,11 @@ def list_notices(
     published_before: Optional[str] = Query(default=None),
     crawled_from: Optional[str] = Query(default=None),
     crawled_to: Optional[str] = Query(default=None),
+    sort_by: str = Query(default="published", pattern="^(published|crawled)$"),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=200),
 ) -> NoticePage:
-    """多条件分页查询通知列表（含时间范围筛选，返回分页信封）。"""
+    """多条件分页查询通知列表（含时间范围筛选，返回分页信封；sort_by 控制排序字段）。"""
     data = get_notices(
         status=status,
         source=source,
@@ -101,6 +102,7 @@ def list_notices(
         crawled_to=crawled_to,
         page=page,
         page_size=page_size,
+        sort_by=sort_by,
     )
     items = [
         NoticeSummary(
