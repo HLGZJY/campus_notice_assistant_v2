@@ -590,6 +590,35 @@ class SchedulerStatus(BaseModel):
     recent_runs: list[dict] = Field(default_factory=list)
 
 
+# ---------- 用量（盘点 §5.6 用量映射表 + 阶段 7 遗留项） ----------
+#
+# 约定：GET /usage/tokens 返回 usage_service.get_token_usage_summary 的 dict，
+# 分组为任务 × 供应商 × 模型；task_label 为中文标签单一事实源（services/usage_service.py）。
+
+
+class TokenUsageRow(BaseModel):
+    """token 计量分组行（按 task × provider × model）。"""
+
+    task: str
+    provider: str = ""
+    model: str = ""
+    calls: int = 0
+    success: int = 0
+    failed: int = 0
+    retry_calls: int = 0
+    input_tokens: int = 0
+    output_tokens: int = 0
+    task_label: str = ""
+
+
+class TokenUsageSummary(BaseModel):
+    """token 用量汇总：近 N 天分组明细 + 总计。"""
+
+    days: int = 7
+    rows: list[TokenUsageRow] = Field(default_factory=list)
+    total: dict = Field(default_factory=dict)
+
+
 # ---------- 埋点（阶段 7，前端 fire-and-forget 上报） ----------
 #
 # 约定：写入逻辑归 tracking_service.track_event（独立短连接、整体 try/except，
