@@ -34,6 +34,57 @@ const sourceTestBusy = ref<Record<string, boolean>>({})
 const saving = ref(false)
 const reloading = ref(false)
 const loading = ref(false)
+const sourceExpanded = ref<Record<number, boolean>>({})
+const sourceHovered = ref<Record<number, boolean>>({})
+const providerExpanded = ref<Record<string, boolean>>({})
+const providerHovered = ref<Record<string, boolean>>({})
+const crawlExpanded = ref(false)
+const crawlHovered = ref(false)
+const extractExpanded = ref(false)
+const extractHovered = ref(false)
+
+function isInteractiveTarget(e: MouseEvent): boolean {
+  const el = e.target as HTMLElement | null
+  if (!el) return false
+  return !!el.closest(
+    'button, a, input, textarea, select, option, .n-button, .n-input, .n-base-select, .n-select, .n-switch, .n-input-number, .n-checkbox, .n-radio, .n-tag, .n-slider'
+  )
+}
+
+function srcShow(idx: number) {
+  return !!sourceExpanded.value[idx] || !!sourceHovered.value[idx]
+}
+function provShow(name: string) {
+  return !!providerExpanded.value[name] || !!providerHovered.value[name]
+}
+function toggleSource(idx: number, e: MouseEvent) {
+  if (isInteractiveTarget(e)) {
+    sourceExpanded.value[idx] = true
+    return
+  }
+  sourceExpanded.value[idx] = !sourceExpanded.value[idx]
+}
+function toggleProvider(name: string, e: MouseEvent) {
+  if (isInteractiveTarget(e)) {
+    providerExpanded.value[name] = true
+    return
+  }
+  providerExpanded.value[name] = !providerExpanded.value[name]
+}
+function toggleCrawl(e: MouseEvent) {
+  if (isInteractiveTarget(e)) {
+    crawlExpanded.value = true
+    return
+  }
+  crawlExpanded.value = !crawlExpanded.value
+}
+function toggleExtract(e: MouseEvent) {
+  if (isInteractiveTarget(e)) {
+    extractExpanded.value = true
+    return
+  }
+  extractExpanded.value = !extractExpanded.value
+}
 
 const providerOptions = computed(() =>
   Object.entries(cfg.providers || {}).map(([k, p]) => ({ label: p.display_name || p.name, value: k }))
@@ -123,6 +174,14 @@ function initDrafts() {
   sourcesDraft.value = (cfg.sources?.sources ?? []).map((s) => ({ ...s }))
   crawlDraft.value = cfg.crawl ? { ...cfg.crawl } : null
   extractDraft.value = cfg.extract ? { ...cfg.extract } : null
+  sourceExpanded.value = {}
+  sourceHovered.value = {}
+  providerExpanded.value = {}
+  providerHovered.value = {}
+  crawlExpanded.value = false
+  crawlHovered.value = false
+  extractExpanded.value = false
+  extractHovered.value = false
 }
 
 function handleMutation(res: ConfigMutationResult, okText = '保存成功') {
@@ -131,6 +190,12 @@ function handleMutation(res: ConfigMutationResult, okText = '保存成功') {
   } else {
     message.error(res.error || '保存失败')
   }
+}
+
+function normalizeUrl(url: string): string {
+  const u = (url || '').trim()
+  if (!u) return u
+  return /^https?:\/\//i.test(u) ? u : `https://${u}`
 }
 
 async function saveModels() {
@@ -240,6 +305,7 @@ function addProvider() {
     type: '',
     models: [],
   }
+  providerExpanded.value[name] = true
 }
 
 function providerDisplay(name: string) {
@@ -265,6 +331,8 @@ function confirmRemoveProvider(name: string) {
       delete pendingModel.value[name]
       delete testModelInput.value[name]
       delete testResult.value[name]
+      delete providerExpanded.value[name]
+      delete providerHovered.value[name]
       message.success('已删除，保存供应商配置后生效')
     },
   })
@@ -366,10 +434,23 @@ function addSource() {
     fetch_detail: true,
     deep_check: false,
   })
+  sourceExpanded.value[sourcesDraft.value.length - 1] = true
 }
 
 function removeSource(idx: number) {
   sourcesDraft.value.splice(idx, 1)
+  sourceExpanded.value = shiftKeyMap(sourceExpanded.value, idx)
+  sourceHovered.value = shiftKeyMap(sourceHovered.value, idx)
+}
+
+function shiftKeyMap(m: Record<number, boolean>, idx: number) {
+  const next: Record<number, boolean> = {}
+  for (const k of Object.keys(m)) {
+    const n = Number(k)
+    if (n < idx) next[n] = m[n]
+    else if (n > idx) next[n - 1] = m[n]
+  }
+  return next
 }
 
 async function testProvider(name: string) {
@@ -528,17 +609,32 @@ async function reloadConfig() {
 
         <n-tab-pane name="providers" tab="供应商">
           <n-space vertical size="large">
-            <n-card v-for="(p, name) in providerDraft" :key="name" size="small">
+            <n-card
+              v-for="(p, name) in providerDraft"
+              :key="name"
+              size="small"
+              class="collapsible-card"
+              @click="toggleProvider(name, $event)"
+              @mouseenter="providerHovered[name] = true"
+              @mouseleave="providerHovered[name] = false"
+            >
               <template #header>
-                <n-space align="center" justify="space-between" style="width: 100%">
-                  <n-space align="center">
-                    <n-input v-model:value="p.display_name" size="small" placeholder="实例名" style="width: 180px" />
-                    <n-tag size="small" :bordered="false" :type="badgeType(p.type)">{{ typeLabel(p.type) }}</n-tag>
-                  </n-space>
-                  <n-button size="small" quaternary type="error" @click="confirmRemoveProvider(name)">删除</n-button>
-                </n-space>
+                <div class="card-header-bar">
+                  <span class="card-header-title">{{ p.display_name || name }}</span>
+                  <n-tag size="small" :bordered="false" :type="badgeType(p.type)">{{ typeLabel(p.type) }}</n-tag>
+                  <n-tag size="small" :bordered="false" :type="keyStatus(name) ? 'success' : 'warning'">
+                    {{ keyStatus(name) ? '已就绪' : '未就绪' }}
+                  </n-tag>
+                  <span class="header-spacer" />
+                  <n-button size="small" quaternary type="error" @click.stop="confirmRemoveProvider(name)">删除</n-button>
+                  <span class="collapse-arrow">{{ provShow(name) ? '▲' : '▼' }}</span>
+                </div>
               </template>
+              <n-collapse-transition :show="provShow(name)">
               <n-form label-placement="left" label-width="100">
+                <n-form-item label="实例名">
+                  <n-input v-model:value="p.display_name" placeholder="实例名" style="width: 240px" />
+                </n-form-item>
                 <n-form-item label="Base URL">
                   <n-input v-model:value="p.base_url" placeholder="https://api.example.com" />
                 </n-form-item>
@@ -648,6 +744,7 @@ async function reloadConfig() {
                     </n-form>
                   </div>
               </n-form>
+              </n-collapse-transition>
             </n-card>
             <n-space>
               <n-button secondary @click="addProvider">添加供应商</n-button>
@@ -662,7 +759,40 @@ async function reloadConfig() {
             <n-descriptions-item label="代码">{{ cfg.sources?.code || '—' }}</n-descriptions-item>
           </n-descriptions>
           <n-space vertical size="large">
-            <n-card v-for="(s, idx) in sourcesDraft" :key="idx" size="small" :title="`数据源 ${idx + 1}`">
+            <n-card
+              v-for="(s, idx) in sourcesDraft"
+              :key="idx"
+              size="small"
+              class="collapsible-card"
+              @click="toggleSource(idx, $event)"
+              @mouseenter="sourceHovered[idx] = true"
+              @mouseleave="sourceHovered[idx] = false"
+            >
+              <template #header>
+                <div class="card-header-bar">
+                  <span class="header-index">#{{ idx + 1 }}</span>
+                  <span class="card-header-title">{{ s.name || '未命名' }}</span>
+                  <n-tag size="small" :bordered="false" type="info">{{ s.type }}</n-tag>
+                  <n-tag size="small" :bordered="false" :type="s.enabled ? 'success' : 'default'">
+                    {{ s.enabled ? '已启用' : '已停用' }}
+                  </n-tag>
+                  <a
+                    v-if="s.list_url"
+                    class="header-link"
+                    :href="normalizeUrl(s.list_url)"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    @click.stop
+                  >
+                    ↗ {{ s.list_url }}
+                  </a>
+                  <span v-else class="header-muted">未填写列表地址</span>
+                  <span class="header-spacer" />
+                  <n-button size="small" quaternary type="error" @click.stop="removeSource(idx)">删除</n-button>
+                  <span class="collapse-arrow">{{ srcShow(idx) ? '▲' : '▼' }}</span>
+                </div>
+              </template>
+              <n-collapse-transition :show="srcShow(idx)">
               <n-form label-placement="left" label-width="110">
                 <n-form-item label="名称">
                   <n-input v-model:value="s.name" placeholder="如 教务处" />
@@ -679,7 +809,22 @@ async function reloadConfig() {
                   />
                 </n-form-item>
                 <n-form-item label="列表地址">
-                  <n-input v-model:value="s.list_url" placeholder="https://..." />
+                  <n-input v-model:value="s.list_url" placeholder="https://...">
+                    <template #suffix>
+                      <a
+                        v-if="s.list_url"
+                        class="input-suffix-link"
+                        :href="normalizeUrl(s.list_url)"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        @click.stop
+                        title="在新窗口打开列表页"
+                      >
+                        ↗
+                      </a>
+                      <span v-else class="input-suffix-disabled" title="请先填写列表地址">↗</span>
+                    </template>
+                  </n-input>
                 </n-form-item>
                 <n-form-item label="URL 模式">
                   <n-input v-model:value="s.url_pattern" placeholder="可选，正文链接正则；留空时点“测试链接”自动填充" />
@@ -706,14 +851,12 @@ async function reloadConfig() {
                   <span style="margin-left: 8px; color: #999; font-size: 12px">增量模式下周期重抓详情页比对内容变更</span>
                 </n-form-item>
                 <n-form-item label=" ">
-                  <n-space>
-                    <n-button size="small" secondary :loading="sourceTestBusy[idx]" @click="testSourceUrl(idx, s.list_url)">
-                      测试链接
-                    </n-button>
-                    <n-button size="small" quaternary type="error" @click="removeSource(idx)">删除</n-button>
-                  </n-space>
+                  <n-button size="small" secondary :loading="sourceTestBusy[idx]" @click="testSourceUrl(idx, s.list_url)">
+                    测试链接
+                  </n-button>
                 </n-form-item>
               </n-form>
+              </n-collapse-transition>
             </n-card>
             <n-space>
               <n-button secondary @click="addSource">添加数据源</n-button>
@@ -724,7 +867,22 @@ async function reloadConfig() {
 
         <n-tab-pane name="crawl" tab="抓取与提取">
           <n-space vertical size="large">
-            <n-card title="全局抓取参数" size="small" v-if="crawlDraft">
+            <n-card
+              size="small"
+              v-if="crawlDraft"
+              class="collapsible-card"
+              @click="toggleCrawl($event)"
+              @mouseenter="crawlHovered = true"
+              @mouseleave="crawlHovered = false"
+            >
+              <template #header>
+                <div class="card-header-bar">
+                  <span class="card-header-title">全局抓取参数</span>
+                  <span class="header-spacer" />
+                  <span class="collapse-arrow">{{ crawlExpanded || crawlHovered ? '▲' : '▼' }}</span>
+                </div>
+              </template>
+              <n-collapse-transition :show="crawlExpanded || crawlHovered">
               <n-form label-placement="left" label-width="160">
                 <n-form-item label="抓取间隔（分钟）">
                   <n-input-number v-model:value="crawlDraft.interval_minutes" :min="1" style="width: 120px" />
@@ -758,8 +916,24 @@ async function reloadConfig() {
                 </n-form-item>
                 <n-button type="primary" :loading="saving" @click="saveCrawl">保存抓取参数</n-button>
               </n-form>
+              </n-collapse-transition>
             </n-card>
-            <n-card title="提取前置过滤" size="small" v-if="extractDraft">
+            <n-card
+              size="small"
+              v-if="extractDraft"
+              class="collapsible-card"
+              @click="toggleExtract($event)"
+              @mouseenter="extractHovered = true"
+              @mouseleave="extractHovered = false"
+            >
+              <template #header>
+                <div class="card-header-bar">
+                  <span class="card-header-title">提取前置过滤</span>
+                  <span class="header-spacer" />
+                  <span class="collapse-arrow">{{ extractExpanded || extractHovered ? '▲' : '▼' }}</span>
+                </div>
+              </template>
+              <n-collapse-transition :show="extractExpanded || extractHovered">
               <n-alert type="info" :bordered="false" style="margin-bottom: 12px">
                 批量提取前先按规则预筛，不通过的通知不调 LLM（标记为“已跳过提取”），节省 Token。
                 全部条件为“且”关系，留空/关闭的条件不参与判定。
@@ -800,6 +974,7 @@ async function reloadConfig() {
                 </n-form-item>
                 <n-button type="primary" :loading="saving" @click="saveExtract">保存提取过滤配置</n-button>
               </n-form>
+              </n-collapse-transition>
             </n-card>
           </n-space>
         </n-tab-pane>
@@ -848,5 +1023,75 @@ async function reloadConfig() {
   margin-left: 4px;
   cursor: help;
   color: #999;
+}
+.card-header-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  width: 100%;
+  cursor: pointer;
+  user-select: none;
+}
+.collapsible-card {
+  cursor: pointer;
+  transition: box-shadow 0.2s ease;
+}
+.collapsible-card:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+.card-header-bar:hover {
+  opacity: 0.88;
+}
+.header-index {
+  color: #999;
+  font-size: 13px;
+  font-weight: 600;
+}
+.card-header-title {
+  font-weight: 600;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.header-link {
+  color: #2080f0;
+  text-decoration: none;
+  font-size: 13px;
+  max-width: 340px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.header-link:hover {
+  text-decoration: underline;
+}
+.header-muted {
+  color: #bbb;
+  font-size: 12px;
+}
+.header-spacer {
+  flex: 1;
+}
+.collapse-arrow {
+  color: #999;
+  font-size: 12px;
+}
+.input-suffix-link {
+  color: #2080f0;
+  cursor: pointer;
+  text-decoration: none;
+  font-size: 14px;
+  padding: 0 2px;
+}
+.input-suffix-link:hover {
+  text-decoration: underline;
+}
+.input-suffix-disabled {
+  color: #ccc;
+  cursor: not-allowed;
+  font-size: 14px;
+  padding: 0 2px;
 }
 </style>
