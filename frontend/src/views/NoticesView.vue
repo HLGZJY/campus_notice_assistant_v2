@@ -30,6 +30,17 @@ const crawledRange = ref<[number, number] | null>(null)
 const oldDays = ref(30)
 const sortBy = ref<'published' | 'crawled'>('published')
 
+const oldCutDay = computed(() => {
+  const cut = new Date()
+  cut.setDate(cut.getDate() - oldDays.value)
+  return fmtDay(cut)
+})
+
+const oldDaysWidth = computed(() => {
+  const len = Math.max(1, String(oldDays.value).length)
+  return `${80 + len * 12}px`
+})
+
 const matchMap = ref<Record<string, string[]>>({})
 const detail = ref<NoticeDetail | null>(null)
 const detailOpen = ref(false)
@@ -449,13 +460,23 @@ function keyDatesText(d: NoticeDetail): string {
   <n-space vertical size="large">
     <n-card title="通知列表">
       <template #header-extra>
-        <n-space>
-          <n-input-number v-model:value="oldDays" :min="1" :max="3650" style="width: 90px">
-            <template #suffix>天</template>
-          </n-input-number>
-          <n-button size="small" type="error" secondary :loading="batchRunning" @click="onDeleteOld">
-            清理 N 天前
-          </n-button>
+        <n-space align="center">
+          <n-tooltip trigger="hover">
+            <template #trigger>
+              <n-input-number v-model:value="oldDays" :min="1" :max="3650" :style="{ width: oldDaysWidth }">
+                <template #suffix>天</template>
+              </n-input-number>
+            </template>
+            清理天数：删除抓取时间在 {{ oldDays }} 天前的通知
+          </n-tooltip>
+          <n-tooltip trigger="hover">
+            <template #trigger>
+              <n-button size="small" type="error" secondary :loading="batchRunning" @click="onDeleteOld">
+                清理 {{ oldDays }} 天前抓取
+              </n-button>
+            </template>
+            删除抓取时间 ≤ {{ oldCutDay }} 的通知（含关联待办/提醒），删除后不可恢复
+          </n-tooltip>
           <n-button size="small" type="error" secondary :loading="batchRunning" @click="onBatchDelete">
             批量删除当前筛选
           </n-button>
