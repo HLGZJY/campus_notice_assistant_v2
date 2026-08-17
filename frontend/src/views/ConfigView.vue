@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useMessage } from 'naive-ui'
+import { useDialog, useMessage } from 'naive-ui'
 import { useConfigStore } from '../stores/useConfigStore'
 import type {
   ConfigMutationResult,
@@ -14,6 +14,7 @@ import type {
 } from '../api/schema'
 
 const message = useMessage()
+const dialog = useDialog()
 const cfg = useConfigStore()
 const activeTab = ref('models')
 
@@ -21,6 +22,9 @@ const modelsDraft = ref<ModelsConfig | null>(null)
 const providerDraft = ref<Record<string, ProviderConfig>>({})
 const providerKeyDraft = ref<Record<string, string>>({})
 const savingKey = ref<Record<string, boolean>>({})
+const pendingModel = ref<Record<string, string>>({})
+const advancedOpen = ref<Record<string, boolean>>({})
+const testResult = ref<Record<string, { ok: boolean; latency?: number; error?: string }>>({})
 const sourcesDraft = ref<SourceConfig[]>([])
 const crawlDraft = ref<CrawlConfig | null>(null)
 const extractDraft = ref<ExtractConfig | null>(null)
@@ -31,7 +35,9 @@ const saving = ref(false)
 const reloading = ref(false)
 const loading = ref(false)
 
-const providerNames = computed(() => Object.keys(cfg.providers || {}))
+const providerOptions = computed(() =>
+  Object.entries(cfg.providers || {}).map(([k, p]) => ({ label: p.display_name || p.name, value: k }))
+)
 
 const taskKeys = ['extraction', 'qa', 'todo', 'embedding'] as const
 type TaskKey = (typeof taskKeys)[number]
@@ -50,6 +56,19 @@ const crawlModeOptions = [
   { label: '全量抓取（每轮重抓全部详情页，耗时高）', value: 'full' },
   { label: '仅列表（只抓列表页标题/链接，不抓正文）', value: 'list_only' },
 ]
+
+// 按供应商类型内置的常用模型建议（与 config/defaults.py 对齐）；手动输入自定义模型不受此表限制
+const MODEL_PRESETS: Record<string, string[]> = {
+  bailian: ['qwen3.7-max-2026-05-20', 'qwen3.7-flash-2026-07-15', 'qwen3.7-turbo', 'qwen3.7-max'],
+  'opencode-zen': ['kimi-k2.7-code', 'deepseek-v4-pro', 'kimi-k2.5-turbo'],
+  local: ['models/bge-small-zh-v1.5', 'sentence-transformers/all-MiniLM-L6-v2'],
+}
+
+const TYPE_LABELS: Record<string, string> = {
+  bailian: 'Bailian',
+  'opencode-zen': 'OpenCode Zen',
+  local: 'Local',
+}
 
 onMounted(async () => {
   await load()
@@ -91,12 +110,16 @@ function initDrafts() {
   for (const [name, p] of Object.entries(cfg.providers || {})) {
     providerDraft.value[name] = {
       name: p.name,
+      display_name: p.display_name ?? p.name,
       base_url: p.base_url,
       api_key_env: p.api_key_env,
       models: [...(p.models ?? [])],
+      type: p.type ?? '',
     }
   }
   providerKeyDraft.value = {}
+  pendingModel.value = {}
+  testResult.value = {}
   sourcesDraft.value = (cfg.sources?.sources ?? []).map((s) => ({ ...s }))
   crawlDraft.value = cfg.crawl ? { ...cfg.crawl } : null
   extractDraft.value = cfg.extract ? { ...cfg.extract } : null
@@ -190,58 +213,106 @@ async function testModelRow(provider: string, model: string) {
 
 // ---------- 供应商增删 / 改名 / API Key ----------
 
+function typeLabel(t?: string) {
+  return TYPE_LABELS[t ?? ''] ?? (t || 'Custom')
+}
+
+function badgeType(t?: string) {
+  return t === 'local' ? 'success' : t === 'custom' || !t ? 'default' : 'info'
+}
+
+function keyStatus(name: string) {
+  return !!cfg.providers?.[name]?.api_key_status
+}
+
 function addProvider() {
-  const base = 'new-provider'
-  let name = base
-  let i = 2
+  let i = 1
+  let name = 'new-provider'
   while (providerDraft.value[name]) {
-    name = `${base}-${i}`
     i += 1
+    name = `new-provider-${i}`
   }
-  providerDraft.value[name] = { name, base_url: '', api_key_env: '', models: [] }
-}
-
-function onNameBlur(oldName: string) {
-  const p = providerDraft.value[oldName]
-  if (!p) return
-  const newName = (p.name || '').trim() || oldName
-  if (newName === oldName) {
-    p.name = oldName
-    return
-  }
-  if (providerDraft.value[newName]) {
-    message.error(`供应商「${newName}」已存在`)
-    p.name = oldName
-    return
-  }
-  delete providerDraft.value[oldName]
-  p.name = newName
-  providerDraft.value[newName] = p
-  for (const [k, v] of Object.entries(providerKeyDraft.value)) {
-    if (k === oldName) {
-      providerKeyDraft.value[newName] = v
-      delete providerKeyDraft.value[k]
-    }
-  }
-  for (const [k, v] of Object.entries(testModelInput.value)) {
-    if (k === oldName) {
-      testModelInput.value[newName] = v
-      delete testModelInput.value[k]
-    }
+  providerDraft.value[name] = {
+    name,
+    display_name: `新供应商 ${i}`,
+    base_url: '',
+    api_key_env: '',
+    type: '',
+    models: [],
   }
 }
 
-function removeProvider(name: string) {
+function providerDisplay(name: string) {
+  return providerDraft.value[name]?.display_name || name
+}
+
+function confirmRemoveProvider(name: string) {
   const used = (Object.values(modelsDraft.value ?? {}) as ModelProfileView[]).some(
     (p) => p.provider === name
   )
   if (used) {
-    message.error(`任务模型仍在引用供应商「${name}」，请先在「模型」tab 更换后再删除`)
+    message.error(`任务模型仍在引用供应商「${providerDisplay(name)}」，请先在「模型」tab 更换后再删除`)
     return
   }
-  delete providerDraft.value[name]
-  delete providerKeyDraft.value[name]
-  delete testModelInput.value[name]
+  dialog.warning({
+    title: '删除供应商',
+    content: `确定删除供应商「${providerDisplay(name)}」？删除后需点「保存供应商配置」才会生效。`,
+    positiveText: '删除',
+    negativeText: '取消',
+    onPositiveClick: () => {
+      delete providerDraft.value[name]
+      delete providerKeyDraft.value[name]
+      delete pendingModel.value[name]
+      delete testModelInput.value[name]
+      delete testResult.value[name]
+      message.success('已删除，保存供应商配置后生效')
+    },
+  })
+}
+
+// ---------- 可用模型（下拉建议 + 标签） ----------
+
+function toggleAdvanced(name: string) {
+  advancedOpen.value[name] = !advancedOpen.value[name]
+}
+
+function modelAddOptions(name: string) {
+  const p = providerDraft.value[name]
+  if (!p) return []
+  const seen = new Set<string>()
+  const out: { label: string; value: string }[] = []
+  for (const m of [...(MODEL_PRESETS[p.type] ?? []), ...p.models]) {
+    if (!seen.has(m)) {
+      seen.add(m)
+      out.push({ label: m, value: m })
+    }
+  }
+  return out
+}
+
+function addProviderModel(name: string) {
+  const p = providerDraft.value[name]
+  const m = (pendingModel.value[name] || '').trim()
+  if (!m) {
+    message.warning('请选择或输入一个模型名')
+    return
+  }
+  if (p.models.includes(m)) {
+    message.warning('该模型已在列表中')
+    return
+  }
+  p.models.push(m)
+  pendingModel.value[name] = ''
+}
+
+function removeProviderModel(name: string, idx: number) {
+  providerDraft.value[name].models.splice(idx, 1)
+}
+
+function modelTestOptions(name: string) {
+  const p = providerDraft.value[name]
+  const pool = p?.models.length ? p.models : (MODEL_PRESETS[p.type] ?? [])
+  return pool.map((m) => ({ label: m, value: m }))
 }
 
 async function saveProviderKey(name: string) {
@@ -304,18 +375,21 @@ function removeSource(idx: number) {
 async function testProvider(name: string) {
   const model = (testModelInput.value[name] || '').trim()
   if (!model) {
-    message.warning('请先填写测试用的模型名')
+    message.warning('请先选择测试用的模型名')
     return
   }
   testBusy.value[name] = true
   try {
     const res = await cfg.testModel({ provider: name, model, timeout: 30 })
     if (res.ok) {
+      testResult.value[name] = { ok: true, latency: res.latency_ms }
       message.success(`连接成功（${res.latency_ms}ms）${res.completion ? `：${res.completion}` : ''}`)
     } else {
+      testResult.value[name] = { ok: false, error: res.error || '连接失败' }
       message.error(res.error || '连接失败')
     }
   } catch (e) {
+    testResult.value[name] = { ok: false, error: e instanceof Error ? e.message : String(e) }
     message.error(e instanceof Error ? e.message : String(e))
   } finally {
     testBusy.value[name] = false
@@ -404,7 +478,7 @@ async function reloadConfig() {
                 <n-space>
                   <n-select
                     v-model:value="modelsDraft[task].provider"
-                    :options="providerNames.map((p) => ({ label: p, value: p }))"
+                    :options="providerOptions"
                     placeholder="Provider"
                     style="width: 200px"
                   />
@@ -454,26 +528,28 @@ async function reloadConfig() {
 
         <n-tab-pane name="providers" tab="供应商">
           <n-space vertical size="large">
-            <n-card v-for="(p, name) in providerDraft" :key="name" size="small" :title="`供应商：${name}`">
-              <n-form label-placement="left" label-width="140">
-                <n-form-item label="名称">
-                  <n-input v-model:value="p.name" @blur="onNameBlur(name)" placeholder="供应商唯一标识" style="width: 240px" />
-                </n-form-item>
+            <n-card v-for="(p, name) in providerDraft" :key="name" size="small">
+              <template #header>
+                <n-space align="center" justify="space-between" style="width: 100%">
+                  <n-space align="center">
+                    <n-input v-model:value="p.display_name" size="small" placeholder="实例名" style="width: 180px" />
+                    <n-tag size="small" :bordered="false" :type="badgeType(p.type)">{{ typeLabel(p.type) }}</n-tag>
+                  </n-space>
+                  <n-button size="small" quaternary type="error" @click="confirmRemoveProvider(name)">删除</n-button>
+                </n-space>
+              </template>
+              <n-form label-placement="left" label-width="100">
                 <n-form-item label="Base URL">
                   <n-input v-model:value="p.base_url" placeholder="https://api.example.com" />
                 </n-form-item>
-                <n-form-item label="API Key 环境变量">
-                  <n-input v-model:value="p.api_key_env" placeholder="OPENAI_API_KEY" style="width: 240px" />
-                  <template #feedback>Key 写入 .env 的该变量名；留空时保存 Key 会自动生成 &lt;NAME&gt;_API_KEY</template>
-                </n-form-item>
                 <n-form-item label="API Key">
-                  <n-space>
+                  <n-space align="center">
                     <n-input
                       v-model:value="providerKeyDraft[name]"
                       type="password"
                       show-password-on="click"
                       placeholder="粘贴 API Key，保存后写入 .env"
-                      style="width: 320px"
+                      style="width: 300px"
                     />
                     <n-button
                       size="small"
@@ -482,35 +558,95 @@ async function reloadConfig() {
                       :loading="savingKey[name]"
                       @click="saveProviderKey(name)"
                     >
-                      保存 Key 到 .env
+                      保存密钥
                     </n-button>
+                    <span class="key-dot" :class="keyStatus(name) ? 'ok' : 'bad'" />
+                    <span style="font-size: 12px; color: #999">{{ keyStatus(name) ? '已就绪' : '未就绪' }}</span>
                   </n-space>
-                  <template #feedback>不落库、不进 YAML，仅写入项目根 .env（已 gitignore，免重启生效）</template>
+                  <template #feedback>
+                    <span style="color: #999">密钥仅写入项目根 .env（已忽略 Git，即时生效）</span>
+                    <n-tooltip trigger="hover" placement="right">
+                      <template #trigger><span class="help-icon">ⓘ</span></template>
+                      保存后自动 upsert 到项目根目录 .env，不落库、不进 YAML；若环境变量名为空会自动生成
+                      &lt;标识&gt;_API_KEY。写入后进程内立即生效，无需重启。
+                    </n-tooltip>
+                  </template>
                 </n-form-item>
-                <n-form-item label="Key 状态">
-                  <n-tag
-                    :bordered="false"
-                    :type="cfg.providers?.[name]?.api_key_status ? 'success' : 'default'"
-                    size="small"
-                  >
-                    {{ cfg.providers?.[name]?.api_key_status ? '已配置' : '未配置' }}
-                  </n-tag>
-                </n-form-item>
-                <n-form-item label="可选模型">
-                  <n-dynamic-tags v-model:value="p.models" :max="20" size="small" style="min-width: 340px" />
-                  <template #feedback>「模型」tab 的下拉候选；留空则模型名只能手动输入</template>
-                </n-form-item>
-                <n-form-item label="连通性测试">
-                  <n-space>
-                    <n-input v-model:value="testModelInput[name]" placeholder="测试用模型名" style="width: 200px" />
-                    <n-button size="small" secondary :loading="testBusy[name]" @click="testProvider(name)">
-                      测试连接
-                    </n-button>
+                <n-form-item label="可用模型">
+                  <n-space vertical style="width: 100%">
+                    <n-space>
+                      <n-select
+                        v-model:value="pendingModel[name]"
+                        filterable
+                        tag
+                        :options="modelAddOptions(name)"
+                        placeholder="下拉选择或输入模型名"
+                        style="width: 280px"
+                      />
+                      <n-button size="small" secondary @click="addProviderModel(name)">添加</n-button>
+                    </n-space>
+                    <n-space v-if="p.models.length">
+                      <n-tag
+                        v-for="(m, idx) in p.models"
+                        :key="m"
+                        closable
+                        size="small"
+                        @close="removeProviderModel(name, idx)"
+                      >
+                        {{ m }}
+                      </n-tag>
+                    </n-space>
+                    <span v-else style="font-size: 12px; color: #999">
+                      暂无模型；此处维护的模型会作为「模型」tab 的下拉候选
+                    </span>
                   </n-space>
                 </n-form-item>
-                <n-form-item label=" ">
-                  <n-button size="small" quaternary type="error" @click="removeProvider(name)">删除供应商</n-button>
-                </n-form-item>
+                <n-button size="small" quaternary style="margin: 2px 0 8px" @click="toggleAdvanced(name)">
+                    {{ advancedOpen[name] ? '收起高级选项 ▲' : '⚙️ 连通性测试 · 环境变量 · 标识 ▼' }}
+                  </n-button>
+                  <div v-show="advancedOpen[name]">
+                    <n-form label-placement="left" label-width="100">
+                      <n-form-item label="连通性测试">
+                        <n-space vertical>
+                          <n-space>
+                            <n-select
+                              v-model:value="testModelInput[name]"
+                              filterable
+                              :options="modelTestOptions(name)"
+                              placeholder="测试用的模型名"
+                              style="width: 280px"
+                            />
+                            <n-button
+                              size="small"
+                              secondary
+                              type="primary"
+                              :loading="testBusy[name]"
+                              @click="testProvider(name)"
+                            >
+                              开始测试
+                            </n-button>
+                          </n-space>
+                          <span
+                            v-if="testResult[name]"
+                            :style="{
+                              color: testResult[name].ok ? '#18a058' : '#d03050',
+                              fontSize: '12px',
+                            }"
+                          >
+                            {{ testResult[name].ok ? `✅ 连接成功（${testResult[name].latency}ms）` : `❌ ${testResult[name].error}` }}
+                          </span>
+                        </n-space>
+                      </n-form-item>
+                      <n-form-item label="环境变量名">
+                        <n-input v-model:value="p.api_key_env" placeholder="OPENAI_API_KEY" style="width: 240px" />
+                        <template #feedback>Key 写入 .env 使用的变量名；留空时保存 Key 自动生成 &lt;标识&gt;_API_KEY</template>
+                      </n-form-item>
+                      <n-form-item label="标识">
+                        <n-input :value="name" disabled style="width: 240px" />
+                        <template #feedback>唯一标识，任务模型通过它引用本供应商，不可在页面修改（如需改名请编辑 YAML）</template>
+                      </n-form-item>
+                    </n-form>
+                  </div>
               </n-form>
             </n-card>
             <n-space>
@@ -694,3 +830,23 @@ async function reloadConfig() {
     </n-spin>
   </n-card>
 </template>
+
+<style scoped>
+.key-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.key-dot.ok {
+  background: #18a058;
+}
+.key-dot.bad {
+  background: #d03050;
+}
+.help-icon {
+  margin-left: 4px;
+  cursor: help;
+  color: #999;
+}
+</style>
