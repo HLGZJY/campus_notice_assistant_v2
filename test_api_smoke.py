@@ -727,8 +727,9 @@ def _smoke(client, db_mod, config_dir, tmpdir, real_config_path, real_config_sna
                 if line.startswith("data: ")
             ]
     check(
-        "错误路径末事件为 error 且含异常名",
-        err_events[-1]["type"] == "error" and "RuntimeError" in err_events[-1]["message"],
+        "错误路径末事件为 error 且为友好文案（不泄露内部细节）",
+        err_events[-1]["type"] == "error"
+        and err_events[-1]["message"] == "推理中断，请稍后重试",
         f"{err_events[-1]}",
     )
 

@@ -74,8 +74,10 @@ async def ask_stream(
                     yield _sse({"type": "done", **_serialize_result(payload)})
                     return
         except Exception as e:  # noqa: BLE001 —— 流式异常转 SSE error 事件
+            # 批次 D3：started 之后的中途断流不抛 500，向客户端发友好错误事件后正常关流；
+            # 原始异常只进日志（避免泄露内部细节给前端）。
             logger.exception("问答流式失败: question=%r", question)
-            yield _sse({"type": "error", "message": f"{type(e).__name__}: {e}"})
+            yield _sse({"type": "error", "message": "推理中断，请稍后重试"})
 
     return StreamingResponse(
         event_stream(),

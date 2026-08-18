@@ -13,6 +13,7 @@
 import asyncio
 import logging
 import sys
+import tempfile
 from collections import defaultdict
 from pathlib import Path
 
@@ -30,7 +31,8 @@ from core.extractor import ExtractionOutcome
 from core.models import NoticeExtraction
 from storage.db import get_connection, log_llm_usage
 
-TMP_DB = Path(__file__).parent / "data" / "test_tasks.db"
+TMP_DIR = tempfile.mkdtemp(prefix="wb_test_tasks_")
+TMP_DB = Path(TMP_DIR) / "test_tasks.db"
 
 storage.db.DB_PATH = TMP_DB
 
@@ -58,6 +60,10 @@ class FakeExtractor:
     ) -> ExtractionOutcome:
         nid = notice_id
         self.calls_by_notice[nid] += 1
+
+        # 模拟 LLM 延迟：给并发调度一个可取消点（真实调用有网络 IO，
+        # kill 时 gather 才能整体中断未完成任务，而非任务瞬间跑完）
+        await asyncio.sleep(0.01)
 
         # 模拟崩溃：完成 kill_after 次后，下一次调用直接被"杀掉"（不计费、不写库）
         if (

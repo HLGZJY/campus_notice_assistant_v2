@@ -15,6 +15,7 @@ import asyncio
 import logging
 import shutil
 import sys
+import tempfile
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -35,7 +36,8 @@ from utils import llm as utils_llm
 from utils.llm import record_llm_usage, run_agent
 from utils.embedding import _CountingEmbeddings, _MeteredOpenAIEmbeddings
 
-TMP_DB = Path(__file__).parent / "data" / "test_token_usage.db"
+TMP_DIR = tempfile.mkdtemp(prefix="wb_test_token_usage_")
+TMP_DB = Path(TMP_DIR) / "test_token_usage.db"
 
 storage.db.DB_PATH = TMP_DB
 
@@ -169,6 +171,7 @@ def run():
     extractor.provider = "extract-prov"
     extractor.models = ["extract-model"]
     extractor._agents = {}
+    extractor._usage_cb = None
     extractor._get_agent = lambda model: object()
     out = asyncio.run(extractor._call("extract-model", "prompt", None, attempt=1, notice_id=7))
     check("返回 NoticeExtraction", isinstance(out, NoticeExtraction))
@@ -182,6 +185,7 @@ def run():
                 "attempt": 1,
                 "notice_id": 7,
                 "provider": "extract-prov",
+                "usage_cb": None,
             }
         ],
         f"{calls}",
@@ -212,6 +216,7 @@ def run():
     gen.provider = "todo-prov"
     gen.models = ["todo-model"]
     gen._agents = {}
+    gen._usage_cb = None
     gen._get_agent = lambda model: object()
     notice = {
         "id": 3,
@@ -258,6 +263,7 @@ def run():
     qa.strategy = "none"
     qa.expire_days = None
     qa.search_kwargs = {}
+    qa._usage_cb = None
     qa._get_agent = lambda model: object()
     qa.index = SimpleNamespace(
         search=lambda question, k, **kwargs: [
@@ -278,7 +284,7 @@ def run():
     check("回答返回", res.answer == "测试回答")
     check(
         "qa 链路 task/model/provider 正确（attempt/notice_id 走 run_agent 默认值）",
-        calls == [{"task": "qa", "model": "qa-model", "provider": "qa-prov"}],
+        calls == [{"task": "qa", "model": "qa-model", "provider": "qa-prov", "usage_cb": None}],
         f"{calls}",
     )
 

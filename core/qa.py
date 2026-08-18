@@ -74,6 +74,7 @@ class QAAgent:
         strategy: str = "none",
         expire_days: Optional[int] = None,
         search_mode: str = "vector",
+        usage_cb=None,
         **search_kwargs,
     ):
         if index is None:
@@ -91,6 +92,8 @@ class QAAgent:
         self.search_mode = search_mode
         self.search_kwargs = search_kwargs
         self._agents: dict[str, Agent] = {}
+        # 可选回调 (input_tokens, output_tokens)：每次 LLM 调用成功后触发（压测 per-sample 归因）
+        self._usage_cb = usage_cb
 
     def _get_agent(self, model: str) -> Agent:
         agent = self._agents.get(model)
@@ -221,7 +224,7 @@ class QAAgent:
         for model in self.models:
             try:
                 agent = self._get_agent(model)
-                result = await run_agent(agent, prompt, task="qa", model=model, provider=self.provider)
+                result = await run_agent(agent, prompt, task="qa", model=model, provider=self.provider, usage_cb=self._usage_cb)
                 break
             except Exception as e:
                 if not is_failover_worthy(e):
@@ -275,7 +278,7 @@ class QAAgent:
             started = False
             try:
                 agent = self._get_agent(model)
-                async for delta in run_agent_stream(agent, prompt, task="qa", model=model, provider=self.provider):
+                async for delta in run_agent_stream(agent, prompt, task="qa", model=model, provider=self.provider, usage_cb=self._usage_cb):
                     started = True
                     parts.append(delta)
                     yield ("delta", delta)

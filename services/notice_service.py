@@ -542,6 +542,7 @@ def extract_batch(
     prefilter: bool = True,
     extract_cfg: ExtractConfig | None = None,
     notice_ids: Optional[list[int]] = None,
+    concurrency: Optional[int] = None,
 ) -> dict:
     """批量提取所有 status=raw 的通知（断点续跑的提取游标 + 阶段 7 前置过滤）。
 
@@ -549,13 +550,16 @@ def extract_batch(
         limit: 最大处理条数（预筛通过后才计入；<=0 时取 config.extract.batch_limit）
         auto_index: 每条提取成功后是否自动加入向量索引
         extractor: 可注入（测试用），默认真实 NoticeExtractor
-        progress_cb: 可选进度回调 (done:int, total:int) -> None，供任务管理器上报进度
+        progress_cb: 可选进度回调 (done:int, total:int) -> None，每完成一条触发一次
         prefilter: 是否启用规则预筛（读取 config.extract；跳过项写 extract_skipped_reason，
                    状态保持 raw，下轮不再重复判定）
         extract_cfg: 可注入提取配置（测试用），默认读 ConfigStore
         notice_ids: 显式指定要提取的通知 id（提取前预览勾选提交；命中即跳过预筛）
+        concurrency: 并发数覆盖（默认取 config.extract.concurrency，上限 8）
     """
     cfg = extract_cfg or ConfigStore.get_instance().get_extract()
+    effective_concurrency = concurrency if concurrency and concurrency > 0 else cfg.concurrency
+    effective_concurrency = max(1, min(8, effective_concurrency))
     notices, skipped = _gather_extract_candidates(
         cfg, limit=limit, prefilter=prefilter, notice_ids=notice_ids
     )
@@ -574,90 +578,120 @@ def extract_batch(
     extractor = extractor or NoticeExtractor()
     total = len(notices)
 
-    async def _run() -> dict:
-        summary = {"extracted": 0, "partial": 0, "failed": 0, "details": []}
+    async def _process_one(notice: dict) -> dict:
+        """并发处理单条通知：独占任务连接（contextvars 隔离），协程内自关。"""
+        conn2 = get_task_connection()
         try:
-            for i, notice in enumerate(notices, start=1):
-                if progress_cb is not None:
-                    progress_cb(i, total)
+            if cfg.skip_llm:
+                # 省 token 模式：不调 LLM，仅订阅匹配 + 建索引，状态置 partial（仅索引未结构化）
+                update_extraction(conn2, notice["id"], {}, "partial")
                 try:
-                    if cfg.skip_llm:
-                        # 省 token 模式：不调 LLM，仅订阅匹配 + 建索引，状态置 partial（仅索引未结构化）
-                        status = "partial"
-                        conn2 = get_task_connection()
-                        update_extraction(conn2, notice["id"], {}, "partial")
-                        try:
-                            match_notice(notice["id"])
-                        except Exception as e:
-                            logger.warning("订阅匹配失败 notice_id=%s: %s", notice["id"], e)
-                        if auto_index:
-                            try:
-                                updated = get_notice_by_id(conn2, notice["id"])
-                                _get_vector_index().add_notice(dict(updated))
-                            except Exception as e:
-                                logger.warning("自动索引失败 notice_id=%s: %s", notice["id"], e)
-                        summary["partial"] += 1
-                        summary["details"].append(
-                            {
-                                "id": notice["id"],
-                                "title": notice["title"],
-                                "status": status,
-                                "error": None,
-                                "skipped_llm": True,
-                            }
-                        )
-                        continue
-
-                    outcome = await extractor.extract_one(
-                        title=notice["title"],
-                        content=notice["raw_content"],
-                        published_at=notice.get("published_at"),
-                        crawled_at=notice.get("crawled_at"),
-                        notice_id=notice["id"],
-                    )
-                    status = outcome.status
-                    extraction = outcome.extraction.model_dump() if outcome.extraction else None
-
-                    # 写库（专属任务连接：每协程/任务上下文一条，循环结束后统一关闭）
-                    conn2 = get_task_connection()
-                    if status == "failed" or extraction is None:
-                        mark_failed(conn2, notice["id"], outcome.error or "提取失败")
-                        summary["failed"] += 1
-                    else:
-                        update_extraction(conn2, notice["id"], extraction, status)
-                        summary[status] += 1
-                        try:
-                            match_notice(notice["id"])
-                        except Exception as e:
-                            logger.warning("订阅匹配失败 notice_id=%s: %s", notice["id"], e)
-                        if auto_index:
-                            try:
-                                updated = get_notice_by_id(conn2, notice["id"])
-                                _get_vector_index().add_notice(dict(updated))
-                            except Exception as e:
-                                logger.warning("自动索引失败 notice_id=%s: %s", notice["id"], e)
-
-                    summary["details"].append(
-                        {
-                            "id": notice["id"],
-                            "title": notice["title"],
-                            "status": status,
-                            "error": outcome.error,
-                        }
-                    )
+                    match_notice(notice["id"])
                 except Exception as e:
-                    logger.exception("提取失败 notice_id=%s", notice["id"])
-                    summary["failed"] += 1
-                    summary["details"].append(
-                        {
-                            "id": notice["id"],
-                            "title": notice["title"],
-                            "status": "failed",
-                            "error": f"{type(e).__name__}: {e}",
-                        }
-                    )
+                    logger.warning("订阅匹配失败 notice_id=%s: %s", notice["id"], e)
+                if auto_index:
+                    try:
+                        updated = get_notice_by_id(conn2, notice["id"])
+                        _get_vector_index().add_notice(dict(updated))
+                    except Exception as e:
+                        logger.warning("自动索引失败 notice_id=%s: %s", notice["id"], e)
+                return {
+                    "status": "partial",
+                    "title": notice["title"],
+                    "error": None,
+                    "skipped_llm": True,
+                }
+
+            outcome = await extractor.extract_one(
+                title=notice["title"],
+                content=notice["raw_content"],
+                published_at=notice.get("published_at"),
+                crawled_at=notice.get("crawled_at"),
+                notice_id=notice["id"],
+            )
+            status = outcome.status
+            extraction = outcome.extraction.model_dump() if outcome.extraction else None
+
+            if status == "failed" or extraction is None:
+                mark_failed(conn2, notice["id"], outcome.error or "提取失败")
+            else:
+                update_extraction(conn2, notice["id"], extraction, status)
+                try:
+                    match_notice(notice["id"])
+                except Exception as e:
+                    logger.warning("订阅匹配失败 notice_id=%s: %s", notice["id"], e)
+                if auto_index:
+                    try:
+                        updated = get_notice_by_id(conn2, notice["id"])
+                        _get_vector_index().add_notice(dict(updated))
+                    except Exception as e:
+                        logger.warning("自动索引失败 notice_id=%s: %s", notice["id"], e)
+
+            return {
+                "status": status,
+                "title": notice["title"],
+                "error": outcome.error,
+            }
+        except Exception as e:
+            logger.exception("提取失败 notice_id=%s", notice["id"])
+            return {
+                "status": "failed",
+                "title": notice["title"],
+                "error": f"{type(e).__name__}: {e}",
+            }
         finally:
             close_task_connection()
+
+    async def _run() -> dict:
+        summary = {"extracted": 0, "partial": 0, "failed": 0, "details": []}
+        sem = asyncio.Semaphore(effective_concurrency)
+        done = 0
+
+        def _on_done() -> None:
+            nonlocal done
+            done += 1
+            if progress_cb is not None:
+                progress_cb(done, total)
+
+        async def _guarded(notice: dict) -> dict:
+            async with sem:
+                cancelled = False
+                try:
+                    return await _process_one(notice)
+                except asyncio.CancelledError:
+                    # 整体中断（kill/进程崩溃模拟）：被取消的任务不算完成，不推进进度
+                    cancelled = True
+                    raise
+                finally:
+                    if not cancelled:
+                        _on_done()
+
+        tasks = [asyncio.create_task(_guarded(n)) for n in notices]
+        try:
+            results = await asyncio.gather(*tasks)
+        except BaseException:
+            # 中断语义（kill/进程崩溃模拟）：整体中断，取消其余未完成任务，
+            # 等待它们收尾后再上抛（已完成的写库结果保留，未启动的不再执行）。
+            for t in tasks:
+                if not t.done():
+                    t.cancel()
+            try:
+                await asyncio.gather(*tasks, return_exceptions=True)
+            except BaseException:
+                pass
+            raise
+        for idx, result in enumerate(results):
+            summary[result["status"]] += 1
+            summary["details"].append(
+                {
+                    "id": notices[idx]["id"],
+                    "title": result["title"],
+                    "status": result["status"],
+                    "error": result["error"],
+                }
+            )
+            if result.get("skipped_llm"):
+                summary["details"][-1]["skipped_llm"] = True
         return summary
 
     summary = asyncio.run(_run())

@@ -156,6 +156,7 @@ def test_no_retry_on_fast_path() -> None:
     extractor.provider = "p"
     extractor.models = ["m"]
     extractor._agents = {}
+    extractor._usage_cb = None
     extractor._get_agent = lambda model: object()
     out = asyncio.run(
         extractor.extract_one(

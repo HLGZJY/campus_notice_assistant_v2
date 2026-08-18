@@ -24,6 +24,7 @@ import storage.vectorstore as vs
 
 TMP_CHROMA_A = Path(__file__).parent / "data" / "test_vs_singleton_a"
 TMP_CHROMA_B = Path(__file__).parent / "data" / "test_vs_singleton_b"
+TMP_CHROMA_C = Path(__file__).parent / "data" / "test_vs_singleton_c"
 
 
 class FakeEmbeddings:
@@ -142,7 +143,6 @@ def run():
 
     print("== 5. 客户端创建瞬时失败自动重试 ==")
     # 模拟旧进程未退出、持久化存储被短暂占用：前 2 次创建抛错，第 3 次成功
-    TMP_CHROMA_C = Path(__file__).parent / "data" / "test_vs_singleton_c"
     real_create = vs.chromadb.PersistentClient
     calls = {"n": 0}
 

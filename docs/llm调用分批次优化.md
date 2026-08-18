@@ -53,9 +53,11 @@ docs\Agentic Workflow 框架.md
 
 ---
 
-### 🧩 批次 D（批量吞吐、压测可观测性与流式兜底）
+### 🧩 批次 D（批量吞吐、压测可观测性与流式兜底）-已完成
 
 > **服务目标**：验证优化收益，量化 Token 成本降低，并完善前端交互体验。
+
+> 完成记录：docs-local\assest\llm改进调用完成记录.md
 
 - **D1. 批量并发 Semaphore 化（对应原改动 4）**
   - 修改 `services/notice_service.py` 的 `extract_batch` 和 `cli/extract.py` 的 `run_batch`：引入 `asyncio.Semaphore(concurrency)`，使用 `asyncio.gather` 并行执行，确保单机并发数可配置（默认 3~5）。

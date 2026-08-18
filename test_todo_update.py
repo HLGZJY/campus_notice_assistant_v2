@@ -11,6 +11,7 @@
 用法：python test_todo_update.py
 """
 import sys
+import tempfile
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -26,7 +27,8 @@ from storage.db import get_connection
 from services.reminder_service import scan_reminders
 from services.todo_service import update_todo
 
-TMP_DB = Path(__file__).parent / "data" / "test_todo_update.db"
+TMP_DIR = tempfile.mkdtemp(prefix="wb_test_todo_update_")
+TMP_DB = Path(TMP_DIR) / "test_todo_update.db"
 
 storage.db.DB_PATH = TMP_DB
 

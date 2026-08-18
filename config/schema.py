@@ -227,6 +227,8 @@ class ExtractConfig(BaseModel):
 
     # 每轮最多提取条数（通过预筛后才调 LLM）
     batch_limit: int = 50
+    # 批量提取并发数（单机默认 3；调大前注意供应商限流）
+    concurrency: int = 3
     # 只提取最近 N 天发布的通知（发布时间缺失时回退抓取时间；None=不限制）
     max_age_days: Optional[int] = None
     # 正文长度低于该值不提取（过滤无正文/纯标题快照）
@@ -249,6 +251,13 @@ class ExtractConfig(BaseModel):
     def _positive(cls, v: Optional[int]) -> Optional[int]:
         if v is not None and v < 1:
             raise ValueError("必须 >= 1")
+        return v
+
+    @field_validator("concurrency")
+    @classmethod
+    def _concurrency_cap(cls, v: int) -> int:
+        if v > 8:
+            raise ValueError("并发数过大（上限 8），请控制对供应商的请求频率")
         return v
 
 

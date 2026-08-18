@@ -1018,6 +1018,10 @@ async function reloadConfig() {
                 <n-form-item label="单批上限">
                   <n-input-number v-model:value="extractDraft.batch_limit" :min="1" style="width: 120px" />
                 </n-form-item>
+                <n-form-item label="提取并发数">
+                  <n-input-number v-model:value="extractDraft.concurrency" :min="1" :max="8" style="width: 120px" />
+                  <template #feedback>批量提取并发上限（1–8，默认 3）；调大前注意供应商限流</template>
+                </n-form-item>
                 <n-form-item label="最短正文长度">
                   <n-input-number v-model:value="extractDraft.min_content_length" :min="0" style="width: 120px" />
                   <template #feedback>正文长度低于该值的通知跳过（默认 100，过滤空页面/占位页）</template>

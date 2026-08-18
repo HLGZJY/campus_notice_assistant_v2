@@ -126,6 +126,7 @@ def main() -> None:
     extractor.provider = "test-prov"
     extractor.models = ["model-a", "model-b"]
     extractor._agents = {}
+    extractor._usage_cb = None
     extractor._get_agent = lambda model: object()
     outcome = asyncio.run(extractor.extract_one("标题", "正文内容"))
     check("切换后提取成功", outcome.status in ("extracted", "partial") and outcome.extraction is not None, outcome.status)
@@ -162,6 +163,7 @@ def main() -> None:
     gen.provider = "test-prov"
     gen.models = ["todo-a", "todo-b"]
     gen._agents = {}
+    gen._usage_cb = None
     gen._get_agent = lambda model: object()
     items = asyncio.run(gen.generate_one({"id": 1, "title": "报名", "deadline": None, "notice_type": "registration"}))
     # todo 链路保持原有"模型内重试 1 次再跨模型切换"语义：todo-a ×2 → todo-b
@@ -188,6 +190,7 @@ def main() -> None:
     qa.strategy = "none"
     qa.expire_days = None
     qa.search_kwargs = {}
+    qa._usage_cb = None
     qa._get_agent = lambda model: object()
     qa.index = SimpleNamespace(
         search=lambda question, k, **kwargs: [

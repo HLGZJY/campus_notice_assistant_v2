@@ -49,6 +49,7 @@ def make_extractor(fake_run, models=("m",)) -> NoticeExtractor:
     inst.provider = "p"
     inst.models = list(models)
     inst._agents = {}
+    inst._usage_cb = None
     inst._get_agent = lambda model: object()
     return inst
 
@@ -157,6 +158,7 @@ def test_call_appends_format_sample() -> None:
     inst.provider = "p"
     inst.models = ["m"]
     inst._agents = {}
+    inst._usage_cb = None
     inst._get_agent = lambda model: object()
 
     asyncio.run(inst._call("m", "原始PROMPT", "截止时间 2025-07-16T17:00:00 早于发布时间 2026-07-01T00:00:00", attempt=1))

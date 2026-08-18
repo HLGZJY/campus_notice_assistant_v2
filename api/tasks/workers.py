@@ -76,6 +76,7 @@ def extract_batch(task: dict, progress_cb, deps: dict) -> dict:
         extractor=deps.get("extractor"),
         prefilter=params.get("prefilter", True),
         notice_ids=params.get("notice_ids"),
+        concurrency=params.get("concurrency"),
         progress_cb=lambda d, t: _on_progress(progress_cb, d, t),
     )
 

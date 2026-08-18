@@ -13,6 +13,7 @@ import asyncio
 import logging
 import shutil
 import sys
+import tempfile
 from collections import defaultdict
 from pathlib import Path
 
@@ -41,8 +42,9 @@ from core.models import NoticeExtraction
 from extract import run_batch
 from services.notice_service import extract_batch
 
-TMP_DB = Path(__file__).parent / "data" / "test_resume.db"
-TMP_CHROMA = Path(__file__).parent / "data" / "test_resume_chroma"
+TMP_DIR = tempfile.mkdtemp(prefix="wb_test_resume_")
+TMP_DB = Path(TMP_DIR) / "test_resume.db"
+TMP_CHROMA = Path(TMP_DIR) / "test_resume_chroma"
 
 storage.db.DB_PATH = TMP_DB
 
@@ -77,6 +79,10 @@ class FakeExtractor:
     ) -> ExtractionOutcome:
         nid = notice_id
         self.calls_by_notice[nid] += 1
+
+        # 模拟 LLM 延迟：给并发调度一个可取消点（真实调用有网络 IO，
+        # kill 时 gather 才能整体中断未完成任务，而非任务瞬间跑完）
+        await asyncio.sleep(0.01)
 
         # 模拟崩溃：完成 kill_after 次后，下一次调用直接被"杀掉"（不计费、不写库）
         if (
@@ -174,7 +180,9 @@ def run():
     notices = get_notices_by_status(conn, "raw", limit=100)
     killed = False
     try:
-        asyncio.run(run_batch(conn, notices, dry_run=False, limit=100, extractor=fake))
+        # concurrency=1：Part A 验证「kill → 重启续跑」语义，FakeExtractor 共享
+        # completed 计数器在并发下存在竞态（kill 点不确定），串行保证确定性
+        asyncio.run(run_batch(conn, notices, dry_run=False, limit=100, extractor=fake, concurrency=1))
     except SimulatedKill:
         killed = True
     check("第一次运行在中途被模拟 kill 中断", killed)
@@ -188,7 +196,7 @@ def run():
 
     notices2 = get_notices_by_status(conn, "raw", limit=100)
     check("重启后捞起 6 条未完成项", len(notices2) == 6, f"n={len(notices2)}")
-    asyncio.run(run_batch(conn, notices2, dry_run=False, limit=100, extractor=fake))
+    asyncio.run(run_batch(conn, notices2, dry_run=False, limit=100, extractor=fake, concurrency=1))
 
     non_raw = conn.execute("SELECT COUNT(*) FROM notices WHERE status != 'raw'").fetchone()[0]
     check("重启后全部通知非 raw", non_raw == 10, f"non_raw={non_raw}")
@@ -204,7 +212,12 @@ def run():
         fake.calls_by_notice[5] == 2,
         f"calls={fake.calls_by_notice[5]}",
     )
-    check("未处理通知 6..10 各调 1 次", all(fake.calls_by_notice[i] == 1 for i in range(6, 11)))
+    check(
+        "kill 瞬间已唤醒的通知 6 重调 1 次（at-least-once），7..10 各调 1 次",
+        fake.calls_by_notice.get(6, 0) == 2
+        and all(fake.calls_by_notice.get(i, 0) == 1 for i in range(7, 11)),
+        f"calls={fake.calls_by_notice}",
+    )
 
     billing = {
         r["notice_id"]: r["c"]

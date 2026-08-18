@@ -1229,6 +1229,11 @@ export interface components {
              * @default 50
              */
             batch_limit: number;
+            /**
+             * Concurrency
+             * @default 3
+             */
+            concurrency: number;
             /** Max Age Days */
             max_age_days?: number | null;
             /**

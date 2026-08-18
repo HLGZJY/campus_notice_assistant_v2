@@ -3971,6 +3971,11 @@
             "title": "Batch Limit",
             "default": 50
           },
+          "concurrency": {
+            "type": "integer",
+            "title": "Concurrency",
+            "default": 3
+          },
           "max_age_days": {
             "anyOf": [
               {

@@ -20,7 +20,7 @@ from __future__ import annotations
 import logging
 import os
 from dataclasses import dataclass
-from typing import Optional
+from typing import Callable, Optional
 
 from agents import Runner
 from openai import BadRequestError
@@ -169,6 +169,7 @@ async def run_agent(
     attempt: int = 0,
     notice_id: Optional[int] = None,
     provider: Optional[str] = None,
+    usage_cb: Optional[Callable[[int, int], None]] = None,
 ):
     """统一 LLM 调用点：Runner.run + token 计量。
 
@@ -182,6 +183,8 @@ async def run_agent(
         attempt: 本次是第几次尝试（0 = 首调），用于区分首调与重试
         notice_id: 关联通知 ID（提取/待办），问答为 None
         provider: 供应商名（用量分析按供应商分组）
+        usage_cb: 可选回调 (input_tokens, output_tokens)，调用成功后触发一次
+                  （压测脚本 per-sample 归因用；默认 None 零开销）
 
     Returns:
         RunResult。调用失败时先写 success=0 的计量记录，再重新抛出异常，
@@ -211,6 +214,8 @@ async def run_agent(
         retry_count=attempt,
         notice_id=notice_id,
     )
+    if usage_cb is not None:
+        usage_cb(input_tokens, output_tokens)
     return result
 
 
@@ -223,6 +228,7 @@ async def run_agent_stream(
     attempt: int = 0,
     notice_id: Optional[int] = None,
     provider: Optional[str] = None,
+    usage_cb: Optional[Callable[[int, int], None]] = None,
 ):
     """统一 LLM 流式调用点：Runner.run_streamed + 逐 delta 产出 + token 计量。
 
@@ -231,7 +237,7 @@ async def run_agent_stream(
     token 数从 `response.completed` 事件中的 response.usage 采集。
 
     Args:
-        同 run_agent。
+        同 run_agent（usage_cb 在流式完成后触发一次）。
 
     Yields:
         str：模型输出的文本增量（response.output_text.delta）。
@@ -259,13 +265,17 @@ async def run_agent_stream(
             notice_id=notice_id,
         )
         raise
+    input_tokens = int(getattr(usage, "input_tokens", 0) or 0)
+    output_tokens = int(getattr(usage, "output_tokens", 0) or 0)
     record_llm_usage(
         task=task,
         provider=provider,
         model=model,
-        input_tokens=int(getattr(usage, "input_tokens", 0) or 0),
-        output_tokens=int(getattr(usage, "output_tokens", 0) or 0),
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
         success=True,
         retry_count=attempt,
         notice_id=notice_id,
     )
+    if usage_cb is not None:
+        usage_cb(input_tokens, output_tokens)

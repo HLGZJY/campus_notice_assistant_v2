@@ -15,6 +15,7 @@ SSE 一用就崩。本测试用替身 Runner 直接走 run_agent_stream 真实�
 import asyncio
 import logging
 import sys
+import tempfile
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -32,7 +33,8 @@ from storage.db import get_connection
 from utils import llm as utils_llm
 from utils.llm import run_agent_stream
 
-TMP_DB = Path(__file__).parent / "data" / "test_llm_stream.db"
+TMP_DIR = tempfile.mkdtemp(prefix="wb_test_llm_stream_")
+TMP_DB = Path(TMP_DIR) / "test_llm_stream.db"
 
 storage.db.DB_PATH = TMP_DB
 

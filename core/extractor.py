@@ -151,9 +151,11 @@ class NoticeExtractor:
     （配额/网络/5xx/404 等）时自动切下一个；400/401/403 不切换直接失败。
     """
 
-    def __init__(self):
+    def __init__(self, usage_cb=None):
         self.api_key, self.base_url, self.provider, self.models = get_model_candidates("extraction")
         self._agents: dict[str, Agent] = {}
+        # 可选回调 (input_tokens, output_tokens)：每次 LLM 调用成功后触发（压测 per-sample 归因）
+        self._usage_cb = usage_cb
 
     def _get_agent(self, model: str) -> Agent:
         agent = self._agents.get(model)
@@ -285,6 +287,7 @@ class NoticeExtractor:
             attempt=attempt,
             notice_id=notice_id,
             provider=self.provider,
+            usage_cb=self._usage_cb,
         )
         output = result.final_output
         if not isinstance(output, NoticeExtraction):
