@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { nextTick, ref, watch, onMounted } from 'vue'
+import { nextTick, ref, reactive, watch, onMounted } from 'vue'
 import { ChatbubbleEllipsesOutline, LayersOutline, SendOutline, SparklesOutline, TrashOutline } from '@vicons/ionicons5'
 import { useQaStore, type QaMessage } from '../stores/useQaStore'
+import MarkdownView from '../components/MarkdownView.vue'
 import { trackEvent, EVENT_TYPES } from '../api/events'
 import type { IndexStatsView } from '../api/schema'
 
@@ -34,13 +35,13 @@ watch(
 async function ask() {
   const q = question.value.trim()
   if (!q) return
-  const msg: QaMessage = {
+  const msg = reactive<QaMessage>({
     id: crypto.randomUUID(),
     question: q,
     answer: '',
     sources: [],
     retrievedChunks: 0,
-  }
+  })
   qa.history.push(msg)
   question.value = ''
   abortController = new AbortController()
@@ -134,7 +135,7 @@ function clearHistory() {
             </div>
             <div class="bubble bubble--assistant">
               <template v-if="msg.answer">
-                <pre class="answer-text">{{ msg.answer }}</pre>
+                <MarkdownView :content="msg.answer" />
               </template>
               <div v-else-if="msg.error" class="answer-error">[错误] {{ msg.error }}</div>
               <div v-else class="thinking">
@@ -296,6 +297,8 @@ function clearHistory() {
   color: var(--violet);
 }
 .bubble {
+  width: fit-content;
+  min-width: 0;
   max-width: 72%;
   padding: 12px 16px;
   border-radius: 14px;
@@ -313,13 +316,6 @@ function clearHistory() {
   color: var(--text-1);
   border-top-left-radius: 4px;
   border: 1px solid var(--border);
-}
-.answer-text {
-  white-space: pre-wrap;
-  word-break: break-word;
-  font-family: inherit;
-  margin: 0;
-  color: inherit;
 }
 .answer-error {
   color: var(--error);
