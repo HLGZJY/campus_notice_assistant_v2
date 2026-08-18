@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, ref, onMounted } from 'vue'
-import { useDialog, useMessage } from 'naive-ui'
+import { computed, h, ref, onMounted } from 'vue'
+import { NEllipsis, NTooltip, useDialog, useMessage } from 'naive-ui'
+import type { SelectOption } from 'naive-ui'
 import {
   ArrowUndoOutline,
   CheckmarkDoneCircleOutline,
@@ -81,6 +82,17 @@ const taskProgressVisible = ref(false)
 const sourceOptions = computed(() =>
   (configStore.sources?.sources ?? []).map((s) => ({ label: s.name, value: s.name }))
 )
+
+// 数据源选项文本可能很长：
+// - 下拉项（selected=false）：用 n-ellipsis 截断，悬停时显示完整内容 tooltip
+// - 选中框内的选中值（selected=true）：不在此处加 tooltip，改由外层 n-tooltip 包裹展示，避免重复气泡
+function renderSourceLabel(option: SelectOption, selected?: boolean) {
+  return h(
+    NEllipsis,
+    { style: 'max-width: 200px; width:100%;', tooltip: selected ? false : { placement: 'top' } },
+    { default: () => option.label ?? '' }
+  )
+}
 
 const FALLBACK_STATUSES = ['raw', 'extracted', 'partial', 'failed']
 const FALLBACK_TYPES = ['competition', 'lecture', 'registration', 'scholarship', 'administrative', 'recruitment', 'policy', 'result', 'news', 'other']
@@ -326,28 +338,33 @@ async function onReset(item: NoticeSummary) {
   })
 }
 
+async function reExtract(item: NoticeSummary) {
+  reExtracting.value = item.id
+  try {
+    const res = await notices.reExtractNotice(item.id)
+    const task = await poll(res.task_id)
+    if (task.status === 'success') {
+      message.success(`「${item.title}」提取完成`)
+    } else {
+      message.error(task.error || '重新提取失败')
+    }
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : String(e))
+  } finally {
+    reExtracting.value = null
+    await refresh()
+  }
+}
+
 async function onReExtract(item: NoticeSummary) {
   dialog.warning({
     title: '重新提取',
     content: `确定重新提取「${item.title}」？原提取结果将被覆盖。`,
     positiveText: '开始提取',
     negativeText: '取消',
-    onPositiveClick: async () => {
-      reExtracting.value = item.id
-      try {
-        const res = await notices.reExtractNotice(item.id)
-        const task = await poll(res.task_id)
-        if (task.status === 'success') {
-          message.success(`「${item.title}」提取完成`)
-        } else {
-          message.error(task.error || '重新提取失败')
-        }
-        await refresh()
-      } catch (e) {
-        message.error(e instanceof Error ? e.message : String(e))
-      } finally {
-        reExtracting.value = null
-      }
+    onPositiveClick: () => {
+      // 点击确认后立即关闭弹窗，提取任务在后台继续运行（不阻塞确认窗关闭）
+      void reExtract(item)
     },
   })
 }
@@ -527,13 +544,19 @@ function keyDatesText(d: NoticeDetail): string {
 
       <n-form inline class="filter-form" @submit.prevent="refresh">
         <n-form-item label="数据源">
-          <n-select
-            v-model:value="filterSource"
-            clearable
-            placeholder="全部来源"
-            :options="notices.sources.map((s) => ({ label: s, value: s }))"
-            style="width: 150px"
-          />
+          <n-tooltip :disabled="!filterSource" placement="top">
+            <template #trigger>
+              <n-select
+                v-model:value="filterSource"
+                clearable
+                placeholder="全部来源"
+                :options="notices.sources.map((s) => ({ label: s, value: s }))"
+                :render-label="renderSourceLabel"
+                style="width: 150px; max-width: 150px"
+              />
+            </template>
+            {{ filterSource }}
+          </n-tooltip>
         </n-form-item>
         <n-form-item label="类型">
           <n-select v-model:value="filterType" clearable :options="typeOptions" style="width: 150px" />
@@ -543,12 +566,6 @@ function keyDatesText(d: NoticeDetail): string {
         </n-form-item>
         <n-form-item label="关键词">
           <n-input v-model:value="filterKeyword" placeholder="标题模糊匹配" style="width: 150px" clearable />
-        </n-form-item>
-        <n-form-item label="发布时间">
-          <n-date-picker v-model:value="publishedRange" type="daterange" clearable style="width: 250px" />
-        </n-form-item>
-        <n-form-item label="抓取时间">
-          <n-date-picker v-model:value="crawledRange" type="daterange" clearable style="width: 250px" />
         </n-form-item>
         <n-form-item label="排序">
           <n-select
@@ -571,6 +588,15 @@ function keyDatesText(d: NoticeDetail): string {
           </n-button>
         </n-form-item>
       </n-form>
+
+      <div class="filter-row-secondary">
+        <n-form-item label="发布时间">
+          <n-date-picker v-model:value="publishedRange" type="daterange" clearable style="width: 250px" />
+        </n-form-item>
+        <n-form-item label="抓取时间">
+          <n-date-picker v-model:value="crawledRange" type="daterange" clearable style="width: 250px" />
+        </n-form-item>
+      </div>
 
       <n-spin :show="loading">
         <n-empty v-if="notices.list.length === 0" description="暂无通知" style="padding: 40px 0" />
@@ -654,6 +680,7 @@ function keyDatesText(d: NoticeDetail): string {
             multiple
             clearable
             :options="sourceOptions"
+            :render-label="renderSourceLabel"
             placeholder="全部启用来源"
             style="width: 100%"
           />
@@ -794,6 +821,37 @@ function keyDatesText(d: NoticeDetail): string {
   border-radius: 10px;
   background: var(--bg-soft);
   margin-bottom: 16px;
+}
+.filter-form :deep(.n-form-inline) {
+  flex-wrap: wrap;
+  row-gap: 12px;
+}
+/* 每个筛选项固定自身宽度，不被过长内容撑开，避免覆盖相邻的类型筛选框 */
+.filter-form :deep(.n-form-item) {
+  flex: 0 0 auto;
+  min-width: 0;
+}
+/* 选中长数据源时，限制选中标签宽度，避免筛选框被拉长覆盖相邻控件 */
+.filter-form :deep(.n-base-selection) {
+  width: 100%;
+  min-width: 0; /* flex容器允许收缩：子项默认 min-width:auto 会以内容撑开，必须显式置0 */
+}
+.filter-form :deep(.n-base-selection-label) {
+  min-width: 0;
+  flex-shrink: 1;
+}
+/* 发布时间 / 抓取时间 单独成行，位于筛选区下方并靠右对齐 */
+.filter-row-secondary {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  row-gap: 12px;
+  column-gap: 16px;
+  margin-top: 12px;
+}
+.filter-row-secondary :deep(.n-form-item) {
+  flex: 0 0 auto;
+  min-width: 0;
 }
 .notice-list {
   display: flex;
