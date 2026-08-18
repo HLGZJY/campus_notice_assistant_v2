@@ -55,13 +55,9 @@ const saving = ref(false)
 const reloading = ref(false)
 const loading = ref(false)
 const sourceExpanded = ref<Record<number, boolean>>({})
-const sourceHovered = ref<Record<number, boolean>>({})
 const providerExpanded = ref<Record<string, boolean>>({})
-const providerHovered = ref<Record<string, boolean>>({})
 const crawlExpanded = ref(false)
-const crawlHovered = ref(false)
 const extractExpanded = ref(false)
-const extractHovered = ref(false)
 
 // ---- Token 用量 Tab（GET /usage/tokens，阶段 7 遗留项落地） ----
 const usageDays = ref(7)
@@ -107,10 +103,10 @@ function isInteractiveTarget(e: MouseEvent): boolean {
 }
 
 function srcShow(idx: number) {
-  return !!sourceExpanded.value[idx] || !!sourceHovered.value[idx]
+  return !!sourceExpanded.value[idx]
 }
 function provShow(name: string) {
-  return !!providerExpanded.value[name] || !!providerHovered.value[name]
+  return !!providerExpanded.value[name]
 }
 function toggleSource(idx: number, e: MouseEvent) {
   if (isInteractiveTarget(e)) {
@@ -230,13 +226,9 @@ function initDrafts() {
   crawlDraft.value = cfg.crawl ? { ...cfg.crawl } : null
   extractDraft.value = cfg.extract ? { ...cfg.extract } : null
   sourceExpanded.value = {}
-  sourceHovered.value = {}
   providerExpanded.value = {}
-  providerHovered.value = {}
   crawlExpanded.value = false
-  crawlHovered.value = false
   extractExpanded.value = false
-  extractHovered.value = false
 }
 
 function handleMutation(res: ConfigMutationResult, okText = '保存成功') {
@@ -387,7 +379,6 @@ function confirmRemoveProvider(name: string) {
       delete testModelInput.value[name]
       delete testResult.value[name]
       delete providerExpanded.value[name]
-      delete providerHovered.value[name]
       message.success('已删除，保存供应商配置后生效')
     },
   })
@@ -495,7 +486,6 @@ function addSource() {
 function removeSource(idx: number) {
   sourcesDraft.value.splice(idx, 1)
   sourceExpanded.value = shiftKeyMap(sourceExpanded.value, idx)
-  sourceHovered.value = shiftKeyMap(sourceHovered.value, idx)
 }
 
 function shiftKeyMap(m: Record<number, boolean>, idx: number) {
@@ -676,8 +666,6 @@ async function reloadConfig() {
               size="small"
               class="collapsible-card"
               @click="toggleProvider(name, $event)"
-              @mouseenter="providerHovered[name] = true"
-              @mouseleave="providerHovered[name] = false"
             >
               <template #header>
                 <div class="card-header-bar">
@@ -833,8 +821,6 @@ async function reloadConfig() {
               size="small"
               class="collapsible-card"
               @click="toggleSource(idx, $event)"
-              @mouseenter="sourceHovered[idx] = true"
-              @mouseleave="sourceHovered[idx] = false"
             >
               <template #header>
                 <div class="card-header-bar">
@@ -942,8 +928,6 @@ async function reloadConfig() {
               v-if="crawlDraft"
               class="collapsible-card"
               @click="toggleCrawl($event)"
-              @mouseenter="crawlHovered = true"
-              @mouseleave="crawlHovered = false"
             >
               <template #header>
                 <div class="card-header-bar">
@@ -951,11 +935,11 @@ async function reloadConfig() {
                   <span class="card-header-title">全局抓取参数</span>
                   <span class="header-spacer" />
                   <n-icon size="14" color="var(--text-3)">
-                    <component :is="crawlExpanded || crawlHovered ? ChevronUpOutline : ChevronDownOutline" />
+                    <component :is="crawlExpanded ? ChevronUpOutline : ChevronDownOutline" />
                   </n-icon>
                 </div>
               </template>
-              <n-collapse-transition :show="crawlExpanded || crawlHovered">
+              <n-collapse-transition :show="crawlExpanded">
               <n-form label-placement="left" label-width="160">
                 <n-form-item label="抓取间隔（分钟）">
                   <n-input-number v-model:value="crawlDraft.interval_minutes" :min="1" style="width: 120px" />
@@ -996,8 +980,6 @@ async function reloadConfig() {
               v-if="extractDraft"
               class="collapsible-card"
               @click="toggleExtract($event)"
-              @mouseenter="extractHovered = true"
-              @mouseleave="extractHovered = false"
             >
               <template #header>
                 <div class="card-header-bar">
@@ -1005,11 +987,11 @@ async function reloadConfig() {
                   <span class="card-header-title">提取前置过滤</span>
                   <span class="header-spacer" />
                   <n-icon size="14" color="var(--text-3)">
-                    <component :is="extractExpanded || extractHovered ? ChevronUpOutline : ChevronDownOutline" />
+                    <component :is="extractExpanded ? ChevronUpOutline : ChevronDownOutline" />
                   </n-icon>
                 </div>
               </template>
-              <n-collapse-transition :show="extractExpanded || extractHovered">
+              <n-collapse-transition :show="extractExpanded">
               <n-alert type="info" :bordered="false" style="margin-bottom: 12px">
                 批量提取前先按规则预筛，不通过的通知不调 LLM（标记为“已跳过提取”），节省 Token。
                 全部条件为“且”关系，留空/关闭的条件不参与判定。
