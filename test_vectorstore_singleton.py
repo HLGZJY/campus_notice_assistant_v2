@@ -10,6 +10,7 @@
 """
 import shutil
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -61,7 +62,7 @@ def cleanup():
             pass
     vs._CLIENTS.clear()
     vs._DEFAULT_INDEX = None
-    for path in (TMP_CHROMA_A, TMP_CHROMA_B):
+    for path in (TMP_CHROMA_A, TMP_CHROMA_B, TMP_CHROMA_C):
         try:
             if path.exists():
                 shutil.rmtree(path)
@@ -138,6 +139,48 @@ def run():
     check("delete_collection 后 count=0", i1.count() == 0, f"count={i1.count()}")
     info_after = i1.add_notice(_sample_notice(3, "通知C", "关于C的正文内容，删除后重建。"))
     check("删除后 add_notice 重建可用", info_after["chunks"] > 0, f"chunks={info_after['chunks']}")
+
+    print("== 5. 客户端创建瞬时失败自动重试 ==")
+    # 模拟旧进程未退出、持久化存储被短暂占用：前 2 次创建抛错，第 3 次成功
+    TMP_CHROMA_C = Path(__file__).parent / "data" / "test_vs_singleton_c"
+    real_create = vs.chromadb.PersistentClient
+    calls = {"n": 0}
+
+    def flaky_create(path):
+        calls["n"] += 1
+        if calls["n"] <= 2:
+            raise RuntimeError("simulated store lock (bindings init failed)")
+        return real_create(path=path)
+
+    vs.chromadb.PersistentClient = flaky_create
+    vs.time.sleep = lambda s: None  # 加速：跳过 2s 重试间隔
+    try:
+        client = vs._get_persistent_client(TMP_CHROMA_C)
+        check("R1. 失败 2 次后第 3 次创建成功", calls["n"] == 3, f"calls={calls['n']}")
+        check("R1. 返回真实可用 client", client.heartbeat() > 0, "")
+        vs._CLIENTS.pop(str(TMP_CHROMA_C), None)
+    finally:
+        vs.chromadb.PersistentClient = real_create
+        vs.time.sleep = time.sleep
+
+    # 连续失败 3 次 → 上抛，不静默
+    calls2 = {"n": 0}
+
+    def always_fail(path):
+        calls2["n"] += 1
+        raise RuntimeError("persistent failure")
+
+    vs.chromadb.PersistentClient = always_fail
+    vs.time.sleep = lambda s: None
+    raised = False
+    try:
+        vs._get_persistent_client(TMP_CHROMA_C)
+    except RuntimeError:
+        raised = True
+    finally:
+        vs.chromadb.PersistentClient = real_create
+        vs.time.sleep = time.sleep
+    check("R2. 连续失败 3 次后上抛（不静默）", raised and calls2["n"] == 3, f"calls={calls2['n']} raised={raised}")
 
     cleanup()
     print("=" * 60)

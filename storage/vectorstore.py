@@ -11,6 +11,8 @@
 from __future__ import annotations
 
 import logging
+import threading
+import time
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Optional
@@ -30,6 +32,8 @@ COLLECTION_NAME = "notices"
 # 全局共享的 PersistentClient（按持久化目录缓存）：HNSW 索引进程内只加载一次，
 # 避免每次 new VectorIndex() 都从磁盘重载索引（QA/提取 25s 稳定病根之一）。
 _CLIENTS: dict[str, chromadb.PersistentClient] = {}
+# 客户端懒建并发保护：多个线程首次同时访问时只建一个（避免重复加载 HNSW）
+_CLIENT_LOCK = threading.Lock()
 # 默认路径的进程级单例 VectorIndex。
 _DEFAULT_INDEX: Optional["VectorIndex"] = None
 
@@ -51,14 +55,38 @@ def _doc_id(notice_id: int, chunk_idx: int) -> str:
 
 
 def _get_persistent_client(persist_dir: Path) -> chromadb.PersistentClient:
-    """按持久化目录获取全局共享的 PersistentClient（懒建，进程内缓存）。"""
+    """按持久化目录获取全局共享的 PersistentClient（懒建，进程内缓存）。
+
+    健壮性：旧进程未完全退出时持久化存储可能被短暂占用，Chroma 新建客户端
+    会初始化失败（Rust bindings 异常 → 伪装成 tenant 不存在），这里做有限重试。
+    """
     key = str(persist_dir)
     client = _CLIENTS.get(key)
-    if client is None:
-        client = chromadb.PersistentClient(path=key)
+    if client is not None:
+        return client
+    with _CLIENT_LOCK:
+        client = _CLIENTS.get(key)
+        if client is not None:
+            return client
+        last_error: Optional[Exception] = None
+        for attempt in range(3):
+            try:
+                client = chromadb.PersistentClient(path=key)
+                break
+            except Exception as e:  # noqa: BLE001
+                last_error = e
+                if attempt < 2:
+                    logger.warning(
+                        "创建 Chroma PersistentClient 失败（第 %d/3 次，2s 后重试）: %s",
+                        attempt + 1,
+                        e,
+                    )
+                    time.sleep(2.0)
+        if client is None:
+            raise last_error or RuntimeError(f"创建 Chroma PersistentClient 失败: {key}")
         _CLIENTS[key] = client
         logger.info("已创建共享 Chroma PersistentClient: %s", key)
-    return client
+        return client
 
 
 def _split_notice(notice: dict) -> list[Document]:
