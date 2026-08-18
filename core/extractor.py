@@ -11,7 +11,7 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from typing import Optional
 
 from agents import (
@@ -192,7 +192,9 @@ class NoticeExtractor:
 
         switched_errors: list[str] = []
         for model in self.models:
-            outcome = await self._try_model(model, prompt, reference, title, notice_id, content)
+            outcome = await self._try_model(
+                model, prompt, reference, title, notice_id, content, published_at
+            )
             if outcome is not None:
                 return outcome
             switched_errors.append(f"模型 {model} 失败")
@@ -212,6 +214,7 @@ class NoticeExtractor:
         title: str,
         notice_id: Optional[int],
         content: Optional[str] = None,
+        published_at: Optional[str] = None,
     ) -> Optional[ExtractionOutcome]:
         """在单个候选模型上执行「调用 + 校验重试」。
 
@@ -241,7 +244,7 @@ class NoticeExtractor:
                 return None
 
             best = ext
-            ext, errors = self._resolve_and_validate(ext, reference, content)
+            ext, errors = self._resolve_and_validate(ext, reference, content, published_at)
             if not errors:
                 return ExtractionOutcome(status=classify_status(ext), extraction=ext, error=None)
             last_error = "；".join(errors)
@@ -272,6 +275,7 @@ class NoticeExtractor:
                 prompt
                 + "\n\n【注意】上一次输出未通过校验，请修正后重新提取：\n"
                 + error_msg
+                + "\n【参考格式】deadline_raw: \"7月16日17:00\", deadline: \"2026-07-16T17:00:00\""
             )
         result = await run_agent(
             agent,
@@ -292,8 +296,14 @@ class NoticeExtractor:
         ext: NoticeExtraction,
         reference: Optional[date],
         content: Optional[str] = None,
+        published_at: Optional[str] = None,
     ) -> tuple[NoticeExtraction, list[str]]:
-        """时间规范化 + 语义校验。返回 (修正后的模型, 错误列表)。"""
+        """时间规范化 + 语义校验。返回 (修正后的模型, 错误列表)。
+
+        错误归因：
+          - 格式错误（deadline_raw 解析失败）→ Fast Path 兜底，不写入 errors（不触发重试）
+          - 逻辑冲突（截止早于发布时间）→ 写入 errors，触发 LLM 重试修正年份
+        """
         errors: list[str] = []
         fast = fast_extract(content) if content else None
 
@@ -321,6 +331,24 @@ class NoticeExtractor:
                 ext.signup_url = url
             else:
                 ext.signup_url = fast.urls[0] if (fast and fast.urls) else None
+
+        # 1c. 逻辑冲突：截止时间早于发布时间 → 写入 errors 触发 LLM 重试（确定性重算救不了）
+        if ext.deadline and published_at:
+            try:
+                deadline_dt = datetime.fromisoformat(ext.deadline.replace("Z", "+00:00"))
+                pub_dt = datetime.fromisoformat(published_at.replace("Z", "+00:00"))
+                # 统一为 naive 再比较，避免时区偏差误判
+                if deadline_dt.tzinfo is not None:
+                    deadline_dt = deadline_dt.replace(tzinfo=None)
+                if pub_dt.tzinfo is not None:
+                    pub_dt = pub_dt.replace(tzinfo=None)
+                if deadline_dt < pub_dt:
+                    errors.append(
+                        f"截止时间 {ext.deadline} 早于发布时间 {published_at}，"
+                        f"请重新核对 deadline_raw 的年份"
+                    )
+            except (ValueError, TypeError):
+                pass  # 任一端不可解析则跳过检查，不误报
 
         # 2. key_dates：尽力解析，不因解析失败阻断
         for kd in ext.key_dates:

@@ -35,7 +35,9 @@ docs\Agentic Workflow 框架.md
 
 ---
 
-### 🧩 批次 C（智能重试归因与 RAG 上下文优化）
+### 🧩 批次 C（智能重试归因与 RAG 上下文优化）-已完成
+
+完成记录：docs-local\assest\llm改进调用完成记录.md
 
 > **服务目标**：提升首次调用准确率，减少无效重试和冗余 Token 消耗，同时让 LLM 关注最关键的上下文。
 

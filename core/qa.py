@@ -174,7 +174,20 @@ class QAAgent:
                 )
             )
 
+        # Lost-in-the-Middle 优化：整体反转 context，使最相关的 Top-1 chunk
+        # 紧邻 Prompt 底部的"问题区"。sources 不反转——[n] 编号与 sources 按索引
+        # 一一对应（编号已内嵌在 context 片段里），反转来源会破坏引用映射。
+        context_parts.reverse()
+
         return "\n\n".join(context_parts), sources
+
+    def _build_prompt(self, question: str, context: str) -> str:
+        """拼接 RAG 问答 Prompt：参考通知在前、问题紧随其后（Lost-in-the-Middle 布局）。"""
+        return (
+            f"参考通知：\n\n{context}\n\n"
+            f"问题：{question}\n\n"
+            f"请根据参考通知回答问题，并用 [编号] 引用来源。"
+        )
 
     def _filter_cited_sources(self, answer: str, sources: list[SourceRef]) -> list[SourceRef]:
         """只保留答案中实际 [n] 引用的来源（1-based 编号，按答案出现顺序去重）。
@@ -201,11 +214,7 @@ class QAAgent:
             )
 
         context, sources = self._build_context(docs)
-        prompt = (
-            f"问题：{question}\n\n"
-            f"参考通知：\n\n{context}\n\n"
-            f"请根据参考通知回答问题，并用 [编号] 引用来源。"
-        )
+        prompt = self._build_prompt(question, context)
 
         result = None
         last_error: Optional[str] = None
@@ -258,11 +267,7 @@ class QAAgent:
             return
 
         context, sources = self._build_context(docs)
-        prompt = (
-            f"问题：{question}\n\n"
-            f"参考通知：\n\n{context}\n\n"
-            f"请根据参考通知回答问题，并用 [编号] 引用来源。"
-        )
+        prompt = self._build_prompt(question, context)
 
         parts: list[str] = []
         last_error: Optional[str] = None
