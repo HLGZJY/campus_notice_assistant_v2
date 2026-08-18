@@ -21,6 +21,7 @@ import { useTaskPoll } from '../composables/useTaskPoll'
 import { post } from '../api/http'
 import { endpoints } from '../api/endpoints'
 import { trackEvent, EVENT_TYPES } from '../api/events'
+import { useTaskStore } from '../stores/useTaskStore'
 import type { ExtractPreviewItem, ExtractPreviewResponse, NoticeBatchFilter, NoticeDetail, NoticeSummary, TaskCreateResult } from '../api/schema'
 
 const message = useMessage()
@@ -28,6 +29,7 @@ const dialog = useDialog()
 const notices = useNoticesStore()
 const configStore = useConfigStore()
 const { poll, submitAndPoll } = useTaskPoll()
+const taskStore = useTaskStore()
 
 interface BatchTaskResult {
   deleted_notices?: number
@@ -218,7 +220,7 @@ async function runCrawl() {
     const params: Record<string, unknown> = { mode: crawlMode.value, deep_check: crawlDeepCheck.value }
     if (crawlSources.value.length) params.sources = crawlSources.value
     if (crawlMaxPages.value) params.max_pages = crawlMaxPages.value
-    const task = await submitAndPoll('crawl_all', params, (t) => {
+    const task = await taskStore.submit('crawl_all', params, (t) => {
       if (typeof t.progress === 'number') taskProgress.value = t.progress
     })
     if (task.status === 'success') {
@@ -266,7 +268,7 @@ async function runExtractSelected() {
   taskProgressVisible.value = true
   taskProgress.value = 0
   try {
-    const task = await submitAndPoll(
+    const task = await taskStore.submit(
       'extract_batch',
       { notice_ids: selectedIds.value, auto_index: true },
       (t) => {
@@ -305,8 +307,7 @@ async function generateTodos(item: NoticeSummary) {
   generating.value = item.id
   try {
     trackEvent(EVENT_TYPES.TODO_GENERATE, item.id, item.title)
-    const res = await post<TaskCreateResult>(endpoints.notices.todos(item.id))
-    const task = await poll(res.task_id)
+    const task = await taskStore.submit('generate_todos', { notice_id: item.id })
     if (task.status === 'success') {
       message.success(`「${item.title}」待办已生成`)
       await refresh()
@@ -342,7 +343,7 @@ async function reExtract(item: NoticeSummary) {
   reExtracting.value = item.id
   try {
     const res = await notices.reExtractNotice(item.id)
-    const task = await poll(res.task_id)
+    const task = await taskStore.pollSingle(res.task_id)
     if (task.status === 'success') {
       message.success(`「${item.title}」提取完成`)
     } else {

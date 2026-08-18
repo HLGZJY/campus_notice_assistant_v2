@@ -5791,6 +5791,36 @@
         "title": "TaskCreateResult",
         "description": "任务提交结果（202）：前端据此轮询 GET /tasks/{id}。"
       },
+      "TaskTokenUsage": {
+        "properties": {
+          "input_tokens": {
+            "type": "integer",
+            "title": "Input Tokens",
+            "default": 0
+          },
+          "output_tokens": {
+            "type": "integer",
+            "title": "Output Tokens",
+            "default": 0
+          },
+          "calls": {
+            "type": "integer",
+            "title": "Calls",
+            "default": 0
+          },
+          "providers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Providers",
+            "default": []
+          }
+        },
+        "type": "object",
+        "title": "TaskTokenUsage",
+        "description": "任务级 token 反查聚合（由 result.notice_ids + 时间窗反查 token_usage 表）。"
+      },
       "TaskView": {
         "properties": {
           "id": {
@@ -5852,6 +5882,27 @@
           "updated_at": {
             "type": "string",
             "title": "Updated At"
+          },
+          "lock_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lock Key"
+          },
+          "token_usage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TaskTokenUsage"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",

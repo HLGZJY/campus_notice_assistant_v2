@@ -4,6 +4,10 @@ import type { TaskCreateResult, TaskView } from './schema'
 
 export type TaskStatus = 'queued' | 'running' | 'success' | 'failed'
 
+export async function listTasks(status?: TaskStatus, limit = 50): Promise<TaskView[]> {
+  return get<TaskView[]>(endpoints.tasks.list, { status, limit })
+}
+
 export function pollTask(
   taskId: number,
   onProgress?: (task: TaskView) => void,

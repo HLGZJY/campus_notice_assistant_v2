@@ -118,8 +118,12 @@ a:hover {
 
 /* ---- Shared helpers ---- */
 .page-wrap {
-  max-width: 1280px;
+  width: 100%;
   margin: 0 auto;
+  max-width: 100%;
+}
+.page-wrap > * {
+  width: 100%;
 }
 
 .section-title {

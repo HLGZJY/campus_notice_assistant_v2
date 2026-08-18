@@ -11,6 +11,7 @@ import {
   MoonOutline,
   NewspaperOutline,
   NotificationsOutline,
+  RocketOutline,
   SchoolOutline,
   SettingsOutline,
   StorefrontOutline,
@@ -19,11 +20,14 @@ import {
 import { endpoints } from './api/endpoints'
 import { get } from './api/http'
 import router from './router'
+import { useTaskStore } from './stores/useTaskStore'
 import { useThemeStore, type ThemeMode } from './stores/useThemeStore'
 import { lightThemeOverrides, darkThemeOverrides } from './theme'
+import TaskListDrawer from './components/TaskListDrawer.vue'
 
 const route = useRoute()
 const theme = useThemeStore()
+const taskStore = useTaskStore()
 const pendingCount = ref(0)
 const collapsed = ref(false)
 
@@ -98,11 +102,14 @@ onMounted(() => {
   theme.listen()
   fetchPendingCount()
   timer = setInterval(fetchPendingCount, 30000)
+  taskStore.fetchList()
+  taskStore.startGlobalPolling()
 })
 
 onUnmounted(() => {
   window.removeEventListener('resize', updateCollapsed)
   if (timer) clearInterval(timer)
+  taskStore.stopGlobalPolling()
 })
 </script>
 
@@ -117,31 +124,36 @@ onUnmounted(() => {
         <n-layout position="absolute" has-sider style="inset: 0">
           <n-layout-sider
             bordered
-            :width="240"
+            :width="280"
             :collapsed-width="64"
             :collapsed="collapsed"
             collapse-mode="width"
             :show-trigger="false"
           >
-            <div class="brand" :class="{ collapsed }">
-              <div class="brand-logo">
-                <n-icon size="22"><SchoolOutline /></n-icon>
-              </div>
-              <transition name="fade">
-                <div v-if="!collapsed" class="brand-text">
-                  <div class="brand-title">校园通知智能助手</div>
-                  <div class="brand-sub">Campus Notice Assistant</div>
+            <div class="sider-inner">
+              <div class="brand" :class="{ collapsed }">
+                <div class="brand-logo">
+                  <n-icon size="22"><SchoolOutline /></n-icon>
                 </div>
-              </transition>
+                <transition name="fade">
+                  <div v-if="!collapsed" class="brand-text">
+                    <div class="brand-title">校园通知智能助手</div>
+                    <div class="brand-sub">Campus Notice Assistant</div>
+                  </div>
+                </transition>
+              </div>
+              <div class="sider-menu">
+                <n-menu
+                  :value="route.path"
+                  :options="menuOptions"
+                  :collapsed="collapsed"
+                  :collapsed-width="64"
+                  :collapsed-icon-size="22"
+                  @update:value="onMenuUpdate"
+                />
+              </div>
+              <TaskListDrawer v-if="!collapsed" />
             </div>
-            <n-menu
-              :value="route.path"
-              :options="menuOptions"
-              :collapsed="collapsed"
-              :collapsed-width="64"
-              :collapsed-icon-size="22"
-              @update:value="onMenuUpdate"
-            />
           </n-layout-sider>
 
           <n-layout :native-scrollbar="false">
@@ -207,6 +219,18 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+.sider-inner {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+.sider-menu {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
+}
 .brand {
   display: flex;
   align-items: center;

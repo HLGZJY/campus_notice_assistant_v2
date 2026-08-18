@@ -18,6 +18,7 @@ import { useSubscriptionsStore } from '../stores/useSubscriptionsStore'
 import { useNoticesStore } from '../stores/useNoticesStore'
 import StatCard from '../components/StatCard.vue'
 import { useTaskPoll } from '../composables/useTaskPoll'
+import { useTaskStore } from '../stores/useTaskStore'
 import type {
   NoticeDetail,
   NoticeSummary,
@@ -30,6 +31,7 @@ const dialog = useDialog()
 const subs = useSubscriptionsStore()
 const notices = useNoticesStore()
 const { poll } = useTaskPoll()
+const taskStore = useTaskStore()
 
 const showModal = ref(false)
 const editingId = ref<number | null>(null)
@@ -138,7 +140,7 @@ async function confirm() {
     } else {
       result = await subs.create({ keyword: keyword.value.trim(), notice_type: noticeType.value, enabled: enabled.value })
     }
-    const task = await poll(result.task_id)
+    const task = await taskStore.pollSingle(result.task_id)
     if (task.status === 'success') {
       const backfill = (task.result as Record<string, unknown> | null | undefined)?.backfill as
         | { matched_notices?: number }
@@ -169,7 +171,7 @@ async function toggleSubscription(s: SubscriptionItem) {
   const next = s.enabled === 1 ? false : true
   try {
     const result = await subs.toggle(s.id, next)
-    const task = await poll(result.task_id)
+    const task = await taskStore.pollSingle(result.task_id)
     if (task.status === 'success') {
       await subs.fetchList()
       await subs.fetchStats()
@@ -209,7 +211,7 @@ async function matchAll() {
   matchingAll.value = true
   try {
     const result = await subs.matchAll()
-    const task = await poll(result.task_id)
+    const task = await taskStore.pollSingle(result.task_id)
     if (task.status === 'success') {
       const summary = task.result as { matched_notices?: number } | null | undefined
       message.success(`全库重匹配完成${summary?.matched_notices != null ? `（命中 ${summary.matched_notices} 条通知）` : ''}`)

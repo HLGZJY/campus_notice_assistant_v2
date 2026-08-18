@@ -2102,6 +2102,32 @@ export interface components {
             status: string;
         };
         /**
+         * TaskTokenUsage
+         * @description 任务级 token 反查聚合（由 result.notice_ids + 时间窗反查 token_usage 表）。
+         */
+        TaskTokenUsage: {
+            /**
+             * Input Tokens
+             * @default 0
+             */
+            input_tokens: number;
+            /**
+             * Output Tokens
+             * @default 0
+             */
+            output_tokens: number;
+            /**
+             * Calls
+             * @default 0
+             */
+            calls: number;
+            /**
+             * Providers
+             * @default []
+             */
+            providers: string[];
+        };
+        /**
          * TaskView
          * @description 任务查询视图（轮询点）。
          */
@@ -2131,6 +2157,9 @@ export interface components {
             created_at: string;
             /** Updated At */
             updated_at: string;
+            /** Lock Key */
+            lock_key?: string | null;
+            token_usage?: components["schemas"]["TaskTokenUsage"] | null;
         };
         /**
          * TestModelRequest
