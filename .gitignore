@@ -39,3 +39,9 @@ docs-local/assest
 config/app.yaml
 config/schools/scuec.yaml
 # 本机个性化配置已 git rm --cached 取消跟踪（默认配置保留在 config/scuec.yaml）
+
+# ---------- WorkBuddy 工作记忆（不入库） ----------
+.workbuddy/
+
+# ---------- benchmark 临时输出 ----------
+data/benchmark_*.json

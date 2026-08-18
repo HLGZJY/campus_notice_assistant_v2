@@ -18,11 +18,12 @@ import logging
 from functools import partial
 from typing import Callable, Optional
 
+from api.tasks.lock import compute_lock_key
 from api.tasks.workers import WORKERS
 from storage.db import (
     claim_next_task,
     complete_task,
-    create_task,
+    create_task_or_get_existing,
     fail_task,
     get_connection,
     get_task as db_get_task,
@@ -72,12 +73,16 @@ class TaskManager:
     # ---------- 提交 / 查询（同步，路由线程池可直接调用） ----------
 
     def submit(self, task_type: str, params: Optional[dict] = None) -> int:
-        """提交一个 queued 任务，返回 task_id。未知 type 抛 ValueError。"""
+        """提交一个 queued 任务，返回 task_id。未知 type 抛 ValueError。
+
+        幂等去重：若已有 (type, lock_key) 相同且 queued/running 的任务，直接返回其 id。
+        """
         if task_type not in WORKERS:
             raise ValueError(f"未知任务类型: {task_type}")
+        lock_key = compute_lock_key(task_type, params or {})
         conn = get_connection()
         try:
-            return create_task(conn, task_type, params)
+            return create_task_or_get_existing(conn, task_type, params, lock_key)
         finally:
             conn.close()
 

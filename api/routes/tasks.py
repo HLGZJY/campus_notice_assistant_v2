@@ -11,7 +11,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from api.deps import require_auth
 from api.schemas import TaskCreateRequest, TaskCreateResult, TaskView
+from api.tasks.lock import LLM_TASK_TYPES
 from api.tasks.workers import WORKERS
+from services.usage_service import get_token_usage_for_task
 
 router = APIRouter(
     prefix="/tasks",
@@ -38,13 +40,22 @@ def create_task(request: Request, body: TaskCreateRequest) -> TaskCreateResult:
     return TaskCreateResult(task_id=task_id, type=body.type, status="queued")
 
 
+def _enrich_task(task: dict) -> TaskView:
+    """构建 TaskView 并对 success 的 LLM 类任务反查 token_usage。"""
+    if task.get("status") == "success" and task.get("type") in LLM_TASK_TYPES:
+        task["token_usage"] = get_token_usage_for_task(task)
+    else:
+        task.setdefault("token_usage", None)
+    return TaskView(**task)
+
+
 @router.get("/{task_id}", response_model=TaskView)
 def get_task(request: Request, task_id: int) -> TaskView:
     """查询任务状态 / 进度 / 结果（轮询点）。"""
     task = get_task_manager(request).get(task_id)
     if task is None:
         raise HTTPException(status_code=404, detail=f"任务 {task_id} 不存在")
-    return TaskView(**task)
+    return _enrich_task(task)
 
 
 @router.get("", response_model=list[TaskView])
@@ -55,4 +66,4 @@ def list_tasks(
 ) -> list[TaskView]:
     """最近任务列表（可按状态过滤，按 id 倒序）。"""
     tasks = get_task_manager(request).list(status=status, limit=limit)
-    return [TaskView(**t) for t in tasks]
+    return [_enrich_task(t) for t in tasks]

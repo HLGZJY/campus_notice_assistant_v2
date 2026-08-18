@@ -136,7 +136,7 @@ def run():
     cols = {r[1] for r in conn.execute("PRAGMA table_info(tasks)")}
     check(
         "tasks 列齐全",
-        {"id", "type", "params_json", "status", "progress", "result_json", "error", "created_at", "updated_at"}
+        {"id", "type", "params_json", "status", "progress", "result_json", "error", "lock_key", "created_at", "updated_at"}
         <= cols,
         f"cols={sorted(cols)}",
     )
@@ -261,8 +261,8 @@ def run():
     conn.close()
 
     mgr4 = TaskManager(deps={"extractor": FakeExtractor()})
-    t1 = mgr4.submit("extract_batch", {"limit": 100, "auto_index": False, "prefilter": False})
-    t2 = mgr4.submit("extract_batch", {"limit": 100, "auto_index": False, "prefilter": False})
+    t1 = mgr4.submit("extract_batch", {"notice_ids": [1, 2], "auto_index": False, "prefilter": False})
+    t2 = mgr4.submit("extract_batch", {"notice_ids": [3], "auto_index": False, "prefilter": False})
     check("第二个任务提交后排队 queued", mgr4.get(t2)["status"] == "queued", f"status={mgr4.get(t2)['status']}")
 
     asyncio.run(_drive(mgr4))
@@ -294,6 +294,92 @@ def run():
         check("failed 任务记录保留（result 为 None）", rec["result"] is None, f"result={rec['result']}")
     finally:
         workers_mod.WORKERS.pop("boom", None)
+
+    # ---------- Part 5：任务锁幂等去重 ----------
+    print("\n== 5. 任务锁幂等去重（防重复点击） ==")
+    reset_db()
+    mgr6 = TaskManager()
+
+    # 5.1 同一 notice_id 的 generate_todos 连续提交两次 → 返回相同 task_id
+    tid_a1 = mgr6.submit("generate_todos", {"notice_id": 42})
+    tid_a2 = mgr6.submit("generate_todos", {"notice_id": 42})
+    check(
+        "同一 notice_id 重复提交返回相同 task_id（幂等）",
+        tid_a1 == tid_a2,
+        f"tid_a1={tid_a1}, tid_a2={tid_a2}",
+    )
+
+    # 5.2 不同 notice_id → 不同 task_id
+    tid_b = mgr6.submit("generate_todos", {"notice_id": 43})
+    check(
+        "不同 notice_id 返回不同 task_id",
+        tid_b != tid_a1,
+        f"tid_a1={tid_a1}, tid_b={tid_b}",
+    )
+
+    # 5.3 re_extract_notice 同一 notice_id 也去重（type 不同但 lock_key 相同 notice:42）
+    tid_r1 = mgr6.submit("re_extract_notice", {"notice_id": 42})
+    tid_r2 = mgr6.submit("re_extract_notice", {"notice_id": 42})
+    check(
+        "re_extract_notice 同一 notice_id 幂等",
+        tid_r1 == tid_r2,
+        f"tid_r1={tid_r1}, tid_r2={tid_r2}",
+    )
+    check(
+        "re_extract 与 generate_todos lock_key 相同但 type 不同 → 不同 task_id",
+        tid_r1 != tid_a1,
+        f"tid_a1={tid_a1}, tid_r1={tid_r1}",
+    )
+
+    # 5.4 crawl_all 无 sources → lock_key=crawl_all:default，重复提交幂等
+    tid_c1 = mgr6.submit("crawl_all", {})
+    tid_c2 = mgr6.submit("crawl_all", {})
+    check(
+        "crawl_all 无 sources 重复提交幂等",
+        tid_c1 == tid_c2,
+        f"tid_c1={tid_c1}, tid_c2={tid_c2}",
+    )
+
+    # 5.5 crawl_all 有 sources → 按 sources 集合去重（顺序无关）
+    tid_d1 = mgr6.submit("crawl_all", {"sources": ["教务处", "学工部"]})
+    tid_d2 = mgr6.submit("crawl_all", {"sources": ["学工部", "教务处"]})
+    check(
+        "crawl_all sources 顺序不同但集合相同 → 幂等",
+        tid_d1 == tid_d2,
+        f"tid_d1={tid_d1}, tid_d2={tid_d2}",
+    )
+
+    # 5.6 extract_batch 有 notice_ids → 按 ids 集合去重
+    tid_e1 = mgr6.submit("extract_batch", {"notice_ids": [10, 20, 30]})
+    tid_e2 = mgr6.submit("extract_batch", {"notice_ids": [30, 20, 10]})
+    check(
+        "extract_batch notice_ids 顺序不同但集合相同 → 幂等",
+        tid_e1 == tid_e2,
+        f"tid_e1={tid_e1}, tid_e2={tid_e2}",
+    )
+
+    # 5.7 终态任务不阻止重新提交（lock_key 相同但 status=success/failed）
+    #     先把第一个 generate_todos 任务标记 failed，再提交应得到新 task_id
+    conn = get_connection()
+    conn.execute("UPDATE tasks SET status='failed' WHERE id=?", (tid_a1,))
+    conn.commit()
+    conn.close()
+    tid_a3 = mgr6.submit("generate_todos", {"notice_id": 42})
+    check(
+        "终态任务（failed）后重新提交 → 新 task_id",
+        tid_a3 != tid_a1,
+        f"tid_a1={tid_a1}, tid_a3={tid_a3}",
+    )
+
+    # 5.8 验证 lock_key 写入 DB
+    conn = get_connection()
+    row = conn.execute("SELECT lock_key FROM tasks WHERE id=?", (tid_a1,)).fetchone()
+    conn.close()
+    check(
+        "DB 中 lock_key 已写入",
+        row is not None and row["lock_key"] == "notice:42",
+        f"lock_key={row['lock_key'] if row else 'N/A'}",
+    )
 
     cleanup()
     print("=" * 60)

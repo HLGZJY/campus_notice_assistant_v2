@@ -586,13 +586,13 @@ def extract_batch(
                 # 省 token 模式：不调 LLM，仅订阅匹配 + 建索引，状态置 partial（仅索引未结构化）
                 update_extraction(conn2, notice["id"], {}, "partial")
                 try:
-                    match_notice(notice["id"])
+                    await asyncio.to_thread(match_notice, notice["id"])
                 except Exception as e:
                     logger.warning("订阅匹配失败 notice_id=%s: %s", notice["id"], e)
                 if auto_index:
                     try:
                         updated = get_notice_by_id(conn2, notice["id"])
-                        _get_vector_index().add_notice(dict(updated))
+                        await asyncio.to_thread(_get_vector_index().add_notice, dict(updated))
                     except Exception as e:
                         logger.warning("自动索引失败 notice_id=%s: %s", notice["id"], e)
                 return {
@@ -617,13 +617,13 @@ def extract_batch(
             else:
                 update_extraction(conn2, notice["id"], extraction, status)
                 try:
-                    match_notice(notice["id"])
+                    await asyncio.to_thread(match_notice, notice["id"])
                 except Exception as e:
                     logger.warning("订阅匹配失败 notice_id=%s: %s", notice["id"], e)
                 if auto_index:
                     try:
                         updated = get_notice_by_id(conn2, notice["id"])
-                        _get_vector_index().add_notice(dict(updated))
+                        await asyncio.to_thread(_get_vector_index().add_notice, dict(updated))
                     except Exception as e:
                         logger.warning("自动索引失败 notice_id=%s: %s", notice["id"], e)
 

@@ -139,12 +139,14 @@ CREATE TABLE IF NOT EXISTS tasks (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     type TEXT NOT NULL,                -- crawl_source / crawl_all / extract_batch /
                                        -- subscription_add / subscription_update / match_all /
-                                       -- rebuild_index / generate_todos
+                                       -- rebuild_index / generate_todos / re_extract_notice /
+                                       -- batch_delete / batch_reset
     params_json TEXT,                  -- 请求参数 JSON
     status TEXT NOT NULL DEFAULT 'queued',  -- queued / running / success / failed
     progress REAL NOT NULL DEFAULT 0,  -- 0.0 ~ 1.0
     result_json TEXT,
     error TEXT,
+    lock_key TEXT,                     -- 任务锁键（去重用，NULL=不参与去重）
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
@@ -175,6 +177,8 @@ _MIGRATIONS = [
     "ALTER TABLE notices ADD COLUMN extract_skipped_reason TEXT",
     # 阶段 7 Token 用量：记录调用供应商（多供应商候选列表 + 连通性测试）
     "ALTER TABLE token_usage ADD COLUMN provider TEXT",
+    # 任务锁：提交时按 (type, lock_key) 去重，防止重复点击产生重复任务
+    "ALTER TABLE tasks ADD COLUMN lock_key TEXT",
 ]
 
 
@@ -198,11 +202,13 @@ def _migrate(conn: sqlite3.Connection) -> None:
     crawl_log_cols = _table_cols("crawl_log")
     todos_cols = _table_cols("todos")
     token_usage_cols = _table_cols("token_usage")
+    tasks_cols = _table_cols("tasks")
     cols_by_table = {
         "notices": notices_cols,
         "crawl_log": crawl_log_cols,
         "todos": todos_cols,
         "token_usage": token_usage_cols,
+        "tasks": tasks_cols,
     }
     for stmt in _MIGRATIONS:
         table = stmt.split("ALTER TABLE ")[1].split(" ")[0]
@@ -210,6 +216,11 @@ def _migrate(conn: sqlite3.Connection) -> None:
         cols = cols_by_table.get(table, set())
         if col not in cols:
             conn.execute(stmt)
+
+    # lock_key 列已确保存在（新建库由 SCHEMA 带，旧库由上面 ALTER 补），安全创建索引
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_tasks_lock ON tasks(type, lock_key, status)"
+    )
 
     # 回填已有正文的 content_hash，避免升级后首轮抓取触发全量"变更"
     if "content_hash" in notices_cols or "content_hash" in _table_cols("notices"):
@@ -1075,6 +1086,42 @@ def get_token_usage_summary(
     return {"days": days, "rows": items, "total": total}
 
 
+def get_token_usage_by_notice_ids(
+    conn: sqlite3.Connection,
+    notice_ids: list[int],
+    created_from: str,
+    created_to: str,
+) -> dict:
+    """按 notice_id 列表 + 时间窗聚合 token 用量（任务级 token 反查）。
+
+    走 idx_token_usage_notice + idx_token_usage_created 索引。
+    notice_ids 为空或无命中返回零值 dict。
+    """
+    zero = {"input_tokens": 0, "output_tokens": 0, "calls": 0, "providers": []}
+    if not notice_ids:
+        return zero
+    placeholders = ",".join("?" for _ in notice_ids)
+    row = conn.execute(
+        f"""SELECT COALESCE(SUM(input_tokens), 0) AS input_tokens,
+                  COALESCE(SUM(output_tokens), 0) AS output_tokens,
+                  COUNT(*) AS calls,
+                  GROUP_CONCAT(DISTINCT COALESCE(provider, '')) AS providers_csv
+           FROM token_usage
+           WHERE notice_id IN ({placeholders})
+             AND created_at BETWEEN ? AND ?""",
+        (*notice_ids, created_from, created_to),
+    ).fetchone()
+    if row is None:
+        return zero
+    providers = [p for p in (row["providers_csv"] or "").split(",") if p]
+    return {
+        "input_tokens": row["input_tokens"] or 0,
+        "output_tokens": row["output_tokens"] or 0,
+        "calls": row["calls"] or 0,
+        "providers": sorted(set(providers)),
+    }
+
+
 def get_all_notice_ids(conn: sqlite3.Connection) -> list[int]:
     """返回 SQLite 中全部通知 ID（幽灵向量判定的参照集，模块 2.5）。
 
@@ -1569,7 +1616,7 @@ def get_notice_status_snapshot(conn: sqlite3.Connection) -> dict[int, str]:
 
 
 def create_task(conn: sqlite3.Connection, task_type: str, params: Optional[dict] = None) -> int:
-    """写入一条 queued 任务，返回新 id。"""
+    """写入一条 queued 任务，返回新 id（兼容旧调用，不做去重）。"""
     now = datetime.now().isoformat()
     cur = conn.execute(
         """INSERT INTO tasks (type, params_json, status, progress, created_at, updated_at)
@@ -1578,6 +1625,45 @@ def create_task(conn: sqlite3.Connection, task_type: str, params: Optional[dict]
     )
     conn.commit()
     return cur.lastrowid
+
+
+def create_task_or_get_existing(
+    conn: sqlite3.Connection,
+    task_type: str,
+    params: Optional[dict],
+    lock_key: Optional[str],
+) -> int:
+    """提交任务并做幂等去重：若已有 (type, lock_key) 相同且 status IN (queued, running) 的任务，
+    直接返回该任务 id；否则新建。
+
+    用 BEGIN IMMEDIATE 事务串行化并发提交，规避 check-then-insert 的 TOCTOU。
+    lock_key 为 None 时不参与去重（直接新建）。
+    """
+    now = datetime.now().isoformat()
+    params_json = json.dumps(params, ensure_ascii=False) if params else None
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        if lock_key is not None:
+            row = conn.execute(
+                """SELECT id FROM tasks
+                   WHERE type = ? AND lock_key = ?
+                     AND status IN ('queued', 'running')
+                   ORDER BY id LIMIT 1""",
+                (task_type, lock_key),
+            ).fetchone()
+            if row is not None:
+                conn.commit()  # 幂等返回已有任务
+                return row["id"]
+        cur = conn.execute(
+            """INSERT INTO tasks (type, params_json, status, progress, lock_key, created_at, updated_at)
+               VALUES (?, ?, 'queued', 0, ?, ?, ?)""",
+            (task_type, params_json, lock_key, now, now),
+        )
+        conn.commit()
+        return cur.lastrowid
+    except Exception:
+        conn.rollback()
+        raise
 
 
 def claim_next_task(conn: sqlite3.Connection) -> Optional[dict]:

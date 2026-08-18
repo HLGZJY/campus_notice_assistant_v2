@@ -526,6 +526,15 @@ class TaskCreateResult(BaseModel):
     status: str = "queued"
 
 
+class TaskTokenUsage(BaseModel):
+    """任务级 token 反查聚合（由 result.notice_ids + 时间窗反查 token_usage 表）。"""
+
+    input_tokens: int = 0
+    output_tokens: int = 0
+    calls: int = 0
+    providers: list[str] = []
+
+
 class TaskView(BaseModel):
     """任务查询视图（轮询点）。"""
 
@@ -538,6 +547,8 @@ class TaskView(BaseModel):
     error: Optional[str] = None
     created_at: str
     updated_at: str
+    lock_key: Optional[str] = None
+    token_usage: Optional[TaskTokenUsage] = None
 
 
 # ---------- 问答（阶段 5，盘点 §5.7 唯一例外） ----------
