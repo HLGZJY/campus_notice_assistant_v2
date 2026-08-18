@@ -15,7 +15,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from storage.db import get_connection, get_notice_by_id
-from storage.vectorstore import VectorIndex
+from storage.vectorstore import get_vector_index
 
 logging.basicConfig(
     level=logging.INFO,
@@ -78,7 +78,7 @@ def main():
         logging.getLogger().setLevel(logging.DEBUG)
 
     conn = get_connection()
-    index = VectorIndex()
+    index = get_vector_index()
 
     try:
         if args.notice is not None:

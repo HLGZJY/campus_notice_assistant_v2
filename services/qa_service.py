@@ -9,9 +9,9 @@ from storage.db import get_connection, get_notice_by_id
 
 def _get_vector_index():
     """延迟导入 VectorIndex，避免在不需要向量功能时触发重依赖。"""
-    from storage.vectorstore import VectorIndex
+    from storage.vectorstore import get_vector_index
 
-    return VectorIndex()
+    return get_vector_index()
 
 
 def ask(question: str) -> QAResult:

@@ -15,6 +15,7 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Optional
 
+import chromadb
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -25,6 +26,12 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_PERSIST_DIR = Path(__file__).parent.parent / "data" / "chroma"
 COLLECTION_NAME = "notices"
+
+# 全局共享的 PersistentClient（按持久化目录缓存）：HNSW 索引进程内只加载一次，
+# 避免每次 new VectorIndex() 都从磁盘重载索引（QA/提取 25s 稳定病根之一）。
+_CLIENTS: dict[str, chromadb.PersistentClient] = {}
+# 默认路径的进程级单例 VectorIndex。
+_DEFAULT_INDEX: Optional["VectorIndex"] = None
 
 # 模块 2.3 过期策略
 DEFAULT_EXPIRE_DAYS = 90  # 无 deadline 通知的默认有效期兜底（天）
@@ -41,6 +48,17 @@ TEXT_SPLITTER = RecursiveCharacterTextSplitter(
 
 def _doc_id(notice_id: int, chunk_idx: int) -> str:
     return f"notice_{notice_id}_chunk_{chunk_idx}"
+
+
+def _get_persistent_client(persist_dir: Path) -> chromadb.PersistentClient:
+    """按持久化目录获取全局共享的 PersistentClient（懒建，进程内缓存）。"""
+    key = str(persist_dir)
+    client = _CLIENTS.get(key)
+    if client is None:
+        client = chromadb.PersistentClient(path=key)
+        _CLIENTS[key] = client
+        logger.info("已创建共享 Chroma PersistentClient: %s", key)
+    return client
 
 
 def _split_notice(notice: dict) -> list[Document]:
@@ -152,8 +170,10 @@ class VectorIndex:
             return self._store
 
         self.persist_dir.mkdir(parents=True, exist_ok=True)
+        # 刷新 embedding 实例：配置变更 / 测试 monkeypatch 后按最新 get_embeddings() 生效
+        self._embedding = get_embeddings()
         self._store = Chroma(
-            persist_directory=str(self.persist_dir),
+            client=_get_persistent_client(self.persist_dir),
             embedding_function=self._embedding,
             collection_name=self.collection_name,
             collection_metadata={"hnsw:space": "cosine"},
@@ -397,8 +417,17 @@ class VectorIndex:
 
 
 def get_vector_index(persist_dir: Optional[Path] = None) -> VectorIndex:
-    """获取默认 VectorIndex 实例。"""
-    return VectorIndex(persist_dir=persist_dir)
+    """获取 VectorIndex 实例。
+
+    默认路径返回进程级单例（共享同一个 PersistentClient，HNSW 索引只加载一次）；
+    传入 persist_dir 时返回独立实例（测试 / 隔离场景用）。
+    """
+    global _DEFAULT_INDEX
+    if persist_dir is not None:
+        return VectorIndex(persist_dir=persist_dir)
+    if _DEFAULT_INDEX is None:
+        _DEFAULT_INDEX = VectorIndex()
+    return _DEFAULT_INDEX
 
 
 def check_consistency(

@@ -31,6 +31,7 @@ from storage.vectorstore import (
     VectorIndex,
     _days_expired,
     _default_expire_days,
+    get_vector_index,
 )
 
 logger = logging.getLogger(__name__)
@@ -110,7 +111,7 @@ class HybridIndex:
         rrf_k: int = DEFAULT_RRF_K,
         candidate_k: int = DEFAULT_CANDIDATE_K,
     ):
-        self._index = index or VectorIndex()
+        self._index = index or get_vector_index()
         self.rrf_k = rrf_k
         self.candidate_k = candidate_k
         self._corpus_docs: list[Document] = []

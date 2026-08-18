@@ -77,9 +77,9 @@ class QAAgent:
         **search_kwargs,
     ):
         if index is None:
-            from storage.vectorstore import VectorIndex
+            from storage.vectorstore import get_vector_index
 
-            index = VectorIndex()
+            index = get_vector_index()
         self.index = index
         self.api_key, self.base_url, self.provider, self.models = get_model_candidates("qa")
         self.top_k = top_k

@@ -17,10 +17,12 @@ from services.subscription_service import match_notice
 from storage.db import (
     build_notice_where,
     clear_prefiltered,
+    close_task_connection,
     count_notices_by_status,
     get_connection,
     get_notice_by_id,
     get_notices_by_status,
+    get_task_connection,
     mark_failed,
     mark_prefiltered,
     update_extraction,
@@ -38,9 +40,9 @@ _TIME_HINT_PATTERN = re.compile(
 
 def _get_vector_index():
     """延迟导入 VectorIndex，避免在只需要查询通知时触发向量库依赖。"""
-    from storage.vectorstore import VectorIndex
+    from storage.vectorstore import get_vector_index
 
-    return VectorIndex()
+    return get_vector_index()
 
 
 def get_school_config():
@@ -574,15 +576,15 @@ def extract_batch(
 
     async def _run() -> dict:
         summary = {"extracted": 0, "partial": 0, "failed": 0, "details": []}
-        for i, notice in enumerate(notices, start=1):
-            if progress_cb is not None:
-                progress_cb(i, total)
-            try:
-                if cfg.skip_llm:
-                    # 省 token 模式：不调 LLM，仅订阅匹配 + 建索引，状态置 partial（仅索引未结构化）
-                    status = "partial"
-                    conn2 = get_connection()
-                    try:
+        try:
+            for i, notice in enumerate(notices, start=1):
+                if progress_cb is not None:
+                    progress_cb(i, total)
+                try:
+                    if cfg.skip_llm:
+                        # 省 token 模式：不调 LLM，仅订阅匹配 + 建索引，状态置 partial（仅索引未结构化）
+                        status = "partial"
+                        conn2 = get_task_connection()
                         update_extraction(conn2, notice["id"], {}, "partial")
                         try:
                             match_notice(notice["id"])
@@ -594,33 +596,30 @@ def extract_batch(
                                 _get_vector_index().add_notice(dict(updated))
                             except Exception as e:
                                 logger.warning("自动索引失败 notice_id=%s: %s", notice["id"], e)
-                    finally:
-                        conn2.close()
-                    summary["partial"] += 1
-                    summary["details"].append(
-                        {
-                            "id": notice["id"],
-                            "title": notice["title"],
-                            "status": status,
-                            "error": None,
-                            "skipped_llm": True,
-                        }
+                        summary["partial"] += 1
+                        summary["details"].append(
+                            {
+                                "id": notice["id"],
+                                "title": notice["title"],
+                                "status": status,
+                                "error": None,
+                                "skipped_llm": True,
+                            }
+                        )
+                        continue
+
+                    outcome = await extractor.extract_one(
+                        title=notice["title"],
+                        content=notice["raw_content"],
+                        published_at=notice.get("published_at"),
+                        crawled_at=notice.get("crawled_at"),
+                        notice_id=notice["id"],
                     )
-                    continue
+                    status = outcome.status
+                    extraction = outcome.extraction.model_dump() if outcome.extraction else None
 
-                outcome = await extractor.extract_one(
-                    title=notice["title"],
-                    content=notice["raw_content"],
-                    published_at=notice.get("published_at"),
-                    crawled_at=notice.get("crawled_at"),
-                    notice_id=notice["id"],
-                )
-                status = outcome.status
-                extraction = outcome.extraction.model_dump() if outcome.extraction else None
-
-                # 写库
-                conn2 = get_connection()
-                try:
+                    # 写库（专属任务连接：每协程/任务上下文一条，循环结束后统一关闭）
+                    conn2 = get_task_connection()
                     if status == "failed" or extraction is None:
                         mark_failed(conn2, notice["id"], outcome.error or "提取失败")
                         summary["failed"] += 1
@@ -637,28 +636,28 @@ def extract_batch(
                                 _get_vector_index().add_notice(dict(updated))
                             except Exception as e:
                                 logger.warning("自动索引失败 notice_id=%s: %s", notice["id"], e)
-                finally:
-                    conn2.close()
 
-                summary["details"].append(
-                    {
-                        "id": notice["id"],
-                        "title": notice["title"],
-                        "status": status,
-                        "error": outcome.error,
-                    }
-                )
-            except Exception as e:
-                logger.exception("提取失败 notice_id=%s", notice["id"])
-                summary["failed"] += 1
-                summary["details"].append(
-                    {
-                        "id": notice["id"],
-                        "title": notice["title"],
-                        "status": "failed",
-                        "error": f"{type(e).__name__}: {e}",
-                    }
-                )
+                    summary["details"].append(
+                        {
+                            "id": notice["id"],
+                            "title": notice["title"],
+                            "status": status,
+                            "error": outcome.error,
+                        }
+                    )
+                except Exception as e:
+                    logger.exception("提取失败 notice_id=%s", notice["id"])
+                    summary["failed"] += 1
+                    summary["details"].append(
+                        {
+                            "id": notice["id"],
+                            "title": notice["title"],
+                            "status": "failed",
+                            "error": f"{type(e).__name__}: {e}",
+                        }
+                    )
+        finally:
+            close_task_connection()
         return summary
 
     summary = asyncio.run(_run())

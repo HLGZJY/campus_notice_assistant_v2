@@ -1,4 +1,5 @@
 """SQLite 存储层。"""
+import contextvars
 import hashlib
 import json
 import re
@@ -226,14 +227,46 @@ def _migrate(conn: sqlite3.Connection) -> None:
 
 
 def get_connection(db_path: Optional[Path] = None) -> sqlite3.Connection:
-    """获取 SQLite 连接，自动建库建表 + 迁移。"""
+    """获取 SQLite 连接，自动建库建表 + 迁移。
+
+    并发加固（阶段 A）：check_same_thread=False 允许跨线程复用连接；
+    timeout=30.0 在写锁竞争时等待而非立即抛 "database is locked"。
+    """
     path = db_path or DB_PATH
     path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(path))
+    conn = sqlite3.connect(str(path), check_same_thread=False, timeout=30.0)
     conn.row_factory = sqlite3.Row
     conn.executescript(SCHEMA)
     _migrate(conn)
     return conn
+
+
+# 当前协程/任务上下文的专属连接（contextvars 缓存）。
+_TASK_CONN: contextvars.ContextVar[Optional[sqlite3.Connection]] = contextvars.ContextVar(
+    "task_conn", default=None
+)
+
+
+def get_task_connection(db_path: Optional[Path] = None) -> sqlite3.Connection:
+    """获取当前任务上下文的专属连接（contextvars 缓存）。
+
+    同一上下文内重复调用返回同一连接；异步并发（asyncio.create_task）下每个协程
+    自动持有独立 context，天然实现"每协程专属连接"，避免全局连接共享冲突。
+    任务结束后必须调用 close_task_connection() 释放。
+    """
+    conn = _TASK_CONN.get()
+    if conn is None:
+        conn = get_connection(db_path)
+        _TASK_CONN.set(conn)
+    return conn
+
+
+def close_task_connection() -> None:
+    """关闭并清空当前任务上下文的专属连接。"""
+    conn = _TASK_CONN.get()
+    if conn is not None:
+        conn.close()
+        _TASK_CONN.set(None)
 
 
 def url_exists(conn: sqlite3.Connection, url: str) -> bool:

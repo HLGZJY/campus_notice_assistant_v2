@@ -547,10 +547,10 @@ class NoticeScheduler:
     @staticmethod
     def _remove_notice_vectors(notice_id: int) -> None:
         """删除某通知的向量 chunk（延迟导入 VectorIndex）。"""
-        from storage.vectorstore import VectorIndex
+        from storage.vectorstore import get_vector_index
 
         try:
-            VectorIndex().remove_notice(notice_id)
+            get_vector_index().remove_notice(notice_id)
         except Exception as e:
             logger.warning("删除向量 chunk 失败 notice_id=%s: %s", notice_id, e)
 
