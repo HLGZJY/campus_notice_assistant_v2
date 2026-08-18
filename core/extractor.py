@@ -2,14 +2,14 @@
 
 技术方案：
   - OpenAI Agents SDK 的 Agent + output_type 约束输出（Pydantic 模型）
-  - opencode-go 接口不支持 SDK 默认的 json_schema 模式，通过
-    ModelSettings.extra_body 注入 response_format=json_object
+  - output_type 原生转换为 Function Calling 模式，语法硬约束锁死采样空间
   - 提取后再做语义校验 + 时间规范化（deadline_raw 用自研解析器重算）
   - 校验失败时把错误回传给 LLM 重试（最多 2 次）
 """
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass
 from datetime import date
 from typing import Optional
@@ -26,6 +26,7 @@ from openai import AsyncOpenAI, BadRequestError
 from core.date_utils import (
     extract_gongshi_period,
     extract_reference_date,
+    fast_extract,
     resolve_datetime,
     strip_deadline_noise,
 )
@@ -120,6 +121,29 @@ def classify_status(ext: NoticeExtraction) -> str:
     return "partial"
 
 
+_URL_TRAILING = re.compile(r"[，。；、）)】\u3000'\"<>]+$")
+
+
+def _strip_url_noise(url: str) -> str:
+    """去掉 URL 尾部常见的全角/中文标点噪声。"""
+    return _URL_TRAILING.sub("", url.strip())
+
+
+def _first_resolvable(
+    candidates: list[str],
+    reference: Optional[date],
+) -> Optional[str]:
+    """依次尝试解析候选时间片段，返回第一个成功的 ISO 字符串。"""
+    for raw in candidates:
+        cleaned = strip_deadline_noise(raw)
+        resolved = resolve_datetime(cleaned, reference) or resolve_datetime(
+            raw, reference
+        )
+        if resolved:
+            return resolved
+    return None
+
+
 class NoticeExtractor:
     """基于 OpenAI Agents SDK 的提取器。
 
@@ -146,9 +170,7 @@ class NoticeExtractor:
                 instructions=EXTRACTOR_INSTRUCTIONS,
                 model=model,
                 output_type=NoticeExtraction,
-                model_settings=ModelSettings(
-                    extra_body={"response_format": {"type": "json_object"}}
-                ),
+                model_settings=ModelSettings(),
             )
             self._agents[model] = agent
         return agent
@@ -273,6 +295,7 @@ class NoticeExtractor:
     ) -> tuple[NoticeExtraction, list[str]]:
         """时间规范化 + 语义校验。返回 (修正后的模型, 错误列表)。"""
         errors: list[str] = []
+        fast = fast_extract(content) if content else None
 
         # 1. deadline：以 deadline_raw 用自研解析器重算（年份推断更可靠）
         if ext.deadline_raw:
@@ -283,10 +306,21 @@ class NoticeExtractor:
             if resolved:
                 ext.deadline = resolved
             else:
-                ext.deadline = None
-                errors.append(f"截止时间无法解析: {ext.deadline_raw!r}")
+                # Fast Path 兜底：LLM 的 deadline_raw 解析失败 → 直接从正文预捞。
+                # 确定性解析失败重试救不了，不再写入 errors（避免无效 LLM 重试）。
+                ext.deadline = (
+                    _first_resolvable(fast.deadlines, reference) if fast else None
+                )
         else:
             ext.deadline = None
+
+        # 1b. signup_url：非 http(s) 视为非法，用 Fast Path 预捞链接兜底
+        if ext.signup_url:
+            url = _strip_url_noise(ext.signup_url)
+            if url.startswith("http://") or url.startswith("https://"):
+                ext.signup_url = url
+            else:
+                ext.signup_url = fast.urls[0] if (fast and fast.urls) else None
 
         # 2. key_dates：尽力解析，不因解析失败阻断
         for kd in ext.key_dates:

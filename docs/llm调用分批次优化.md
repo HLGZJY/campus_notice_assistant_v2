@@ -1,7 +1,9 @@
 可参考文件：
 docs\Agentic Workflow 框架.md
 
-### 🧩 批次 A（基础设施保底与索引加速）
+### 🧩 批次 A（基础设施保底与索引加速）-已完成
+
+完成记录：docs-local\assest\llm改进调用完成记录.md
 
 > **服务目标**：根治 25s 耗时中的“稳定病根”（向量库加载 & 数据库并发），提供稳定的低基数环境。
 
@@ -15,18 +17,19 @@ docs\Agentic Workflow 框架.md
 
 ---
 
-### 🧩 批次 B（提取与待办的核心路径压缩）
+### 🧩 批次 B（提取与待办的核心路径压缩）-已完成
+
+完成记录：docs-local\assest\llm改进调用完成记录.md
 
 > **服务目标**：大幅削减 LLM 调用次数和单次 Payload 成本（命中 80/20 法则 + 硬约束提速）。
 
-- **B1. Todo 模板优先策略（修正原计划的致命矛盾）**
-  - 修改 `core/todo.py` 的 `generate_one`：将 `template_fallback(notice)` 的执行挪到 **LLM 调用之前**。
-  - 逻辑判断：若模板生成的 `action` 包含了 deadline 或 signup 具体信息（非纯“查看/跟进”空话），则**直接返回模板结果，跳过 `_try_model`**；仅当模板返回空或纯占位符时，才降级调用 LLM。
+- **B1. Todo 模板优先策略（已取消，2026-08-18 决策）**
+  - 决策：不做模板优先，保持 LLM 调用保证待办生成质量（模板降级仍保留为 LLM 失败兜底）。
 - **B2. Extractor Fast Path 正则兜底（对应原改动 2）**
   - 在 `core/date_utils.py` 新增 `fast_extract(content)`，用正则预捞 `https?://` 链接和带关键词的截止时间。
   - 在 `extractor._resolve_and_validate` 中集成：当 LLM 给出的 `deadline_raw` 解析失败或 `signup_url` 非法时，直接用 Fast Path 结果覆盖，**不再将此错误加入重试队列**。
 - **B3. 结构化输出硬约束（Function Calling 替换 JSON-mode，对应补充 2）**
-  - 修改 `extractor.py` 和 `todo.py` 的 `_get_agent`：**注释掉** `ModelSettings` 中的 `extra_body={"response_format": {"type": "json_object"}}`。
+  - 修改 `extractor.py` 和 `todo.py` 的 `_get_agent`：**移除** `ModelSettings` 中的 `extra_body={"response_format": {"type": "json_object"}}`。
   - 依赖 OpenAI Agents SDK 原生 `output_type` 自动转换为 Function Calling 模式（语法硬约束），利用 logits 锁死采样空间，消除格式错误的 `BadRequestError`。
 - **验收标准**：简单通知（带明确截止日期）的提取和待办生成，平均耗时从 7s 降至 **800ms 以内**（其中 Fast Path 命中的直接 <100ms）；日志中 `BadRequestError` 彻底归零。
 

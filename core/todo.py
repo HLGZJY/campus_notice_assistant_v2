@@ -146,7 +146,6 @@ class TodoGenerator:
                 output_type=TodoList,
                 model_settings=ModelSettings(
                     temperature=self.temperature,
-                    extra_body={"response_format": {"type": "json_object"}},
                 ),
             )
             self._agents[model] = agent

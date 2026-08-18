@@ -9,6 +9,7 @@ dateparser 作为兜底。年份推断规则：
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Optional
 
@@ -187,3 +188,54 @@ def extract_gongshi_period(text: Optional[str], reference: Optional[date] = None
         ]
 
     return []
+
+
+# ---------- Fast Path 正则预捞（批次 B 新增） ----------
+
+_URL_RE = re.compile(
+    r"https?://[^\s，。；、）)】\u3000\uff00-\uffef\u4e00-\u9fff'\"<>]+"
+)
+
+# 截止时间片段：年可缺 + 月日 + 可选时分（Fast Path 预捞用）
+_DEADLINE_FRAGMENT = re.compile(
+    r"(?:\d{4}年)?\d{1,2}月\d{1,2}[日号]?(?:\s*\d{1,2}[:：]\d{2})?"
+)
+
+# 时间片段前后查找截止关键词的窗口宽度
+_DEADLINE_WINDOW = 10
+
+
+@dataclass
+class FastExtract:
+    """正则预捞结果（Fast Path 兜底）。"""
+
+    urls: list[str]  # 正文中的 http(s) 链接，按出现顺序去重
+    deadlines: list[str]  # 邻近截止关键词的时间片段，按出现顺序去重
+
+
+def fast_extract(content: Optional[str]) -> FastExtract:
+    """正则预捞正文中的报名链接与截止时间片段（不调 LLM）。
+
+    用途：当 LLM 给出的 signup_url 非法或 deadline_raw 解析失败时，
+    用这里的确定性结果兜底，避免无效重试。
+
+    Returns:
+        FastExtract(urls, deadlines)：链接与"截止关键词邻近"的时间片段，
+        均按原文出现顺序去重。
+    """
+    if not content:
+        return FastExtract(urls=[], deadlines=[])
+    t = _normalize(content)
+
+    urls = list(dict.fromkeys(_URL_RE.findall(t)))
+
+    deadlines: list[str] = []
+    for m in _DEADLINE_FRAGMENT.finditer(t):
+        frag = m.group(0)
+        start = max(0, m.start() - _DEADLINE_WINDOW)
+        end = min(len(t), m.end() + _DEADLINE_WINDOW)
+        window = t[start:end]
+        if any(kw in window for kw in _DEADLINE_KEYWORDS):
+            if frag not in deadlines:
+                deadlines.append(frag)
+    return FastExtract(urls=urls, deadlines=deadlines)

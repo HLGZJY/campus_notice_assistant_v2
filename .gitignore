@@ -6,6 +6,8 @@ data/health/
 data/eval/
 data/*.db
 data/*.db-*
+storage/*.db
+storage/*.db-*
 *.tmp
 *.bak
 models/
