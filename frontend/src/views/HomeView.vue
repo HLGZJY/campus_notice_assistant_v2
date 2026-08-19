@@ -115,7 +115,7 @@ const quickActions = [
           <span class="notice-type">{{ typeLabel(item.notice_type) }}</span>
           <span class="notice-title">{{ item.title }}</span>
           <span class="notice-meta">
-            {{ item.source }} · {{ fmtDate(item.published_at ?? item.crawled_at) }}
+            <span class="meta-main">{{ item.source }} · {{ fmtDate(item.published_at ?? item.crawled_at) }}</span>
             <span v-if="item.deadline" class="deadline">截止 {{ fmtDate(item.deadline) }}</span>
           </span>
         </router-link>
@@ -275,13 +275,28 @@ const quickActions = [
   color: var(--primary);
 }
 .notice-meta {
-  flex-shrink: 0;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
   font-size: 12px;
   color: var(--text-3);
   font-variant-numeric: tabular-nums;
 }
+.meta-main {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
 .deadline {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--warning);
-  margin-left: 6px;
 }
 </style>
