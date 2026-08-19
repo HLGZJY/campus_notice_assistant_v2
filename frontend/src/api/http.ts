@@ -67,9 +67,10 @@ export async function patch<T = unknown>(url: string, body?: unknown, options?: 
   return (await res.json()) as T
 }
 
-export async function del<T = unknown>(url: string, options?: RequestInit): Promise<T> {
+export async function del<T = unknown>(url: string, params?: Record<string, unknown>, options?: RequestInit): Promise<T> {
+  const target = params ? `${url}?${qs(params)}` : url
   const init: RequestInit = Object.assign({ method: 'DELETE' }, options || {})
-  const res = await fetch(url, init)
+  const res = await fetch(target, init)
   if (!res.ok) await handle(res)
   return (await res.json()) as T
 }

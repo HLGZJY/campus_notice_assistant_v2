@@ -725,6 +725,9 @@ export interface paths {
         /**
          * Ask Stream
          * @description SSE 流式问答：逐 token 产出 delta，末尾产出 done（含 as_source 来源）。
+         *
+         *     - status 事件：各阶段提示（retrieval/thinking/generating）与缓存命中（cache_hit）。
+         *     - 历史按 user_session_id 隔离；不传则作为匿名请求（缓存仍全局生效）。
          */
         get: operations["ask_stream_api_v1_qa_ask_stream_get"];
         put?: never;
@@ -750,6 +753,50 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/qa/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List History
+         * @description 分页查询问答历史（按 created_at 倒序；传 user_session_id 只返回该会话）。
+         */
+        get: operations["list_history_api_v1_qa_history_get"];
+        put?: never;
+        post?: never;
+        /**
+         * Clear History
+         * @description 清空当前会话的所有历史（不传 session_id 清空全部，慎用）。
+         */
+        delete: operations["clear_history_api_v1_qa_history_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/qa/history/{history_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete History
+         * @description 删除单条问答历史。
+         */
+        delete: operations["delete_history_api_v1_qa_history__history_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1701,6 +1748,87 @@ export interface components {
             type: string;
         } & {
             [key: string]: unknown;
+        };
+        /**
+         * QaHistoryItem
+         * @description 问答历史条目（GET /qa/history 返回；sources 为 as_source 契约形态）。
+         *
+         *     status 取值：answer（正常回答）/ cache_hit（缓存命中）/ fallback（兜底）/ error（失败）。
+         */
+        QaHistoryItem: {
+            /** Id */
+            id: number;
+            /** Question Text */
+            question_text: string;
+            /** Answer Text */
+            answer_text: string;
+            /** Sources */
+            sources?: components["schemas"]["QaSourceRef"][];
+            /**
+             * Retrieved Chunks
+             * @default 0
+             */
+            retrieved_chunks: number;
+            /** Created At */
+            created_at: string;
+            /**
+             * Hit Count
+             * @default 0
+             */
+            hit_count: number;
+            /**
+             * Status
+             * @default answer
+             */
+            status: string;
+        };
+        /**
+         * QaHistoryPage
+         * @description 问答历史分页信封（items + 总数，供分页条）。
+         */
+        QaHistoryPage: {
+            /** Items */
+            items?: components["schemas"]["QaHistoryItem"][];
+            /**
+             * Total
+             * @default 0
+             */
+            total: number;
+            /**
+             * Page
+             * @default 1
+             */
+            page: number;
+            /**
+             * Page Size
+             * @default 20
+             */
+            page_size: number;
+        };
+        /**
+         * QaSourceRef
+         * @description 回答引用的来源通知（as_source 转换后的契约形态）。
+         */
+        QaSourceRef: {
+            /** Notice Id */
+            notice_id: number;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+            /**
+             * Url
+             * @default
+             */
+            url: string;
+            /**
+             * Notice Type
+             * @default
+             */
+            notice_type: string;
+            /** Deadline */
+            deadline?: string | null;
         };
         /**
          * ReloadResult
@@ -3824,6 +3952,8 @@ export interface operations {
             query: {
                 /** @description 要回答的问题 */
                 question: string;
+                /** @description 前端会话 ID（用于历史隔离） */
+                user_session_id?: string | null;
             };
             header?: {
                 "x-api-key"?: string | null;
@@ -3869,6 +3999,113 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["IndexStatsView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_history_api_v1_qa_history_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+                /** @description 前端会话 ID（只查该会话历史） */
+                user_session_id?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QaHistoryPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clear_history_api_v1_qa_history_delete: {
+        parameters: {
+            query?: {
+                /** @description 前端会话 ID */
+                user_session_id?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_history_api_v1_qa_history__history_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path: {
+                history_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */

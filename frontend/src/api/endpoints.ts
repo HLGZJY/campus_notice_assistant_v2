@@ -43,6 +43,9 @@ export const endpoints = {
   qa: {
     stream: `${API_BASE}/qa/ask/stream`,
     indexStats: `${API_BASE}/qa/index-stats`,
+    history: `${API_BASE}/qa/history`,
+    historyDelete: (id: number) => `${API_BASE}/qa/history/${id}`,
+    historyClear: `${API_BASE}/qa/history`,
   },
   config: {
     get: `${API_BASE}/config`,

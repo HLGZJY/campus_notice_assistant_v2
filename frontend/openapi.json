@@ -2505,7 +2505,7 @@
           "qa"
         ],
         "summary": "Ask Stream",
-        "description": "SSE 流式问答：逐 token 产出 delta，末尾产出 done（含 as_source 来源）。",
+        "description": "SSE 流式问答：逐 token 产出 delta，末尾产出 done（含 as_source 来源）。\n\n- status 事件：各阶段提示（retrieval/thinking/generating）与缓存命中（cache_hit）。\n- 历史按 user_session_id 隔离；不传则作为匿名请求（缓存仍全局生效）。",
         "operationId": "ask_stream_api_v1_qa_ask_stream_get",
         "parameters": [
           {
@@ -2519,6 +2519,24 @@
               "title": "Question"
             },
             "description": "要回答的问题"
+          },
+          {
+            "name": "user_session_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "前端会话 ID（用于历史隔离）",
+              "title": "User Session Id"
+            },
+            "description": "前端会话 ID（用于历史隔离）"
           },
           {
             "name": "x-api-key",
@@ -2587,6 +2605,226 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/IndexStatsView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/qa/history": {
+      "get": {
+        "tags": [
+          "qa"
+        ],
+        "summary": "List History",
+        "description": "分页查询问答历史（按 created_at 倒序；传 user_session_id 只返回该会话）。",
+        "operationId": "list_history_api_v1_qa_history_get",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Page Size"
+            }
+          },
+          {
+            "name": "user_session_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "前端会话 ID（只查该会话历史）",
+              "title": "User Session Id"
+            },
+            "description": "前端会话 ID（只查该会话历史）"
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QaHistoryPage"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "qa"
+        ],
+        "summary": "Clear History",
+        "description": "清空当前会话的所有历史（不传 session_id 清空全部，慎用）。",
+        "operationId": "clear_history_api_v1_qa_history_delete",
+        "parameters": [
+          {
+            "name": "user_session_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "前端会话 ID",
+              "title": "User Session Id"
+            },
+            "description": "前端会话 ID"
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Clear History Api V1 Qa History Delete"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/qa/history/{history_id}": {
+      "delete": {
+        "tags": [
+          "qa"
+        ],
+        "summary": "Delete History",
+        "description": "删除单条问答历史。",
+        "operationId": "delete_history_api_v1_qa_history__history_id__delete",
+        "parameters": [
+          {
+            "name": "history_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "History Id"
+            }
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Delete History Api V1 Qa History  History Id  Delete"
                 }
               }
             }
@@ -5026,6 +5264,126 @@
         ],
         "title": "ProviderView",
         "description": "供应商视图（api_key 以状态标记代替，不泄露）。"
+      },
+      "QaHistoryItem": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "question_text": {
+            "type": "string",
+            "title": "Question Text"
+          },
+          "answer_text": {
+            "type": "string",
+            "title": "Answer Text"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/QaSourceRef"
+            },
+            "type": "array",
+            "title": "Sources"
+          },
+          "retrieved_chunks": {
+            "type": "integer",
+            "title": "Retrieved Chunks",
+            "default": 0
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "hit_count": {
+            "type": "integer",
+            "title": "Hit Count",
+            "default": 0
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "default": "answer"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "question_text",
+          "answer_text",
+          "created_at"
+        ],
+        "title": "QaHistoryItem",
+        "description": "问答历史条目（GET /qa/history 返回；sources 为 as_source 契约形态）。\n\nstatus 取值：answer（正常回答）/ cache_hit（缓存命中）/ fallback（兜底）/ error（失败）。"
+      },
+      "QaHistoryPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/QaHistoryItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total",
+            "default": 0
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page",
+            "default": 1
+          },
+          "page_size": {
+            "type": "integer",
+            "title": "Page Size",
+            "default": 20
+          }
+        },
+        "type": "object",
+        "title": "QaHistoryPage",
+        "description": "问答历史分页信封（items + 总数，供分页条）。"
+      },
+      "QaSourceRef": {
+        "properties": {
+          "notice_id": {
+            "type": "integer",
+            "title": "Notice Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "default": ""
+          },
+          "url": {
+            "type": "string",
+            "title": "Url",
+            "default": ""
+          },
+          "notice_type": {
+            "type": "string",
+            "title": "Notice Type",
+            "default": ""
+          },
+          "deadline": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deadline"
+          }
+        },
+        "type": "object",
+        "required": [
+          "notice_id"
+        ],
+        "title": "QaSourceRef",
+        "description": "回答引用的来源通知（as_source 转换后的契约形态）。"
       },
       "ReloadResult": {
         "properties": {

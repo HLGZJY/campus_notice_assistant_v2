@@ -86,8 +86,15 @@ export interface QaSourceRef {
   deadline?: string | null
 }
 
-/** SSE 三态事件（兼容 qa_service 流式 + 路由层 as_source 转换）。 */
+/** SSE 事件类型（兼容 qa_service 流式 + 路由层 as_source 转换 + 缓存命中 + 阶段提示）。 */
 export type QaStreamEvent =
   | { type: 'delta'; content: string }
+  | { type: 'status'; stage: 'retrieval' | 'thinking' | 'generating' | 'cache_hit'; message: string; elapsed_ms: number; similarity?: number }
   | { type: 'done'; answer: string; sources: QaSourceRef[]; retrieved_chunks: number }
   | { type: 'error'; message: string }
+
+/** 问答历史条目（GET /qa/history 返回）。 */
+export type QaHistoryItem = components['schemas']['QaHistoryItem']
+
+/** 历史分页响应。 */
+export type QaHistoryPage = components['schemas']['QaHistoryPage']
