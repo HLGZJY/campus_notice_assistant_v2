@@ -586,6 +586,31 @@ class IndexStatsView(BaseModel):
     error: Optional[str] = None
 
 
+class QaHistoryItem(BaseModel):
+    """问答历史条目（GET /qa/history 返回；sources 为 as_source 契约形态）。
+
+    status 取值：answer（正常回答）/ cache_hit（缓存命中）/ fallback（兜底）/ error（失败）。
+    """
+
+    id: int
+    question_text: str
+    answer_text: str
+    sources: list[QaSourceRef] = Field(default_factory=list)
+    retrieved_chunks: int = 0
+    created_at: str
+    hit_count: int = 0
+    status: str = "answer"
+
+
+class QaHistoryPage(BaseModel):
+    """问答历史分页信封（items + 总数，供分页条）。"""
+
+    items: list[QaHistoryItem] = Field(default_factory=list)
+    total: int = 0
+    page: int = 1
+    page_size: int = 20
+
+
 # ---------- 调度器（阶段 6） ----------
 
 
