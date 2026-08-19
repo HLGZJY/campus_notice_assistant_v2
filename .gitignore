@@ -45,3 +45,8 @@ config/schools/scuec.yaml
 
 # ---------- benchmark 临时输出 ----------
 data/benchmark_*.json
+
+# ---------- 运行/调试产物（不入库） ----------
+p.out
+probe_sse.*
+vite.log
