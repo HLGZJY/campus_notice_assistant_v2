@@ -206,7 +206,13 @@ onUnmounted(() => {
             <n-layout-content content-style="padding: 24px 24px 48px" :native-scrollbar="false">
               <div class="page-wrap">
                 <router-view v-slot="{ Component }">
-                  <transition name="page" mode="out-in">
+                  <!--
+                    注意：不要使用 mode="out-in"。out-in 下新页面必须等旧页面 leave
+                    transitionend 完成才挂载；在 naive-ui 自定义滚动容器 / 快速连续切页 /
+                    后台标签页场景下 transitionend 可能不触发，导致新页面永不挂载 → 内容区空白，
+                    只有刷新（绕过过渡层）才恢复。默认模式新旧共存 0.18s，新页面立即渲染。
+                  -->
+                  <transition name="page">
                     <component :is="Component" :key="route.path" />
                   </transition>
                 </router-view>
