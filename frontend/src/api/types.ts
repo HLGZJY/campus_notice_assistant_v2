@@ -1066,6 +1066,88 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/source-center": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Source Center Overview
+         * @description 数据源中心总览：学校信息 + 分类树 + 目录条目（adopted 按 list_url 联动）。
+         */
+        get: operations["source_center_overview_api_v1_source_center_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/source-center/{source_id}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Source Center Preview
+         * @description 预览样例数据：抓取该来源列表页，返回前 N 条标题/链接/日期（不落库）。
+         *
+         *     网络不可达/解析失败返回 ok=false + error（HTTP 200，前端展示降级信息）。
+         */
+        get: operations["source_center_preview_api_v1_source_center__source_id__preview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/source-center/{source_id}/adopt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Source Center Adopt
+         * @description 选用数据源：追加到个人数据源（按 list_url 判重，重复选用幂等返回）。
+         */
+        post: operations["source_center_adopt_api_v1_source_center__source_id__adopt_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/source-center/{source_id}/remove": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Source Center Remove
+         * @description 移除数据源：按 list_url 从个人数据源删除（未选用也幂等成功）。
+         */
+        post: operations["source_center_remove_api_v1_source_center__source_id__remove_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/health": {
         parameters: {
             query?: never;
@@ -1967,6 +2049,156 @@ export interface components {
             code: string;
             /** Sources */
             sources: components["schemas"]["SourceConfig"][];
+        };
+        /**
+         * SourceCenterAdoptResult
+         * @description 选用/移除结果（already=目录条目已存在于个人数据源的幂等返回）。
+         */
+        SourceCenterAdoptResult: {
+            /** Ok */
+            ok: boolean;
+            /**
+             * Source Id
+             * @default
+             */
+            source_id: string;
+            /**
+             * Adopted
+             * @default false
+             */
+            adopted: boolean;
+            /**
+             * Already
+             * @default false
+             */
+            already: boolean;
+            /** Error */
+            error?: string | null;
+        };
+        /**
+         * SourceCenterItem
+         * @description 数据源中心目录条目。
+         */
+        SourceCenterItem: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Org
+             * @default
+             */
+            org: string;
+            /**
+             * Org Group
+             * @default
+             */
+            org_group: string;
+            /** List Url */
+            list_url: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /** Tags */
+            tags?: string[];
+            /**
+             * Status
+             * @default 官方
+             */
+            status: string;
+            /**
+             * Usage Count
+             * @default 0
+             */
+            usage_count: number;
+            /**
+             * Updated At
+             * @default
+             */
+            updated_at: string;
+            /**
+             * Adopted
+             * @default false
+             */
+            adopted: boolean;
+        };
+        /**
+         * SourceCenterNode
+         * @description 数据源中心左侧分类树节点（一级分组 → 二级组织，可折叠）。
+         */
+        SourceCenterNode: {
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /**
+             * Count
+             * @default 0
+             */
+            count: number;
+            /** Children */
+            children?: components["schemas"]["SourceCenterNode"][];
+        };
+        /**
+         * SourceCenterOverview
+         * @description 数据源中心总览：学校信息 + 分类树 + 目录条目。
+         */
+        SourceCenterOverview: {
+            /**
+             * School
+             * @default
+             */
+            school: string;
+            /**
+             * School Code
+             * @default
+             */
+            school_code: string;
+            /** Tree */
+            tree?: components["schemas"]["SourceCenterNode"][];
+            /** Items */
+            items?: components["schemas"]["SourceCenterItem"][];
+            /**
+             * Adopted Count
+             * @default 0
+             */
+            adopted_count: number;
+        };
+        /**
+         * SourceCenterPreview
+         * @description 预览结果：抓取列表页返回样例数据（只读，不落库）。
+         */
+        SourceCenterPreview: {
+            /** Ok */
+            ok: boolean;
+            /**
+             * Source Id
+             * @default
+             */
+            source_id: string;
+            /**
+             * List Url
+             * @default
+             */
+            list_url: string;
+            /** Items */
+            items?: components["schemas"]["SourceCenterPreviewItem"][];
+            /** Error */
+            error?: string | null;
+        };
+        /**
+         * SourceCenterPreviewItem
+         * @description 预览样例条目（列表页解析出的标题/链接/日期）。
+         */
+        SourceCenterPreviewItem: {
+            /** Title */
+            title: string;
+            /** Url */
+            url: string;
+            /** Date */
+            date?: string | null;
         };
         /**
          * SourceConfig
@@ -4580,6 +4812,138 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TokenUsageSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    source_center_overview_api_v1_source_center_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceCenterOverview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    source_center_preview_api_v1_source_center__source_id__preview_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path: {
+                source_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceCenterPreview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    source_center_adopt_api_v1_source_center__source_id__adopt_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path: {
+                source_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceCenterAdoptResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    source_center_remove_api_v1_source_center__source_id__remove_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path: {
+                source_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceCenterAdoptResult"];
                 };
             };
             /** @description Validation Error */

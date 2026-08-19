@@ -681,3 +681,73 @@ class EventCreateResult(BaseModel):
     """埋点上报结果（写入失败仅 ok=false，不报错）。"""
 
     ok: bool
+
+
+# ---------- 数据源中心（阶段 8：公共数据源目录） ----------
+#
+# 约定：目录数据静态存于 config/source_catalog.yaml；GET /source-center 返回
+# 分类树 + 条目（含 adopted 状态，按 list_url 与个人数据源判重联动）；
+# 选用/移除写入口与 config_service.update_sources 同一路径（个人数据源 YAML）。
+
+
+class SourceCenterNode(BaseModel):
+    """数据源中心左侧分类树节点（一级分组 → 二级组织，可折叠）。"""
+
+    key: str
+    label: str
+    count: int = 0
+    children: list["SourceCenterNode"] = Field(default_factory=list)
+
+
+class SourceCenterItem(BaseModel):
+    """数据源中心目录条目。"""
+
+    id: str
+    name: str
+    org: str = ""
+    org_group: str = ""
+    list_url: str
+    description: str = ""
+    tags: list[str] = Field(default_factory=list)
+    status: str = "官方"
+    usage_count: int = 0
+    updated_at: str = ""
+    adopted: bool = False
+
+
+class SourceCenterOverview(BaseModel):
+    """数据源中心总览：学校信息 + 分类树 + 目录条目。"""
+
+    school: str = ""
+    school_code: str = ""
+    tree: list[SourceCenterNode] = Field(default_factory=list)
+    items: list[SourceCenterItem] = Field(default_factory=list)
+    adopted_count: int = 0
+
+
+class SourceCenterAdoptResult(BaseModel):
+    """选用/移除结果（already=目录条目已存在于个人数据源的幂等返回）。"""
+
+    ok: bool
+    source_id: str = ""
+    adopted: bool = False
+    already: bool = False
+    error: Optional[str] = None
+
+
+class SourceCenterPreviewItem(BaseModel):
+    """预览样例条目（列表页解析出的标题/链接/日期）。"""
+
+    title: str
+    url: str
+    date: Optional[str] = None
+
+
+class SourceCenterPreview(BaseModel):
+    """预览结果：抓取列表页返回样例数据（只读，不落库）。"""
+
+    ok: bool
+    source_id: str = ""
+    list_url: str = ""
+    items: list[SourceCenterPreviewItem] = Field(default_factory=list)
+    error: Optional[str] = None

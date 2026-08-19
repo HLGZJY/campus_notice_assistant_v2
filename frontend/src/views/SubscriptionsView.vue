@@ -6,7 +6,6 @@ import {
   CheckmarkCircleOutline,
   ChevronDownOutline,
   ChevronUpOutline,
-  CreateOutline,
   FlashOutline,
   LinkOutline,
   NotificationsOutline,
@@ -17,7 +16,6 @@ import {
 import { useSubscriptionsStore } from '../stores/useSubscriptionsStore'
 import { useNoticesStore } from '../stores/useNoticesStore'
 import StatCard from '../components/StatCard.vue'
-import { useTaskPoll } from '../composables/useTaskPoll'
 import { useTaskStore } from '../stores/useTaskStore'
 import type {
   NoticeDetail,
@@ -30,7 +28,6 @@ const message = useMessage()
 const dialog = useDialog()
 const subs = useSubscriptionsStore()
 const notices = useNoticesStore()
-const { poll } = useTaskPoll()
 const taskStore = useTaskStore()
 
 const showModal = ref(false)

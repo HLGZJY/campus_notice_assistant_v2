@@ -90,7 +90,19 @@ def create_app() -> FastAPI:
     # 顺序：subscriptions 的 /notices/count、/notices/matched-ids 等精确路径须先于
     # notices 的 /notices/{notice_id} 注册，否则会被通配段捕获而 422（Starlette 顺序匹配）。
     try:
-        from api.routes import config, events, notices, qa, reminders, scheduler, subscriptions, tasks, todos, usage
+        from api.routes import (
+            config,
+            events,
+            notices,
+            qa,
+            reminders,
+            scheduler,
+            source_center,
+            subscriptions,
+            tasks,
+            todos,
+            usage,
+        )
         # 业务路由（统一 /api/v1 前缀）
         app.include_router(subscriptions.notice_router, prefix="/api/v1")
         app.include_router(todos.notice_router, prefix="/api/v1")
@@ -104,6 +116,7 @@ def create_app() -> FastAPI:
         app.include_router(notices.router, prefix="/api/v1")
         app.include_router(events.router, prefix="/api/v1")
         app.include_router(usage.router, prefix="/api/v1")
+        app.include_router(source_center.router, prefix="/api/v1")
     except Exception as e:
         logger.warning("Skipping registering routers due to import error: %s", e)
 

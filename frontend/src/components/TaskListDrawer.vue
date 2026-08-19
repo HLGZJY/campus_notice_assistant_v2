@@ -102,7 +102,7 @@ function paramsSummary(task: TaskView): string {
     case 're_extract_notice':
       return p.notice_id != null ? `#${p.notice_id}` : ''
     case 'crawl_source':
-      return p.source_name ? p.source_name : ''
+      return p.source_name != null ? String(p.source_name) : ''
     case 'crawl_all': {
       const sources = p.sources as string[] | undefined
       return sources && sources.length ? sources.join(', ') : '全部'
@@ -201,7 +201,7 @@ const sortedTasks = computed(() =>
             <span v-if="tokenSummary(task)" class="task-token">{{ tokenSummary(task) }}</span>
           </div>
           <div v-if="task.status === 'failed' && task.error" class="task-error">
-            <n-text type="error" depth="secondary">{{ task.error }}</n-text>
+            <n-text type="error" depth="2">{{ task.error }}</n-text>
           </div>
         </div>
       </div>

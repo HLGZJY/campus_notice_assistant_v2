@@ -3830,6 +3830,245 @@
         }
       }
     },
+    "/api/v1/source-center": {
+      "get": {
+        "tags": [
+          "source-center"
+        ],
+        "summary": "Source Center Overview",
+        "description": "数据源中心总览：学校信息 + 分类树 + 目录条目（adopted 按 list_url 联动）。",
+        "operationId": "source_center_overview_api_v1_source_center_get",
+        "parameters": [
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceCenterOverview"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/source-center/{source_id}/preview": {
+      "get": {
+        "tags": [
+          "source-center"
+        ],
+        "summary": "Source Center Preview",
+        "description": "预览样例数据：抓取该来源列表页，返回前 N 条标题/链接/日期（不落库）。\n\n网络不可达/解析失败返回 ok=false + error（HTTP 200，前端展示降级信息）。",
+        "operationId": "source_center_preview_api_v1_source_center__source_id__preview_get",
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Source Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 30,
+              "minimum": 1,
+              "default": 10,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceCenterPreview"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/source-center/{source_id}/adopt": {
+      "post": {
+        "tags": [
+          "source-center"
+        ],
+        "summary": "Source Center Adopt",
+        "description": "选用数据源：追加到个人数据源（按 list_url 判重，重复选用幂等返回）。",
+        "operationId": "source_center_adopt_api_v1_source_center__source_id__adopt_post",
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Source Id"
+            }
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceCenterAdoptResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/source-center/{source_id}/remove": {
+      "post": {
+        "tags": [
+          "source-center"
+        ],
+        "summary": "Source Center Remove",
+        "description": "移除数据源：按 list_url 从个人数据源删除（未选用也幂等成功）。",
+        "operationId": "source_center_remove_api_v1_source_center__source_id__remove_post",
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Source Id"
+            }
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceCenterAdoptResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/health": {
       "get": {
         "tags": [
@@ -5680,6 +5919,251 @@
         ],
         "title": "SchoolConfig",
         "description": "单个学校的数据源配置。"
+      },
+      "SourceCenterAdoptResult": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "source_id": {
+            "type": "string",
+            "title": "Source Id",
+            "default": ""
+          },
+          "adopted": {
+            "type": "boolean",
+            "title": "Adopted",
+            "default": false
+          },
+          "already": {
+            "type": "boolean",
+            "title": "Already",
+            "default": false
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ok"
+        ],
+        "title": "SourceCenterAdoptResult",
+        "description": "选用/移除结果（already=目录条目已存在于个人数据源的幂等返回）。"
+      },
+      "SourceCenterItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "org": {
+            "type": "string",
+            "title": "Org",
+            "default": ""
+          },
+          "org_group": {
+            "type": "string",
+            "title": "Org Group",
+            "default": ""
+          },
+          "list_url": {
+            "type": "string",
+            "title": "List Url"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description",
+            "default": ""
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "default": "官方"
+          },
+          "usage_count": {
+            "type": "integer",
+            "title": "Usage Count",
+            "default": 0
+          },
+          "updated_at": {
+            "type": "string",
+            "title": "Updated At",
+            "default": ""
+          },
+          "adopted": {
+            "type": "boolean",
+            "title": "Adopted",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "list_url"
+        ],
+        "title": "SourceCenterItem",
+        "description": "数据源中心目录条目。"
+      },
+      "SourceCenterNode": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count",
+            "default": 0
+          },
+          "children": {
+            "items": {
+              "$ref": "#/components/schemas/SourceCenterNode"
+            },
+            "type": "array",
+            "title": "Children"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "label"
+        ],
+        "title": "SourceCenterNode",
+        "description": "数据源中心左侧分类树节点（一级分组 → 二级组织，可折叠）。"
+      },
+      "SourceCenterOverview": {
+        "properties": {
+          "school": {
+            "type": "string",
+            "title": "School",
+            "default": ""
+          },
+          "school_code": {
+            "type": "string",
+            "title": "School Code",
+            "default": ""
+          },
+          "tree": {
+            "items": {
+              "$ref": "#/components/schemas/SourceCenterNode"
+            },
+            "type": "array",
+            "title": "Tree"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SourceCenterItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "adopted_count": {
+            "type": "integer",
+            "title": "Adopted Count",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "SourceCenterOverview",
+        "description": "数据源中心总览：学校信息 + 分类树 + 目录条目。"
+      },
+      "SourceCenterPreview": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "source_id": {
+            "type": "string",
+            "title": "Source Id",
+            "default": ""
+          },
+          "list_url": {
+            "type": "string",
+            "title": "List Url",
+            "default": ""
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SourceCenterPreviewItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ok"
+        ],
+        "title": "SourceCenterPreview",
+        "description": "预览结果：抓取列表页返回样例数据（只读，不落库）。"
+      },
+      "SourceCenterPreviewItem": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "url"
+        ],
+        "title": "SourceCenterPreviewItem",
+        "description": "预览样例条目（列表页解析出的标题/链接/日期）。"
       },
       "SourceConfig": {
         "properties": {

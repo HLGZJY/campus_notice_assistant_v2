@@ -71,4 +71,10 @@ export const endpoints = {
   scheduler: {
     status: `${API_BASE}/scheduler/status`,
   },
+  sourceCenter: {
+    overview: `${API_BASE}/source-center`,
+    preview: (sourceId: string) => `${API_BASE}/source-center/${sourceId}/preview`,
+    adopt: (sourceId: string) => `${API_BASE}/source-center/${sourceId}/adopt`,
+    remove: (sourceId: string) => `${API_BASE}/source-center/${sourceId}/remove`,
+  },
 }

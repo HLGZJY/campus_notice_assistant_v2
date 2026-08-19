@@ -28,14 +28,13 @@ import type {
   NoticeBatchFilter,
   NoticeDetail,
   NoticeSummary,
-  TaskCreateResult,
 } from "../api/schema";
 
 const message = useMessage();
 const dialog = useDialog();
 const notices = useNoticesStore();
 const configStore = useConfigStore();
-const { poll, submitAndPoll } = useTaskPoll();
+const { poll } = useTaskPoll();
 const taskStore = useTaskStore();
 
 interface BatchTaskResult {

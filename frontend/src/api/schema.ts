@@ -98,3 +98,11 @@ export type QaHistoryItem = components['schemas']['QaHistoryItem']
 
 /** 历史分页响应。 */
 export type QaHistoryPage = components['schemas']['QaHistoryPage']
+// ---------- 数据源中心（阶段 8） ----------
+
+export type SourceCenterNode = components['schemas']['SourceCenterNode']
+export type SourceCenterItem = components['schemas']['SourceCenterItem']
+export type SourceCenterOverview = components['schemas']['SourceCenterOverview']
+export type SourceCenterAdoptResult = components['schemas']['SourceCenterAdoptResult']
+export type SourceCenterPreviewItem = components['schemas']['SourceCenterPreviewItem']
+export type SourceCenterPreview = components['schemas']['SourceCenterPreview']
