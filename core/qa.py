@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+from datetime import date, timedelta
 from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
@@ -40,6 +41,13 @@ QA_INSTRUCTIONS = """你是校园通知智能问答助手。请严格根据下�
 3. 回答时通过 [1]、[2] 等编号引用来源通知。
 4. 如果问题是问"最近有哪些比赛/活动/通知"，请列出相关通知的标题、截止时间和关键信息。
 5. 保持简洁、清晰，使用中文回答。
+
+## 日期基准
+当前日期：{current_date}（{weekday}）。
+"本周"指 {current_week_start} 至 {current_week_end}；
+"最近"/"近期"默认指最近 7 天；
+"上月"指 {last_month_start} 至 {last_month_end}。
+用户问题中出现的相对时间词，请按此基准日换算为绝对日期后再筛选参考通知。
 
 ## 参考通知格式
 每个参考通知前有 [编号]，请使用该编号引用。"""
@@ -75,6 +83,7 @@ class QAAgent:
         expire_days: Optional[int] = None,
         search_mode: str = "vector",
         usage_cb=None,
+        current_date: Optional[date] = None,
         **search_kwargs,
     ):
         if index is None:
@@ -91,12 +100,37 @@ class QAAgent:
         # 模块 2.4 混合检索（vector/hybrid）；默认 vector，评测结论上/不上后再切换
         self.search_mode = search_mode
         self.search_kwargs = search_kwargs
-        self._agents: dict[str, Agent] = {}
+        # 日期基准：默认今天；注入 QA_INSTRUCTIONS 供相对时间词换算（B.1）
+        self._current_date = current_date or date.today()
+        self._agents: dict[tuple[str, str], Agent] = {}
         # 可选回调 (input_tokens, output_tokens)：每次 LLM 调用成功后触发（压测 per-sample 归因）
         self._usage_cb = usage_cb
 
+    def _date_context(self) -> dict[str, str]:
+        """计算日期基准占位符（当前日期/星期/本周区间/上月区间）。"""
+        d = self._current_date
+        monday = d - timedelta(days=d.weekday())
+        sunday = monday + timedelta(days=6)
+        if d.month == 1:
+            last_start = date(d.year - 1, 12, 1)
+            last_end = date(d.year - 1, 12, 31)
+        else:
+            last_start = date(d.year, d.month - 1, 1)
+            last_end = date(d.year, d.month, 1) - timedelta(days=1)
+        weekdays = ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"]
+        return {
+            "current_date": d.isoformat(),
+            "weekday": weekdays[d.weekday()],
+            "current_week_start": monday.isoformat(),
+            "current_week_end": sunday.isoformat(),
+            "last_month_start": last_start.isoformat(),
+            "last_month_end": last_end.isoformat(),
+        }
+
     def _get_agent(self, model: str) -> Agent:
-        agent = self._agents.get(model)
+        # 缓存按 (model, current_date) 复合 key：同模型不同基准日各自缓存
+        key = (model, self._current_date.isoformat())
+        agent = self._agents.get(key)
         if agent is None:
             set_tracing_disabled(True)
             client = AsyncOpenAI(
@@ -107,10 +141,10 @@ class QAAgent:
             set_default_openai_api("chat_completions")
             agent = Agent(
                 name="通知问答助手",
-                instructions=QA_INSTRUCTIONS,
+                instructions=QA_INSTRUCTIONS.format(**self._date_context()),
                 model=model,
             )
-            self._agents[model] = agent
+            self._agents[key] = agent
         return agent
 
     def _retrieve(self, question: str) -> list:
@@ -247,16 +281,21 @@ class QAAgent:
         )
 
     async def ask_stream(self, question: str):
-        """流式回答一个问题（阶段 5 SSE）。
+        """流式回答一个问题（阶段 5 SSE + 阶段事件 B.1）。
 
         异步生成器，产出 (event_type, payload) 二元组：
+          - ("status", dict)：阶段提示 {stage, message, elapsed_ms}
+            stage ∈ retrieval（检索中→已检索 N 段）/ thinking / generating
           - ("delta", str)：LLM 输出的文本增量
           - ("done", QAResult)：完整问答结果（含确定性导出的来源）
 
         失败切换：只在产出首个 delta 之前失败才切下一个候选模型；
         中途断流无法无缝续接，直接上抛（路由层发 error 事件）。
-        空检索时直接产出 ("done", 兜底 QAResult)，不调用 LLM。
+        空检索兜底直接产出 ("done", 兜底 QAResult)，不调用 LLM、不发阶段事件。
         """
+        import time
+
+        t0 = time.monotonic()
         docs = self._retrieve(question)
         if not docs:
             yield (
@@ -269,8 +308,29 @@ class QAAgent:
             )
             return
 
+        # 阶段 1：检索完成
+        yield ("status", {"stage": "retrieval", "message": "检索中", "elapsed_ms": 0})
+        yield (
+            "status",
+            {
+                "stage": "retrieval",
+                "message": f"已检索 {len(docs)} 段",
+                "elapsed_ms": int((time.monotonic() - t0) * 1000),
+            },
+        )
+
         context, sources = self._build_context(docs)
         prompt = self._build_prompt(question, context)
+
+        # 阶段 2：思考（拼 prompt 完成，进入 LLM 调用前）
+        yield (
+            "status",
+            {
+                "stage": "thinking",
+                "message": "思考中",
+                "elapsed_ms": int((time.monotonic() - t0) * 1000),
+            },
+        )
 
         parts: list[str] = []
         last_error: Optional[str] = None
@@ -278,6 +338,15 @@ class QAAgent:
             started = False
             try:
                 agent = self._get_agent(model)
+                # 阶段 3：生成（首个 delta 产出前）
+                yield (
+                    "status",
+                    {
+                        "stage": "generating",
+                        "message": "生成回复中",
+                        "elapsed_ms": int((time.monotonic() - t0) * 1000),
+                    },
+                )
                 async for delta in run_agent_stream(agent, prompt, task="qa", model=model, provider=self.provider, usage_cb=self._usage_cb):
                     started = True
                     parts.append(delta)
