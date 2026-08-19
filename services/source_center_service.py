@@ -92,25 +92,35 @@ def get_overview() -> dict:
     user_sources = _get_user_sources()
     adopted = _adopted_urls(user_sources)
 
-    # 分类树：一级分组（校级机构/教学科研单位）→ 二级组织（可折叠）
+    # 分类树：一级分组 → 二级组织 → 三级栏目（可折叠）
+    # key 约定：一级 group:{group} / 二级 group:{group}:{org} / 三级 item:{id}，
+    # 前端统一按此解析（item: 前缀按 id 精确匹配单条）。
     tree: list[dict] = []
-    groups: dict[str, dict[str, int]] = {}
+    groups: dict[str, dict[str, list[dict]]] = {}
     for s in catalog["sources"]:
         group = s.get("org_group", "其他")
         org = s.get("org", s.get("name", ""))
-        groups.setdefault(group, {}).setdefault(org, 0)
-        groups[group][org] += 1
+        groups.setdefault(group, {}).setdefault(org, []).append(s)
     for group, orgs in groups.items():
-        children = [
-            # key 统一带 group: 前缀（与根节点一致），前端按 parts[1]=group, parts[2]=org 解析
-            {"key": f"group:{group}:{org}", "label": org, "count": cnt}
-            for org, cnt in sorted(orgs.items(), key=lambda kv: -kv[1])
-        ]
+        children = []
+        for org, srcs in sorted(orgs.items(), key=lambda kv: -len(kv[1])):
+            leaves = [
+                {"key": f"item:{s['id']}", "label": s.get("name", ""), "count": 1}
+                for s in srcs
+            ]
+            children.append(
+                {
+                    "key": f"group:{group}:{org}",
+                    "label": org,
+                    "count": len(srcs),
+                    "children": leaves,
+                }
+            )
         tree.append(
             {
                 "key": f"group:{group}",
                 "label": group,
-                "count": sum(orgs.values()),
+                "count": sum(len(v) for v in orgs.values()),
                 "children": children,
             }
         )

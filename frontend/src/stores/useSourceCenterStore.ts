@@ -42,12 +42,16 @@ export const useSourceCenterStore = defineStore('sourceCenter', () => {
     return (overview.value.items ?? []).filter((it) => {
       if (tags.value.length && !tags.value.some((t) => (it.tags ?? []).includes(t))) return false
       if (orgKey.value) {
-        // 树节点 key 形如 group:校级机构 或 group:教学科研单位:计算机学院
+        // 树 key 约定：一级 group:{group} / 二级 group:{group}:{org} / 三级 item:{id}
         const parts = orgKey.value.split(':')
-        const group = parts[1]
-        const org = parts[2]
-        if (it.org_group !== group) return false
-        if (org && it.org !== org) return false
+        if (parts[0] === 'item') {
+          if (it.id !== parts[1]) return false
+        } else {
+          const group = parts[1]
+          const org = parts[2]
+          if (it.org_group !== group) return false
+          if (org && it.org !== org) return false
+        }
       }
       if (kw) {
         const haystack = `${it.name} ${it.org} ${it.org_group} ${it.description} ${(it.tags ?? []).join(' ')}`.toLowerCase()

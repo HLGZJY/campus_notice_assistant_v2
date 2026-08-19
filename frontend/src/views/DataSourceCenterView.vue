@@ -1,7 +1,7 @@
 <template>
-  <n-space vertical size="large">
+  <div class="page-root">
     <!-- 顶部：搜索 + 筛选 -->
-    <n-card :bordered="false">
+    <n-card :bordered="false" class="filter-card">
       <template #header>
         <div class="section-title-wrap">
           <n-icon size="18" color="var(--primary)"><LibraryOutline /></n-icon>
@@ -44,7 +44,7 @@
       </div>
     </n-card>
 
-    <!-- 主体：左组织树 + 右卡片网格 -->
+    <!-- 主体：左三级组织树 + 右卡片网格（固定高度 + 分页） -->
     <div class="center-layout">
       <n-card :bordered="false" class="org-card">
         <template #header>
@@ -63,32 +63,45 @@
             <span class="node-count">{{ (store.overview.items ?? []).length }}</span>
           </div>
           <template v-for="g in store.overview.tree ?? []" :key="g.key">
+            <!-- 一级：校级机构 / 教学科研单位 -->
             <div class="tree-node group" :class="{ active: store.orgKey === g.key }" @click="selectOrg(g.key)">
               <span class="node-caret" @click.stop="toggleGroup(g.key)">
-                {{ expandedKeys.has(g.key) ? '▾' : '▸' }}
+                {{ expandedGroups.has(g.key) ? '▾' : '▸' }}
               </span>
               <span class="node-label">{{ g.label }}</span>
               <span class="node-count">{{ g.count }}</span>
             </div>
-            <div v-if="expandedKeys.has(g.key)" class="tree-children">
-              <div
-                v-for="c in g.children ?? []"
-                :key="c.key"
-                class="tree-node leaf"
-                :class="{ active: store.orgKey === c.key }"
-                @click="selectOrg(c.key)"
-              >
-                <span class="node-label">{{ c.label }}</span>
-                <span class="node-count">{{ c.count }}</span>
-              </div>
+            <div v-if="expandedGroups.has(g.key)" class="tree-children">
+              <template v-for="o in g.children ?? []" :key="o.key">
+                <!-- 二级：学院 / 部门 -->
+                <div class="tree-node org" :class="{ active: store.orgKey === o.key }" @click="selectOrg(o.key)">
+                  <span class="node-caret" @click.stop="toggleOrg(o.key)">
+                    {{ expandedOrgs.has(o.key) ? '▾' : '▸' }}
+                  </span>
+                  <span class="node-label">{{ o.label }}</span>
+                  <span class="node-count">{{ o.count }}</span>
+                </div>
+                <div v-if="expandedOrgs.has(o.key)" class="tree-children">
+                  <!-- 三级：具体栏目 -->
+                  <div
+                    v-for="c in o.children ?? []"
+                    :key="c.key"
+                    class="tree-node leaf"
+                    :class="{ active: store.orgKey === c.key }"
+                    @click="selectOrg(c.key)"
+                  >
+                    <span class="node-label">{{ c.label }}</span>
+                  </div>
+                </div>
+              </template>
             </div>
           </template>
         </div>
       </n-card>
 
       <div class="cards-col">
-        <div v-if="store.filtered.length" class="card-grid">
-          <div v-for="it in store.filtered" :key="it.id" class="source-card">
+        <div v-if="pagedItems.length" class="card-grid">
+          <div v-for="it in pagedItems" :key="it.id" class="source-card">
             <div class="card-head">
               <div class="card-name" :title="`${it.org}-${it.name}`">{{ it.name }}</div>
               <div class="card-org" :title="it.org">{{ it.org }}</div>
@@ -123,9 +136,17 @@
           </div>
         </div>
         <n-empty v-else description="没有符合条件的数据源" class="empty-box" />
+        <div class="pager">
+          <n-pagination
+            v-model:page="page"
+            :page-count="pageCount"
+            :page-size="PAGE_SIZE"
+            size="small"
+          />
+        </div>
       </div>
     </div>
-  </n-space>
+  </div>
 
   <!-- 预览弹窗 -->
   <n-modal
@@ -184,7 +205,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useDialog, useMessage } from 'naive-ui'
 import {
   AddOutline,
@@ -208,15 +229,37 @@ const previewError = ref('')
 const previewItems = ref<SourceCenterPreviewItem[]>([])
 const actingId = ref<string | null>(null)
 
-// 组织树展开状态（默认展开一级分组）
-const expandedKeys = ref<Set<string>>(new Set())
+// 每页条数（3 列 × 4 行），多余栏目进下一页
+const PAGE_SIZE = 12
+
+// 分页状态
+const page = ref(1)
+const pageCount = computed(() => Math.max(1, Math.ceil(store.filtered.length / PAGE_SIZE)))
+const pagedItems = computed(() =>
+  store.filtered.slice((page.value - 1) * PAGE_SIZE, page.value * PAGE_SIZE),
+)
+
+// 筛选条件变化 → 回到第一页；页码越界自动钳制
+watch(
+  () => [store.keyword, store.tags, store.orgKey],
+  () => {
+    page.value = 1
+  },
+)
+watch(pageCount, (pc) => {
+  if (page.value > pc) page.value = pc
+})
+
+// 组织树展开状态：一级分组 / 二级组织 各自独立
+const expandedGroups = ref<Set<string>>(new Set())
+const expandedOrgs = ref<Set<string>>(new Set())
 
 const tagOptions = computed(() => store.allTags.map((t) => ({ label: t, value: t })))
 
 const orgOptions = computed(() => {
   const opts: { label: string; value: string }[] = []
   for (const g of store.overview.tree ?? []) {
-    for (const c of g.children ?? []) opts.push({ label: `${g.label} / ${c.label}`, value: c.key })
+    for (const o of g.children ?? []) opts.push({ label: `${g.label} / ${o.label}`, value: o.key })
   }
   return opts
 })
@@ -225,11 +268,19 @@ function selectOrg(key: string | null) {
   store.orgKey = key
 }
 
-function toggleGroup(key: string) {
-  const next = new Set(expandedKeys.value)
+function toggleExpanded(set: Set<string>, key: string): Set<string> {
+  const next = new Set(set)
   if (next.has(key)) next.delete(key)
   else next.add(key)
-  expandedKeys.value = next
+  return next
+}
+
+function toggleGroup(key: string) {
+  expandedGroups.value = toggleExpanded(expandedGroups.value, key)
+}
+
+function toggleOrg(key: string) {
+  expandedOrgs.value = toggleExpanded(expandedOrgs.value, key)
 }
 
 async function openPreview(it: SourceCenterItem) {
@@ -298,11 +349,20 @@ async function copyUrl() {
 
 onMounted(async () => {
   await store.fetchOverview().catch(() => {})
-  expandedKeys.value = new Set((store.overview.tree ?? []).map((g) => g.key))
+  expandedGroups.value = new Set((store.overview.tree ?? []).map((g) => g.key))
 })
 </script>
 
 <style scoped>
+/* 页面固定高度：视口 - 顶栏(60) - content padding(24+48)，超出部分交给分页/内部滚动 */
+.page-root {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  height: calc(100vh - 140px);
+  min-height: 460px;
+}
+
 .section-title-wrap {
   display: flex;
   align-items: center;
@@ -320,6 +380,9 @@ onMounted(async () => {
   margin-left: 4px;
 }
 
+.filter-card {
+  flex-shrink: 0;
+}
 .filter-bar {
   display: flex;
   flex-wrap: wrap;
@@ -345,15 +408,15 @@ onMounted(async () => {
 }
 
 .center-layout {
-  display: grid;
-  grid-template-columns: 250px 1fr;
+  display: flex;
   gap: 14px;
-  align-items: start;
+  align-items: stretch;
+  flex: 1;
+  min-height: 0;
 }
 .org-card {
-  position: sticky;
-  top: 76px;
-  max-height: calc(100vh - 110px);
+  width: 250px;
+  flex-shrink: 0;
   overflow: auto;
 }
 .org-title {
@@ -365,7 +428,7 @@ onMounted(async () => {
   color: var(--text-1);
 }
 
-/* ---- 自定义组织树（点击即筛选，展开独立控制） ---- */
+/* ---- 三级组织树（点击即筛选，展开独立控制） ---- */
 .org-tree {
   display: flex;
   flex-direction: column;
@@ -400,6 +463,9 @@ onMounted(async () => {
   font-weight: 600;
   color: var(--text-1);
 }
+.tree-node.org {
+  padding-left: 22px;
+}
 .node-caret {
   width: 14px;
   flex-shrink: 0;
@@ -408,7 +474,7 @@ onMounted(async () => {
   text-align: center;
 }
 .tree-node.leaf {
-  padding-left: 30px;
+  padding-left: 44px;
 }
 .node-label {
   flex: 1;
@@ -432,12 +498,21 @@ onMounted(async () => {
 }
 
 .cards-col {
+  flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 .card-grid {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 12px;
+  align-content: start;
+  padding: 2px;
 }
 .source-card {
   background: var(--bg-card);
@@ -514,6 +589,13 @@ onMounted(async () => {
   padding: 60px 0;
 }
 
+.pager {
+  flex-shrink: 0;
+  padding-top: 10px;
+  display: flex;
+  justify-content: center;
+}
+
 .preview-meta {
   display: flex;
   flex-wrap: wrap;
@@ -586,11 +668,18 @@ onMounted(async () => {
 
 /* 响应式：960 以下树收起为下拉 */
 @media (max-width: 960px) {
+  .page-root {
+    height: auto;
+    min-height: 0;
+  }
   .center-layout {
-    grid-template-columns: 1fr;
+    flex-direction: column;
   }
   .org-card {
     display: none;
+  }
+  .cards-col {
+    min-height: 60vh;
   }
   .filter-org-mobile {
     display: inline-flex;
