@@ -632,7 +632,7 @@ async function openDetailById(id: number) {
     margin-left: 0;
     width: 100%;
   }
-  .sub-card :deep(.n-card__header) {
+  .sub-card :deep(.n-card-header) {
     flex-wrap: wrap;
   }
   .sub-card :deep(.n-card-header__extra) {

@@ -124,6 +124,21 @@ const statusTagType: Record<string, 'default' | 'info' | 'success' | 'warning' |
   failed: 'error',
 }
 
+// 行动型通知类型：仅这些类型能生成待办（与后端 core/models.ACTION_NOTICE_TYPES 保持一致）。
+// policy / result / news / other 为非行动型，待办生成 Agent 直接返回空。
+const ACTION_NOTICE_TYPES = new Set<string>([
+  'competition',
+  'lecture',
+  'registration',
+  'scholarship',
+  'administrative',
+  'recruitment',
+])
+
+function isActionType(item: NoticeSummary): boolean {
+  return !!item.notice_type && ACTION_NOTICE_TYPES.has(item.notice_type)
+}
+
 onMounted(async () => {
   notices.fetchMeta().catch(() => {})
   configStore.fetchSources().catch(() => {})
@@ -497,7 +512,7 @@ function keyDatesText(d: NoticeDetail): string {
         </div>
       </template>
       <template #header-extra>
-        <n-space align="center" wrap>
+        <n-space align="center" wrap class="header-actions">
           <div class="action-group">
             <n-tooltip trigger="hover" placement="top">
               <template #trigger>
@@ -633,7 +648,12 @@ function keyDatesText(d: NoticeDetail): string {
               </div>
             </div>
             <div class="notice-actions" @click.stop>
-              <n-button size="small" :loading="generating === item.id" @click="generateTodos(item)">
+              <n-button
+                v-if="isActionType(item)"
+                size="small"
+                :loading="generating === item.id"
+                @click="generateTodos(item)"
+              >
                 <template #icon><n-icon><CheckmarkDoneCircleOutline /></n-icon></template>
                 生成待办
               </n-button>
@@ -822,24 +842,32 @@ function keyDatesText(d: NoticeDetail): string {
   border-radius: 10px;
   background: var(--bg-soft);
   margin-bottom: 16px;
-}
-.filter-form :deep(.n-form-inline) {
+  /* naive-ui 内联表单默认不换行（inline-flex 无 wrap），必须在这里强制。
+     注意：filter-form 与 n-form--inline 是同一个元素，不能用 `.filter-form :deep(...)` 后代写法 */
   flex-wrap: wrap;
   row-gap: 12px;
 }
-/* 每个筛选项固定自身宽度，不被过长内容撑开，避免覆盖相邻的类型筛选框 */
+/* 每个筛选项固定自身宽度，不被过长内容撑开，避免覆盖相邻的类型筛选框；
+   同时允许收缩（flex: 0 1 auto），窄屏时随容器宽度压缩而不是把表单撑出屏幕 */
 .filter-form :deep(.n-form-item) {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
   min-width: 0;
+  max-width: 100%;
 }
 /* 选中长数据源时，限制选中标签宽度，避免筛选框被拉长覆盖相邻控件 */
 .filter-form :deep(.n-base-selection) {
   width: 100%;
   min-width: 0; /* flex容器允许收缩：子项默认 min-width:auto 会以内容撑开，必须显式置0 */
+  max-width: 100%;
 }
 .filter-form :deep(.n-base-selection-label) {
   min-width: 0;
   flex-shrink: 1;
+}
+.filter-form :deep(.n-input),
+.filter-form :deep(.n-select),
+.filter-form :deep(.n-date-picker) {
+  max-width: 100%;
 }
 /* 发布时间 / 抓取时间 单独成行，位于筛选区下方并靠右对齐 */
 .filter-row-secondary {
@@ -861,6 +889,7 @@ function keyDatesText(d: NoticeDetail): string {
 }
 .notice-row {
   display: flex;
+  flex-wrap: wrap; /* 关键：内容区 + 操作区放不下时，操作区换行到下方，而不是整体溢出屏幕 */
   align-items: center;
   gap: 14px;
   padding: 14px 16px;
@@ -868,6 +897,9 @@ function keyDatesText(d: NoticeDetail): string {
   border-radius: 10px;
   background: var(--bg-card);
   cursor: pointer;
+  min-width: 0; /* flex 子项允许收缩，防止内容把行撑出屏幕 */
+  max-width: 100%; /* 行本身不超容器，内容不足时让 flex-wrap 接管换行 */
+  box-sizing: border-box;
   transition: box-shadow 0.15s ease, transform 0.15s ease, border-color 0.15s ease;
 }
 .notice-row:hover {
@@ -905,6 +937,7 @@ function keyDatesText(d: NoticeDetail): string {
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+  min-width: 0; /* 防止内部标题省略失效：容器必须先允许收缩 */
 }
 .notice-type {
   font-size: 12px;
@@ -918,7 +951,12 @@ function keyDatesText(d: NoticeDetail): string {
   font-size: 14px;
   font-weight: 600;
   color: var(--text-1);
+  /* 单行省略的完整条件：flex-basis: 0 让标题宽度完全由 flex 算法分配（= 容器剩余宽度），
+     永远有明确宽度约束 → 换行到任何位置后省略号都必然生效。
+     min-width:0 允许收缩到 0，overflow/ellipsis/nowrap 完成省略 */
+  flex: 1 1 0;
   min-width: 0;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -960,14 +998,93 @@ function keyDatesText(d: NoticeDetail): string {
   justify-content: flex-end;
 }
 
+/* 让按钮组（30 天输入 + 清理按钮）和后面的批量按钮一起在父 n-space 中能自然换行：
+   给 n-space 一个最小包裹宽度，避免极窄时仍试图单行排列 */
+.header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  row-gap: 8px;
+}
+
+/* 中间窗口（≤960px）：
+   1. 筛选区控件提前收缩，防止日期筛选框/数据源下拉被固有宽度顶到挤出一格；
+   2. 卡片 header 允许换行 —— header-extra 按钮组（清理天数/批量删除/批量重置/抓取/批量提取）
+      不再与「通知列表」标题强塞一行，避免按钮互相重叠、溢出屏幕遮挡列表 */
+@media (max-width: 960px) {
+  .filter-form :deep(.n-input),
+  .filter-form :deep(.n-select),
+  .filter-form :deep(.n-date-picker) {
+    max-width: 200px;
+  }
+  :deep(.n-card-header) {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+  :deep(.n-card-header__extra) {
+    width: 100%;
+    margin-left: 0;
+    justify-content: flex-end;
+  }
+  .action-group {
+    flex-wrap: wrap;
+  }
+}
+
+/* 窄屏（≤720px）：header 换行逻辑已在上方 960 断点覆盖（720 < 960 同样生效）；
+   这里只保留列表行的纵向布局切换 */
 @media (max-width: 720px) {
+  .action-group {
+    width: 100%;
+    justify-content: flex-end;
+  }
+  /* 让进度条在窄屏不再硬撑 110px */
+  .header-actions :deep(.n-progress) {
+    width: 100%;
+    min-width: 0;
+  }
+  /* notice-row 内联布局保持原逻辑 */
   .notice-row {
     align-items: flex-start;
     flex-direction: column;
   }
+  .notice-content {
+    flex: 1 1 auto; /* column 主轴下重置 basis，避免 0 影响高度计算 */
+    width: 100%;
+  }
   .notice-actions {
     width: 100%;
     justify-content: flex-start;
+  }
+}
+
+/* 极窄屏（≤540px）：筛选区每个 form-item 占满一行；时间区间控件改竖排 */
+@media (max-width: 540px) {
+  .filter-form :deep(.n-form-item) {
+    flex: 1 1 100%;
+    width: 100%;
+  }
+  .filter-form :deep(.n-input),
+  .filter-form :deep(.n-select),
+  .filter-form :deep(.n-date-picker) {
+    max-width: none;
+    width: 100%;
+  }
+  .filter-row-secondary {
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+  }
+  .filter-row-secondary :deep(.n-form-item) {
+    width: 100%;
+  }
+  .filter-row-secondary :deep(.n-date-picker) {
+    width: 100%;
+  }
+  /* notice-actions 在一行内也可换行 */
+  .notice-actions {
+    gap: 6px;
   }
 }
 </style>
