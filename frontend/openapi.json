@@ -5996,16 +5996,6 @@
             "type": "array",
             "title": "Tags"
           },
-          "status": {
-            "type": "string",
-            "title": "Status",
-            "default": "官方"
-          },
-          "usage_count": {
-            "type": "integer",
-            "title": "Usage Count",
-            "default": 0
-          },
           "updated_at": {
             "type": "string",
             "title": "Updated At",

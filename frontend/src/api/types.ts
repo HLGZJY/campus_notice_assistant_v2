@@ -2104,16 +2104,6 @@ export interface components {
             /** Tags */
             tags?: string[];
             /**
-             * Status
-             * @default 官方
-             */
-            status: string;
-            /**
-             * Usage Count
-             * @default 0
-             */
-            usage_count: number;
-            /**
              * Updated At
              * @default
              */

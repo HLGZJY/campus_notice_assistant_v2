@@ -102,7 +102,8 @@ def get_overview() -> dict:
         groups[group][org] += 1
     for group, orgs in groups.items():
         children = [
-            {"key": f"{group}:{org}", "label": org, "count": cnt}
+            # key 统一带 group: 前缀（与根节点一致），前端按 parts[1]=group, parts[2]=org 解析
+            {"key": f"group:{group}:{org}", "label": org, "count": cnt}
             for org, cnt in sorted(orgs.items(), key=lambda kv: -kv[1])
         ]
         tree.append(
@@ -125,8 +126,6 @@ def get_overview() -> dict:
                 "list_url": s.get("list_url", ""),
                 "description": s.get("description", ""),
                 "tags": s.get("tags") or [],
-                "status": s.get("status", "官方"),
-                "usage_count": s.get("usage_count", 0),
                 "updated_at": s.get("updated_at", ""),
                 "adopted": s.get("list_url", "") in adopted,
             }

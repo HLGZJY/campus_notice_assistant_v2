@@ -1,1260 +1,1061 @@
-# 数据源中心公共目录（静态公共库，随代码库维护）
-#
-# 用途：数据源中心页面（/sources）展示的公共数据源库，供用户一键选用到
-# 个人数据源（config/schools/<code>.yaml 的 sources，"我的数据源"）。
-#
-# 筛选口径（2026-08-19 从学校官网 168 条候选栏目中筛选）：
-#   - 保留：通知公告 / 学院新闻 / 竞赛 / 就业 / 学术科研 / 教学 / 学工 / 评奖评优 /
-#     制度文件 / 讲座活动 等对学生与教职工高价值栏目；
-#   - 排除：党建党务内部栏目（组织建设、干部任免、学习园地等）、行政采购
-#     （基建、招投标、财务）、FAQ 常见问题、纯宣传类（媒体民大、民大人物、
-#     双塔校园、校友之窗、社会服务）及低信息量栏目。
-#
-# 字段说明：
-#   id         稳定标识（选用/移除按 id 操作）
-#   name       栏目短名
-#   org        所属组织（左侧分类树叶子）
-#   org_group  一级分组：校级机构 / 教学科研单位
-#   list_url   列表页地址（与个人数据源按此判重联动）
-#   status     官方 / 推荐（高价值核心栏目）/ 最新（近期新建站点栏目）
-#   usage_count 使用人数（种子数据，供热门排序与展示）
-
 school: 中南民族大学
 school_code: scuec
-updated_at: "2026-08-19"
-
+updated_at: '2026-08-19'
 sources:
-  # ==================== 校级机构 ====================
-  - id: school-tzgg
-    name: 学校通知公告
-    org: 学校主页
-    org_group: 校级机构
-    list_url: https://www.scuec.edu.cn/sylm/tzgg.htm
-    description: 全校性通知公告，覆盖教学安排、放假调休、选课考试、重大事项等
-    tags: [通知]
-    status: 推荐
-    usage_count: 586
-    updated_at: "2026-03-28"
-
-  - id: news-mdyw
-    name: 民大要闻
-    org: 新闻网
-    org_group: 校级机构
-    list_url: https://www.scuec.edu.cn/xww/mdkx.htm
-    description: 学校重要新闻要闻，第一时间掌握校园大事
-    tags: [新闻]
-    status: 推荐
-    usage_count: 452
-    updated_at: "2026-03-28"
-
-  - id: news-jyjx
-    name: 教育教学
-    org: 新闻网
-    org_group: 校级机构
-    list_url: https://www.scuec.edu.cn/xww/jyjx.htm
-    description: 教学改革、人才培养、课程建设等教育动态
-    tags: [新闻, 教学]
-    status: 官方
-    usage_count: 292
-    updated_at: "2026-03-28"
-
-  - id: news-xsky
-    name: 学术科研
-    org: 新闻网
-    org_group: 校级机构
-    list_url: https://www.scuec.edu.cn/xww/xsky.htm
-    description: 学校层面学术会议、科研项目与成果动态
-    tags: [新闻, 科研]
-    status: 官方
-    usage_count: 268
-    updated_at: "2026-03-28"
-
-  - id: xgb-tzgg
-    name: 通知公告
-    org: 党委学生工作部
-    org_group: 校级机构
-    list_url: https://www.scuec.edu.cn/stu/index/tzgg.htm
-    description: 学生工作部官方通知，助学、心理、事务办理等学生服务信息
-    tags: [通知]
-    status: 推荐
-    usage_count: 431
-    updated_at: "2026-03-29"
-
-  - id: xgb-xgdt
-    name: 学工动态
-    org: 党委学生工作部
-    org_group: 校级机构
-    list_url: https://www.scuec.edu.cn/stu/index/xgdt.htm
-    description: 学生工作动态，家访、主题教育活动与学工要闻
-    tags: [新闻, 学工]
-    status: 官方
-    usage_count: 286
-    updated_at: "2026-03-29"
-
-  - id: xszz-tzgg
-    name: 通知公告
-    org: 学生资助管理中心
-    org_group: 校级机构
-    list_url: https://www.scuec.edu.cn/xszz/zzdt1/tzgg.htm
-    description: 助学金、勤工助学、困难认定等资助通知与评奖评优公示
-    tags: [通知, 公示]
-    status: 推荐
-    usage_count: 298
-    updated_at: "2026-03-29"
-
-  - id: xszz-zcwj
-    name: 政策文件
-    org: 学生资助管理中心
-    org_group: 校级机构
-    list_url: https://www.scuec.edu.cn/xszz/zcwj/xxwj.htm
-    description: 国家与学校学生资助政策文件原文
-    tags: [制度]
-    status: 官方
-    usage_count: 215
-    updated_at: "2026-03-29"
-
-  - id: xgb-gzzd
-    name: 规章制度
-    org: 党委学生工作部
-    org_group: 校级机构
-    list_url: https://www.scuec.edu.cn/stu/index/gzzd.htm
-    description: 学生管理规定、行为规范等规章制度
-    tags: [制度]
-    status: 官方
-    usage_count: 187
-    updated_at: "2026-03-29"
-
-  - id: tw-tzgg
-    name: 通知公告
-    org: 团委
-    org_group: 校级机构
-    list_url: https://www.scuec.edu.cn/qnw/tzgg.htm
-    description: 团组织活动、志愿服务、社会实践等共青团通知
-    tags: [通知, 活动]
-    status: 推荐
-    usage_count: 386
-    updated_at: "2026-03-29"
-
-  - id: jycy-jygz
-    name: 就业工作
-    org: 就业与校友工作处
-    org_group: 校级机构
-    list_url: https://www.scuec.edu.cn/xsc/jygz.htm
-    description: 校园招聘、宣讲会、就业指导与就业政策信息
-    tags: [就业]
-    status: 推荐
-    usage_count: 412
-    updated_at: "2026-03-29"
-
-  - id: cxcy-jstz
-    name: 竞赛通知
-    org: 创新创业学院
-    org_group: 校级机构
-    list_url: https://www.scuec.edu.cn/cxcy/scss/jstz.htm
-    description: 各类学科竞赛、创新创业大赛通知，竞赛信息一站式获取
-    tags: [竞赛, 通知]
-    status: 推荐
-    usage_count: 468
-    updated_at: "2026-03-29"
-
-  - id: cxcy-tzgg
-    name: 通知公告
-    org: 创新创业学院
-    org_group: 校级机构
-    list_url: https://www.scuec.edu.cn/cxcy/tzgg.htm
-    description: 创新创业训练计划、双创项目立项与结题通知
-    tags: [通知]
-    status: 推荐
-    usage_count: 342
-    updated_at: "2026-03-29"
-
-  - id: cxcy-xwzx
-    name: 新闻资讯
-    org: 创新创业学院
-    org_group: 校级机构
-    list_url: https://www.scuec.edu.cn/cxcy/xwzx.htm
-    description: 创新创业活动动态与双创教育新闻
-    tags: [新闻, 活动]
-    status: 官方
-    usage_count: 186
-    updated_at: "2026-03-29"
-
-  - id: cxcyjd-hd
-    name: 创新创业活动
-    org: 创新创业教育实践基地
-    org_group: 校级机构
-    list_url: https://www.scuec.edu.cn/cxcysj/cxcyhuo_do.htm
-    description: 国家级双创基地的沙龙、路演、双创赛事活动通知
-    tags: [活动, 竞赛]
-    status: 最新
-    usage_count: 158
-    updated_at: "2026-03-29"
-
-  - id: cxcyjd-xl
-    name: 创新创业训练
-    org: 创新创业教育实践基地
-    org_group: 校级机构
-    list_url: https://www.scuec.edu.cn/cxcysj/cxcyxl.htm
-    description: 大创项目申报、训练营与孵化资源信息
-    tags: [竞赛]
-    status: 最新
-    usage_count: 142
-    updated_at: "2026-03-29"
-
-  - id: lib-gzdt
-    name: 工作动态
-    org: 图书馆
-    org_group: 校级机构
-    list_url: https://lib.scmu.edu.cn/news/web_newsList?cid=C87DB29C-DB36-9666-35D5-8FEADD07D2C9
-    description: 图书馆开闭馆安排、讲座培训与阅读推广活动
-    tags: [新闻, 活动]
-    status: 官方
-    usage_count: 203
-    updated_at: "2026-03-29"
-
-  - id: metc-tzgg
-    name: 通知公告
-    org: 信息化建设管理处
-    org_group: 校级机构
-    list_url: https://www.scuec.edu.cn/metc/sylm/tzgg.htm
-    description: 校园网、信息系统维护与网络服务变更通知
-    tags: [通知]
-    status: 官方
-    usage_count: 176
-    updated_at: "2026-03-29"
-
-  - id: bwc-tztg
-    name: 通知通告
-    org: 党委保卫部
-    org_group: 校级机构
-    list_url: https://www.scuec.edu.cn/bwc/tztg.htm
-    description: 校园安全管理、交通管制与治安预警通告
-    tags: [通知]
-    status: 官方
-    usage_count: 168
-    updated_at: "2026-03-29"
-
-  - id: bwc-ajy
-    name: 安全教育
-    org: 党委保卫部
-    org_group: 校级机构
-    list_url: https://www.scuec.edu.cn/bwc/ajy.htm
-    description: 防诈骗、消防、人身财产安全等安全教育内容
-    tags: [活动, 学工]
-    status: 推荐
-    usage_count: 192
-    updated_at: "2026-03-29"
-
-  - id: rsc-tzgg
-    name: 通知公告
-    org: 人事处
-    org_group: 校级机构
-    list_url: https://www.scuec.edu.cn/rsc2025/gzdt/tzgg.htm
-    description: 教师招聘、人才引进与人事工作通知
-    tags: [通知, 就业]
-    status: 官方
-    usage_count: 155
-    updated_at: "2026-03-29"
-
-  - id: xb-tzgg
-    name: 通知公告
-    org: 党政办公室
-    org_group: 校级机构
-    list_url: https://www.scuec.edu.cn/xb/index/tzgg.htm
-    description: 学校办公室发布的校级事务通知
-    tags: [通知]
-    status: 官方
-    usage_count: 148
-    updated_at: "2026-03-29"
-
-  - id: iao-tzgg
-    name: 通知公告
-    org: 国际合作与交流处
-    org_group: 校级机构
-    list_url: https://www.scuec.edu.cn/iao/tzgg.htm
-    description: 出国交换、访学项目与国际化活动通知
-    tags: [通知, 活动]
-    status: 推荐
-    usage_count: 176
-    updated_at: "2026-03-29"
-
-  - id: syzx-tzgg
-    name: 通知公告
-    org: 实验教学与工程训练中心
-    org_group: 校级机构
-    list_url: https://www.scuec.edu.cn/syzx/index/tzgg.htm
-    description: 实验室开放、实验课程与工程训练安排通知
-    tags: [通知, 教学]
-    status: 官方
-    usage_count: 132
-    updated_at: "2026-03-29"
-
-  # ==================== 教学科研单位 ====================
-
-  - id: jsj-xyxw
-    name: 学院新闻
-    org: 计算机学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/jky/index/xyxw.htm
-    description: 计算机学院（人工智能学院）新闻动态
-    tags: [新闻]
-    status: 推荐
-    usage_count: 321
-    updated_at: "2026-03-28"
-
-  - id: jsj-tzgg
-    name: 通知公告
-    org: 计算机学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/jky/index/tzgg.htm
-    description: 计算机学院教学、科研与学生事务通知
-    tags: [通知]
-    status: 推荐
-    usage_count: 356
-    updated_at: "2026-03-28"
-
-  - id: jsj-xkjs
-    name: 学科竞赛
-    org: 计算机学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/jky/index/xkjs.htm
-    description: 程序设计、机器人等学科竞赛通知与获奖公示
-    tags: [竞赛, 通知]
-    status: 推荐
-    usage_count: 288
-    updated_at: "2026-03-28"
-
-  - id: jsj-kycx
-    name: 科研创新
-    org: 计算机学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/jky/index/kycx.htm
-    description: 学院科研成果、科研项目申报动态
-    tags: [科研]
-    status: 官方
-    usage_count: 176
-    updated_at: "2026-03-28"
-
-  - id: jsj-txhd
-    name: 团学活动
-    org: 计算机学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/jky/index/txhd.htm
-    description: 学院团委与学生活动动态
-    tags: [活动, 学工]
-    status: 官方
-    usage_count: 143
-    updated_at: "2026-03-28"
-
-  - id: jj-xyxw
-    name: 学院新闻
-    org: 经济学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/economics/sylm/xyxw.htm
-    description: 经济学院新闻动态
-    tags: [新闻]
-    status: 官方
-    usage_count: 286
-    updated_at: "2026-03-28"
-
-  - id: jj-tzgg
-    name: 通知公告
-    org: 经济学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/economics/sylm/tzgg.htm
-    description: 经济学院教学、科研与学生事务通知
-    tags: [通知]
-    status: 推荐
-    usage_count: 312
-    updated_at: "2026-03-28"
-
-  - id: jj-xszs
-    name: 学术之声
-    org: 经济学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/economics/sylm/xszs.htm
-    description: 学院学术讲座、论坛与学术观点分享
-    tags: [讲座, 科研]
-    status: 官方
-    usage_count: 165
-    updated_at: "2026-03-28"
-
-  - id: jj-xgdt
-    name: 学工动态
-    org: 经济学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/economics/xsgz/xgdt.htm
-    description: 学院学生工作动态与活动信息
-    tags: [学工, 活动]
-    status: 官方
-    usage_count: 138
-    updated_at: "2026-03-28"
-
-  - id: fxy-xyxw
-    name: 学院新闻
-    org: 法学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/fxy/index/xyxw.htm
-    description: 法学院新闻动态
-    tags: [新闻]
-    status: 官方
-    usage_count: 268
-    updated_at: "2026-03-28"
-
-  - id: fxy-tzgg
-    name: 通知公告
-    org: 法学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/fxy/index/tzgg.htm
-    description: 法学院教学、科研与学生事务通知
-    tags: [通知]
-    status: 推荐
-    usage_count: 302
-    updated_at: "2026-03-28"
-
-  - id: fxy-sjyjs
-    name: 实践与竞赛
-    org: 法学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/fxy/xsxz/sjyjs.htm?anchor_point=1#in-list
-    description: 模拟法庭、辩论赛等法律实践与竞赛信息
-    tags: [竞赛, 活动]
-    status: 推荐
-    usage_count: 246
-    updated_at: "2026-03-28"
-
-  - id: fxy-xsyky
-    name: 学术与科研
-    org: 法学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/fxy/xsxz/xsyky.htm?anchor_point=1#in-list
-    description: 法学院学术讲座、课题与科研成果动态
-    tags: [科研, 讲座]
-    status: 官方
-    usage_count: 158
-    updated_at: "2026-03-28"
-
-  - id: wc-xyxw
-    name: 学院新闻
-    org: 文学与新闻传播学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/literature/xwzx/xyxw.htm
-    description: 文传学院新闻动态
-    tags: [新闻]
-    status: 官方
-    usage_count: 252
-    updated_at: "2026-03-28"
-
-  - id: wc-ywtz
-    name: 院务通知
-    org: 文学与新闻传播学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/literature/xwzx/ywtz.htm
-    description: 文传学院院务管理与师生事务通知
-    tags: [通知]
-    status: 推荐
-    usage_count: 275
-    updated_at: "2026-03-28"
-
-  - id: wc-jwtz
-    name: 教务通知
-    org: 文学与新闻传播学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/literature/xwzx/jwtz.htm
-    description: 教学安排、选课考试等教务通知
-    tags: [通知, 教学]
-    status: 推荐
-    usage_count: 233
-    updated_at: "2026-03-28"
-
-  - id: wc-xsjz
-    name: 学术讲座
-    org: 文学与新闻传播学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/literature/xsjz.htm
-    description: 学院学术讲座、名家讲坛预告
-    tags: [讲座, 科研]
-    status: 推荐
-    usage_count: 218
-    updated_at: "2026-03-28"
-
-  - id: wc-gshb
-    name: 公示红榜
-    org: 文学与新闻传播学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/literature/dqgz/gshb.htm
-    description: 评优评先、发展对象等公示与表彰
-    tags: [公示]
-    status: 官方
-    usage_count: 196
-    updated_at: "2026-03-28"
-
-  - id: ms-xyxw
-    name: 学院新闻
-    org: 民族学与社会学学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/mz2025/sylm/xyxw.htm
-    description: 民社学院新闻动态
-    tags: [新闻]
-    status: 官方
-    usage_count: 245
-    updated_at: "2026-03-28"
-
-  - id: ms-tzgg
-    name: 通知公告
-    org: 民族学与社会学学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/mz2025/sylm/tzgg.htm
-    description: 民社学院教学、科研与学生事务通知
-    tags: [通知]
-    status: 推荐
-    usage_count: 268
-    updated_at: "2026-03-28"
-
-  - id: ms-kydt
-    name: 科研动态
-    org: 民族学与社会学学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/mz2025/xsky/kydt.htm
-    description: 学院科研项目、成果与学术活动动态
-    tags: [科研]
-    status: 官方
-    usage_count: 152
-    updated_at: "2026-03-28"
-
-  - id: ms-jxdt
-    name: 教学动态
-    org: 民族学与社会学学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/mz2025/rcpy/bksjy/jxdt.htm
-    description: 本科教学安排与培养动态
-    tags: [教学]
-    status: 官方
-    usage_count: 139
-    updated_at: "2026-03-28"
-
-  - id: ms-xgdt
-    name: 学工动态
-    org: 民族学与社会学学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/mz2025/xspy/xgdt.htm
-    description: 学院学生工作与活动动态
-    tags: [学工, 活动]
-    status: 官方
-    usage_count: 131
-    updated_at: "2026-03-28"
-
-  - id: wy-xyxw
-    name: 学院新闻
-    org: 外语学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/wyxy/index/xyxw.htm
-    description: 外语学院新闻动态
-    tags: [新闻]
-    status: 官方
-    usage_count: 238
-    updated_at: "2026-03-28"
-
-  - id: wy-tzgg
-    name: 通知公告
-    org: 外语学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/wyxy/index/tzgg.htm
-    description: 外语学院教学、科研与学生事务通知
-    tags: [通知]
-    status: 推荐
-    usage_count: 261
-    updated_at: "2026-03-28"
-
-  - id: wy-jxdt
-    name: 教学动态
-    org: 外语学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/wyxy/index/jxdongta.htm
-    description: 教学安排、四六级与专业考试相关动态
-    tags: [教学]
-    status: 官方
-    usage_count: 146
-    updated_at: "2026-03-28"
-
-  - id: wy-kydt
-    name: 科研动态
-    org: 外语学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/wyxy/index/kydt.htm
-    description: 学院科研项目与学术交流动态
-    tags: [科研]
-    status: 官方
-    usage_count: 135
-    updated_at: "2026-03-28"
-
-  - id: wy-cxcy
-    name: 创新创业
-    org: 外语学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/wyxy/index/cxcy.htm
-    description: 外语学院创新创业赛事与项目信息
-    tags: [竞赛, 活动]
-    status: 官方
-    usage_count: 152
-    updated_at: "2026-03-28"
-
-  - id: msxy-xyxw
-    name: 学院新闻
-    org: 美术学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/art/xydt/xyxw.htm
-    description: 美术学院新闻动态
-    tags: [新闻]
-    status: 官方
-    usage_count: 226
-    updated_at: "2026-03-28"
-
-  - id: msxy-xygg
-    name: 学院公告
-    org: 美术学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/art/xydt/xygg.htm
-    description: 美术学院教学、展览与事务公告
-    tags: [通知, 活动]
-    status: 推荐
-    usage_count: 249
-    updated_at: "2026-03-28"
-
-  - id: msxy-xshd
-    name: 学生活动
-    org: 美术学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/art/xsgz/xshd.htm
-    description: 学院学生文体与展览活动信息
-    tags: [活动, 学工]
-    status: 官方
-    usage_count: 138
-    updated_at: "2026-03-28"
-
-  - id: msxy-cxcy
-    name: 创新创业
-    org: 美术学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/art/cxcy/cxcy.htm
-    description: 美术学院双创赛事与项目动态
-    tags: [竞赛, 活动]
-    status: 官方
-    usage_count: 145
-    updated_at: "2026-03-28"
-
-  - id: msxy-zcwj
-    name: 政策文件
-    org: 美术学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/art/cxcy/zcwj.htm
-    description: 创新创业相关政策文件与申报指引
-    tags: [制度]
-    status: 官方
-    usage_count: 121
-    updated_at: "2026-03-28"
-
-  - id: mks-xyxw
-    name: 学院新闻
-    org: 马克思主义学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/mkszyxy/index/xyxw.htm
-    description: 马克思主义学院新闻动态
-    tags: [新闻]
-    status: 官方
-    usage_count: 205
-    updated_at: "2026-03-28"
-
-  - id: mks-tzgg
-    name: 通知公告
-    org: 马克思主义学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/mkszyxy/index/tzgg.htm
-    description: 马克思主义学院教学、科研与学生事务通知
-    tags: [通知]
-    status: 推荐
-    usage_count: 232
-    updated_at: "2026-03-28"
-
-  - id: mks-jyjx
-    name: 教育教学
-    org: 马克思主义学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/mkszyxy/index/jyjx.htm
-    description: 思政课教学安排与课程建设动态
-    tags: [教学]
-    status: 官方
-    usage_count: 128
-    updated_at: "2026-03-28"
-
-  - id: mks-xsjw
-    name: 学术经纬
-    org: 马克思主义学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/mkszyxy/index/xsjw.htm
-    description: 学院学术讲座与科研动态
-    tags: [科研, 讲座]
-    status: 官方
-    usage_count: 119
-    updated_at: "2026-03-28"
-
-  - id: ty-xyxw
-    name: 学院新闻
-    org: 体育学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/tyxy/index/xyxw.htm
-    description: 体育学院新闻动态
-    tags: [新闻]
-    status: 官方
-    usage_count: 196
-    updated_at: "2026-03-28"
-
-  - id: ty-tzgg
-    name: 通知公告
-    org: 体育学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/tyxy/index/tzgg.htm
-    description: 体育学院教学、体测与学生事务通知
-    tags: [通知]
-    status: 推荐
-    usage_count: 221
-    updated_at: "2026-03-28"
-
-  - id: ty-xkjs
-    name: 学科竞赛
-    org: 体育学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/tyxy/index/xkjs.htm
-    description: 体育赛事、运动会与竞赛通知
-    tags: [竞赛, 活动]
-    status: 官方
-    usage_count: 187
-    updated_at: "2026-03-28"
-
-  - id: ty-jxky
-    name: 教学科研
-    org: 体育学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/tyxy/index/jxky.htm
-    description: 体育教学改革与科研动态
-    tags: [教学, 科研]
-    status: 官方
-    usage_count: 122
-    updated_at: "2026-03-28"
-
-  - id: ty-xstd
-    name: 学生天地
-    org: 体育学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/tyxy/index/xstd.htm
-    description: 体育学院学生活动与风采动态
-    tags: [学工, 活动]
-    status: 官方
-    usage_count: 115
-    updated_at: "2026-03-28"
-
-  - id: jyxy-xyxw
-    name: 学院新闻
-    org: 教育学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/jyxy/xyxw.htm
-    description: 教育学院新闻动态
-    tags: [新闻]
-    status: 官方
-    usage_count: 192
-    updated_at: "2026-03-28"
-
-  - id: jyxy-zxtz
-    name: 最新通知
-    org: 教育学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/jyxy/zxtz.htm
-    description: 教育学院教学、科研与学生事务通知
-    tags: [通知]
-    status: 推荐
-    usage_count: 218
-    updated_at: "2026-03-28"
-
-  - id: jyxy-xkdt
-    name: 学科动态
-    org: 教育学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/jyxy/xkjs/xkdt.htm
-    description: 学科建设与学术交流动态
-    tags: [科研]
-    status: 官方
-    usage_count: 126
-    updated_at: "2026-03-28"
-
-  - id: jyxy-xsgz
-    name: 学生工作
-    org: 教育学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/jyxy/xsgz.htm
-    description: 学院学生工作与活动动态
-    tags: [学工, 活动]
-    status: 官方
-    usage_count: 118
-    updated_at: "2026-03-28"
-
-  - id: sx-xwzx
-    name: 新闻中心
-    org: 数学与统计学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/math/xwzx.htm
-    description: 数学与统计学学院新闻动态
-    tags: [新闻]
-    status: 官方
-    usage_count: 178
-    updated_at: "2026-03-28"
-
-  - id: sx-xygg
-    name: 学院公告
-    org: 数学与统计学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/math/tzgg/xygg.htm
-    description: 数学与统计学学院教学、科研与学生事务公告
-    tags: [通知]
-    status: 推荐
-    usage_count: 206
-    updated_at: "2026-03-28"
-
-  - id: sx-xsyj
-    name: 学术研究
-    org: 数学与统计学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/math/xsyj.htm
-    description: 学院学术讲座与科研动态
-    tags: [科研, 讲座]
-    status: 官方
-    usage_count: 132
-    updated_at: "2026-03-28"
-
-  - id: hx-xyxw
-    name: 学院新闻
-    org: 化学与材料科学学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/hcxy/sylm/xyxw.htm
-    description: 化学与材料学院新闻动态
-    tags: [新闻]
-    status: 官方
-    usage_count: 188
-    updated_at: "2026-03-28"
-
-  - id: hx-tzgg
-    name: 通知公告
-    org: 化学与材料科学学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/hcxy/sylm/tzgg.htm
-    description: 化学与材料学院教学、科研与学生事务通知
-    tags: [通知]
-    status: 推荐
-    usage_count: 212
-    updated_at: "2026-03-28"
-
-  - id: hx-hcjt
-    name: 化材讲坛
-    org: 化学与材料科学学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/hcxy/kyjx/hcjt.htm
-    description: 学院品牌学术讲坛与科研动态
-    tags: [讲座, 科研]
-    status: 官方
-    usage_count: 128
-    updated_at: "2026-03-28"
-
-  - id: hx-xsyd
-    name: 学生园地
-    org: 化学与材料科学学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/hcxy/xsgz/xsyd.htm
-    description: 学院学生活动与学工动态
-    tags: [学工, 活动]
-    status: 官方
-    usage_count: 116
-    updated_at: "2026-03-28"
-
-  - id: smkx-xwzx
-    name: 新闻中心
-    org: 生命科学学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/smkx/index/xwzx.htm
-    description: 生命科学学院新闻动态
-    tags: [新闻]
-    status: 官方
-    usage_count: 182
-    updated_at: "2026-03-28"
-
-  - id: smkx-tzgg
-    name: 通知公告
-    org: 生命科学学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/smkx/index/tzgg.htm
-    description: 生命科学学院教学、科研与学生事务通知
-    tags: [通知]
-    status: 推荐
-    usage_count: 208
-    updated_at: "2026-03-28"
-
-  - id: smkx-xsdt
-    name: 学术动态
-    org: 生命科学学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/smkx/index/xsdt.htm
-    description: 学院学术讲座与科研动态
-    tags: [科研, 讲座]
-    status: 官方
-    usage_count: 135
-    updated_at: "2026-03-28"
-
-  - id: smkx-jxdt
-    name: 教学动态
-    org: 生命科学学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/smkx/index/jxdt.htm
-    description: 教学安排与培养动态
-    tags: [教学]
-    status: 官方
-    usage_count: 121
-    updated_at: "2026-03-28"
-
-  - id: smkx-xsgz
-    name: 学生工作
-    org: 生命科学学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/smkx/index/xsgz.htm
-    description: 学院学生工作与活动动态
-    tags: [学工, 活动]
-    status: 官方
-    usage_count: 114
-    updated_at: "2026-03-28"
-
-  - id: dxxy-tzgg
-    name: 通知公告
-    org: 电子信息工程学院
-    org_group: 教学科研单位
-    list_url: https://dxxy.scuec.edu.cn/index/tzgg.htm
-    description: 电子信息工程学院教学、科研与学生事务通知
-    tags: [通知]
-    status: 推荐
-    usage_count: 226
-    updated_at: "2026-03-28"
-
-  - id: dxxy-jxdt
-    name: 教学动态
-    org: 电子信息工程学院
-    org_group: 教学科研单位
-    list_url: https://dxxy.scuec.edu.cn/index/jxdt.htm
-    description: 教学安排与培养动态
-    tags: [教学]
-    status: 官方
-    usage_count: 132
-    updated_at: "2026-03-28"
-
-  - id: dxxy-kydt
-    name: 科研动态
-    org: 电子信息工程学院
-    org_group: 教学科研单位
-    list_url: https://dxxy.scuec.edu.cn/index/kydt.htm
-    description: 学院学术讲座与科研动态
-    tags: [科研, 讲座]
-    status: 官方
-    usage_count: 129
-    updated_at: "2026-03-28"
-
-  - id: dxxy-xsyd
-    name: 学生园地
-    org: 电子信息工程学院
-    org_group: 教学科研单位
-    list_url: https://dxxy.scuec.edu.cn/index/xsyd.htm
-    description: 学院学生活动与学工动态
-    tags: [学工, 活动]
-    status: 官方
-    usage_count: 118
-    updated_at: "2026-03-28"
-
-  - id: gl-xyxw
-    name: 学院新闻
-    org: 管理学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/som/index/xyxw.htm
-    description: 管理学院新闻动态
-    tags: [新闻]
-    status: 官方
-    usage_count: 185
-    updated_at: "2026-03-28"
-
-  - id: gl-tzgg
-    name: 通知公告
-    org: 管理学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/som/index/tzgg.htm
-    description: 管理学院教学、科研与学生事务通知
-    tags: [通知]
-    status: 推荐
-    usage_count: 208
-    updated_at: "2026-03-28"
-
-  - id: gl-kxyj
-    name: 科学研究
-    org: 管理学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/som/kxyj.htm
-    description: 学院科研项目与学术动态
-    tags: [科研]
-    status: 官方
-    usage_count: 127
-    updated_at: "2026-03-28"
-
-  - id: gl-xsgz
-    name: 学生工作
-    org: 管理学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/som/xsgz.htm
-    description: 学院学生工作与活动动态
-    tags: [学工, 活动]
-    status: 官方
-    usage_count: 116
-    updated_at: "2026-03-28"
-
-  - id: yxy-xwzx
-    name: 学院动态
-    org: 药学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/yxy/sylm/xydt.htm
-    description: 药学院新闻动态
-    tags: [新闻]
-    status: 官方
-    usage_count: 168
-    updated_at: "2026-03-28"
-
-  - id: yxy-tzgg
-    name: 通知公告
-    org: 药学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/yxy/sylm/tzgg.htm
-    description: 药学院教学、科研与学生事务通知
-    tags: [通知]
-    status: 推荐
-    usage_count: 196
-    updated_at: "2026-03-28"
-
-  - id: yxy-xsdt
-    name: 学术动态
-    org: 药学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/yxy/kxyj/xsdt.htm
-    description: 学院学术讲座与科研动态
-    tags: [科研, 讲座]
-    status: 官方
-    usage_count: 121
-    updated_at: "2026-03-28"
-
-  - id: zh-xyxw
-    name: 学院新闻
-    org: 资源与环境学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/zhxy/xyxw/xyxw.htm
-    description: 资环学院新闻动态
-    tags: [新闻]
-    status: 官方
-    usage_count: 172
-    updated_at: "2026-03-28"
-
-  - id: zh-tzgg
-    name: 通知公告
-    org: 资源与环境学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/zhxy/index/tzgg.htm
-    description: 资环学院教学、科研与学生事务通知
-    tags: [通知]
-    status: 推荐
-    usage_count: 198
-    updated_at: "2026-03-28"
-
-  - id: zh-xsdt
-    name: 学术动态
-    org: 资源与环境学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/zhxy/index/xsdt.htm
-    description: 学院学术讲座与科研动态
-    tags: [科研, 讲座]
-    status: 官方
-    usage_count: 125
-    updated_at: "2026-03-28"
-
-  - id: zh-nhhjjt
-    name: 南湖环境讲坛
-    org: 资源与环境学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/zhxy/index/nhhjjt.htm
-    description: 环境学科品牌学术讲坛动态
-    tags: [讲座, 科研]
-    status: 官方
-    usage_count: 118
-    updated_at: "2026-03-28"
-
-  - id: zh-xsyd
-    name: 学生园地
-    org: 资源与环境学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/zhxy/index/xsyd.htm
-    description: 学院学生活动与学工动态
-    tags: [学工, 活动]
-    status: 官方
-    usage_count: 112
-    updated_at: "2026-03-28"
-
-  - id: yd-xyxw
-    name: 学院新闻
-    org: 音乐舞蹈学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/musicdancing/xyxw/xyxw.htm
-    description: 音乐舞蹈学院新闻动态
-    tags: [新闻]
-    status: 官方
-    usage_count: 158
-    updated_at: "2026-03-28"
-
-  - id: yd-tzgg
-    name: 通知公告
-    org: 音乐舞蹈学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/musicdancing/tzgg.htm
-    description: 音乐舞蹈学院教学、演出与学生事务通知
-    tags: [通知, 活动]
-    status: 推荐
-    usage_count: 182
-    updated_at: "2026-03-28"
-
-  - id: yk-xyxw
-    name: 学院新闻
-    org: 预科教育学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/ykb/tzdt/xyxw.htm
-    description: 预科教育学院新闻动态
-    tags: [新闻]
-    status: 官方
-    usage_count: 146
-    updated_at: "2026-03-28"
-
-  - id: yk-xsgz
-    name: 学生工作
-    org: 预科教育学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/ykb/xsgz.htm
-    description: 预科班学生管理、结业考核与活动通知
-    tags: [学工, 通知]
-    status: 官方
-    usage_count: 121
-    updated_at: "2026-03-28"
-
-  - id: syxy-tzgg
-    name: 通知公告
-    org: 生物医学工程学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/syxy/lmy-tzgg.jsp?urltype=tree.TreeTempUrl&wbtreeid=1296
-    description: 生物医学工程学院教学、科研与学生事务通知
-    tags: [通知]
-    status: 最新
-    usage_count: 168
-    updated_at: "2026-03-28"
-
-  - id: syxy-xgdt
-    name: 学工动态
-    org: 生物医学工程学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/syxy/lmy-xgdt.jsp?urltype=tree.TreeTempUrl&wbtreeid=1303
-    description: 生物医学工程学院学生工作与活动动态
-    tags: [学工, 活动]
-    status: 最新
-    usage_count: 115
-    updated_at: "2026-03-28"
-
-  - id: ga-xyxw
-    name: 学院新闻
-    org: 国家安全学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/gggl/xyxw/xyxw.htm
-    description: 国家安全学院新闻动态
-    tags: [新闻]
-    status: 最新
-    usage_count: 98
-    updated_at: "2026-03-28"
-
-  - id: ga-ggl
-    name: 公告栏
-    org: 国家安全学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/gggl/tzgg/ggl.htm
-    description: 国家安全学院教学、科研与学生事务公告
-    tags: [通知]
-    status: 最新
-    usage_count: 112
-    updated_at: "2026-03-28"
-
-  - id: ga-jyjx
-    name: 教育教学
-    org: 国家安全学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/gggl/jyjx/jyjx.htm
-    description: 国家安全学院教学安排与培养动态
-    tags: [教学]
-    status: 最新
-    usage_count: 76
-    updated_at: "2026-03-28"
-
-  - id: ga-xsdt
-    name: 学术动态
-    org: 国家安全学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/gggl/xsdt/xsdt.htm
-    description: 国家安全学院学术讲座与科研动态
-    tags: [科研, 讲座]
-    status: 最新
-    usage_count: 82
-    updated_at: "2026-03-28"
-
-  - id: ga-txhd
-    name: 团学活动
-    org: 国家安全学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/gggl/txhd/txhd.htm
-    description: 国家安全学院团委与学生活动动态
-    tags: [活动, 学工]
-    status: 最新
-    usage_count: 68
-    updated_at: "2026-03-28"
-
-  - id: gtty-xyxw
-    name: 新闻动态
-    org: 中华民族共同体学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/gttyjy/xwdt.htm
-    description: 中华民族共同体学院新闻动态
-    tags: [新闻]
-    status: 最新
-    usage_count: 92
-    updated_at: "2026-03-28"
-
-  - id: gtty-tzgg
-    name: 通知公告
-    org: 中华民族共同体学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/gttyjy/tzgg.htm
-    description: 中华民族共同体学院教学、科研与学生事务通知
-    tags: [通知]
-    status: 最新
-    usage_count: 118
-    updated_at: "2026-03-28"
-
-  - id: gtty-jxky
-    name: 教学科研
-    org: 中华民族共同体学院
-    org_group: 教学科研单位
-    list_url: https://www.scuec.edu.cn/gttyjy/jxky.htm
-    description: 中华民族共同体学院教学与科研动态
-    tags: [教学, 科研]
-    status: 最新
-    usage_count: 72
-    updated_at: "2026-03-28"
+- id: school-tzgg
+  name: 学校通知公告
+  org: 学校主页
+  org_group: 校级机构
+  list_url: https://www.scuec.edu.cn/sylm/tzgg.htm
+  description: 全校性通知公告，覆盖教学安排、放假调休、选课考试、重大事项等
+  tags:
+  - 通知
+  updated_at: '2026-03-28'
+- id: news-mdyw
+  name: 民大要闻
+  org: 新闻网
+  org_group: 校级机构
+  list_url: https://www.scuec.edu.cn/xww/mdkx.htm
+  description: 学校重要新闻要闻，第一时间掌握校园大事
+  tags:
+  - 新闻
+  updated_at: '2026-03-28'
+- id: news-jyjx
+  name: 教育教学
+  org: 新闻网
+  org_group: 校级机构
+  list_url: https://www.scuec.edu.cn/xww/jyjx.htm
+  description: 教学改革、人才培养、课程建设等教育动态
+  tags:
+  - 新闻
+  - 教学
+  updated_at: '2026-03-28'
+- id: news-xsky
+  name: 学术科研
+  org: 新闻网
+  org_group: 校级机构
+  list_url: https://www.scuec.edu.cn/xww/xsky.htm
+  description: 学校层面学术会议、科研项目与成果动态
+  tags:
+  - 新闻
+  - 科研
+  updated_at: '2026-03-28'
+- id: xgb-tzgg
+  name: 通知公告
+  org: 党委学生工作部
+  org_group: 校级机构
+  list_url: https://www.scuec.edu.cn/stu/index/tzgg.htm
+  description: 学生工作部官方通知，助学、心理、事务办理等学生服务信息
+  tags:
+  - 通知
+  updated_at: '2026-03-29'
+- id: xgb-xgdt
+  name: 学工动态
+  org: 党委学生工作部
+  org_group: 校级机构
+  list_url: https://www.scuec.edu.cn/stu/index/xgdt.htm
+  description: 学生工作动态，家访、主题教育活动与学工要闻
+  tags:
+  - 新闻
+  - 学工
+  updated_at: '2026-03-29'
+- id: xszz-tzgg
+  name: 通知公告
+  org: 学生资助管理中心
+  org_group: 校级机构
+  list_url: https://www.scuec.edu.cn/xszz/zzdt1/tzgg.htm
+  description: 助学金、勤工助学、困难认定等资助通知与评奖评优公示
+  tags:
+  - 通知
+  - 公示
+  updated_at: '2026-03-29'
+- id: xszz-zcwj
+  name: 政策文件
+  org: 学生资助管理中心
+  org_group: 校级机构
+  list_url: https://www.scuec.edu.cn/xszz/zcwj/xxwj.htm
+  description: 国家与学校学生资助政策文件原文
+  tags:
+  - 制度
+  updated_at: '2026-03-29'
+- id: xgb-gzzd
+  name: 规章制度
+  org: 党委学生工作部
+  org_group: 校级机构
+  list_url: https://www.scuec.edu.cn/stu/index/gzzd.htm
+  description: 学生管理规定、行为规范等规章制度
+  tags:
+  - 制度
+  updated_at: '2026-03-29'
+- id: tw-tzgg
+  name: 通知公告
+  org: 团委
+  org_group: 校级机构
+  list_url: https://www.scuec.edu.cn/qnw/tzgg.htm
+  description: 团组织活动、志愿服务、社会实践等共青团通知
+  tags:
+  - 通知
+  - 活动
+  updated_at: '2026-03-29'
+- id: jycy-jygz
+  name: 就业工作
+  org: 就业与校友工作处
+  org_group: 校级机构
+  list_url: https://www.scuec.edu.cn/xsc/jygz.htm
+  description: 校园招聘、宣讲会、就业指导与就业政策信息
+  tags:
+  - 就业
+  updated_at: '2026-03-29'
+- id: cxcy-jstz
+  name: 竞赛通知
+  org: 创新创业学院
+  org_group: 校级机构
+  list_url: https://www.scuec.edu.cn/cxcy/scss/jstz.htm
+  description: 各类学科竞赛、创新创业大赛通知，竞赛信息一站式获取
+  tags:
+  - 竞赛
+  - 通知
+  updated_at: '2026-03-29'
+- id: cxcy-tzgg
+  name: 通知公告
+  org: 创新创业学院
+  org_group: 校级机构
+  list_url: https://www.scuec.edu.cn/cxcy/tzgg.htm
+  description: 创新创业训练计划、双创项目立项与结题通知
+  tags:
+  - 通知
+  updated_at: '2026-03-29'
+- id: cxcy-xwzx
+  name: 新闻资讯
+  org: 创新创业学院
+  org_group: 校级机构
+  list_url: https://www.scuec.edu.cn/cxcy/xwzx.htm
+  description: 创新创业活动动态与双创教育新闻
+  tags:
+  - 新闻
+  - 活动
+  updated_at: '2026-03-29'
+- id: cxcyjd-hd
+  name: 创新创业活动
+  org: 创新创业教育实践基地
+  org_group: 校级机构
+  list_url: https://www.scuec.edu.cn/cxcysj/cxcyhuo_do.htm
+  description: 国家级双创基地的沙龙、路演、双创赛事活动通知
+  tags:
+  - 活动
+  - 竞赛
+  updated_at: '2026-03-29'
+- id: cxcyjd-xl
+  name: 创新创业训练
+  org: 创新创业教育实践基地
+  org_group: 校级机构
+  list_url: https://www.scuec.edu.cn/cxcysj/cxcyxl.htm
+  description: 大创项目申报、训练营与孵化资源信息
+  tags:
+  - 竞赛
+  updated_at: '2026-03-29'
+- id: lib-gzdt
+  name: 工作动态
+  org: 图书馆
+  org_group: 校级机构
+  list_url: https://lib.scmu.edu.cn/news/web_newsList?cid=C87DB29C-DB36-9666-35D5-8FEADD07D2C9
+  description: 图书馆开闭馆安排、讲座培训与阅读推广活动
+  tags:
+  - 新闻
+  - 活动
+  updated_at: '2026-03-29'
+- id: metc-tzgg
+  name: 通知公告
+  org: 信息化建设管理处
+  org_group: 校级机构
+  list_url: https://www.scuec.edu.cn/metc/sylm/tzgg.htm
+  description: 校园网、信息系统维护与网络服务变更通知
+  tags:
+  - 通知
+  updated_at: '2026-03-29'
+- id: bwc-tztg
+  name: 通知通告
+  org: 党委保卫部
+  org_group: 校级机构
+  list_url: https://www.scuec.edu.cn/bwc/tztg.htm
+  description: 校园安全管理、交通管制与治安预警通告
+  tags:
+  - 通知
+  updated_at: '2026-03-29'
+- id: bwc-ajy
+  name: 安全教育
+  org: 党委保卫部
+  org_group: 校级机构
+  list_url: https://www.scuec.edu.cn/bwc/ajy.htm
+  description: 防诈骗、消防、人身财产安全等安全教育内容
+  tags:
+  - 活动
+  - 学工
+  updated_at: '2026-03-29'
+- id: rsc-tzgg
+  name: 通知公告
+  org: 人事处
+  org_group: 校级机构
+  list_url: https://www.scuec.edu.cn/rsc2025/gzdt/tzgg.htm
+  description: 教师招聘、人才引进与人事工作通知
+  tags:
+  - 通知
+  - 就业
+  updated_at: '2026-03-29'
+- id: xb-tzgg
+  name: 通知公告
+  org: 党政办公室
+  org_group: 校级机构
+  list_url: https://www.scuec.edu.cn/xb/index/tzgg.htm
+  description: 学校办公室发布的校级事务通知
+  tags:
+  - 通知
+  updated_at: '2026-03-29'
+- id: iao-tzgg
+  name: 通知公告
+  org: 国际合作与交流处
+  org_group: 校级机构
+  list_url: https://www.scuec.edu.cn/iao/tzgg.htm
+  description: 出国交换、访学项目与国际化活动通知
+  tags:
+  - 通知
+  - 活动
+  updated_at: '2026-03-29'
+- id: syzx-tzgg
+  name: 通知公告
+  org: 实验教学与工程训练中心
+  org_group: 校级机构
+  list_url: https://www.scuec.edu.cn/syzx/index/tzgg.htm
+  description: 实验室开放、实验课程与工程训练安排通知
+  tags:
+  - 通知
+  - 教学
+  updated_at: '2026-03-29'
+- id: jsj-xyxw
+  name: 学院新闻
+  org: 计算机学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/jky/index/xyxw.htm
+  description: 计算机学院（人工智能学院）新闻动态
+  tags:
+  - 新闻
+  updated_at: '2026-03-28'
+- id: jsj-tzgg
+  name: 通知公告
+  org: 计算机学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/jky/index/tzgg.htm
+  description: 计算机学院教学、科研与学生事务通知
+  tags:
+  - 通知
+  updated_at: '2026-03-28'
+- id: jsj-xkjs
+  name: 学科竞赛
+  org: 计算机学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/jky/index/xkjs.htm
+  description: 程序设计、机器人等学科竞赛通知与获奖公示
+  tags:
+  - 竞赛
+  - 通知
+  updated_at: '2026-03-28'
+- id: jsj-kycx
+  name: 科研创新
+  org: 计算机学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/jky/index/kycx.htm
+  description: 学院科研成果、科研项目申报动态
+  tags:
+  - 科研
+  updated_at: '2026-03-28'
+- id: jsj-txhd
+  name: 团学活动
+  org: 计算机学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/jky/index/txhd.htm
+  description: 学院团委与学生活动动态
+  tags:
+  - 活动
+  - 学工
+  updated_at: '2026-03-28'
+- id: jj-xyxw
+  name: 学院新闻
+  org: 经济学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/economics/sylm/xyxw.htm
+  description: 经济学院新闻动态
+  tags:
+  - 新闻
+  updated_at: '2026-03-28'
+- id: jj-tzgg
+  name: 通知公告
+  org: 经济学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/economics/sylm/tzgg.htm
+  description: 经济学院教学、科研与学生事务通知
+  tags:
+  - 通知
+  updated_at: '2026-03-28'
+- id: jj-xszs
+  name: 学术之声
+  org: 经济学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/economics/sylm/xszs.htm
+  description: 学院学术讲座、论坛与学术观点分享
+  tags:
+  - 讲座
+  - 科研
+  updated_at: '2026-03-28'
+- id: jj-xgdt
+  name: 学工动态
+  org: 经济学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/economics/xsgz/xgdt.htm
+  description: 学院学生工作动态与活动信息
+  tags:
+  - 学工
+  - 活动
+  updated_at: '2026-03-28'
+- id: fxy-xyxw
+  name: 学院新闻
+  org: 法学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/fxy/index/xyxw.htm
+  description: 法学院新闻动态
+  tags:
+  - 新闻
+  updated_at: '2026-03-28'
+- id: fxy-tzgg
+  name: 通知公告
+  org: 法学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/fxy/index/tzgg.htm
+  description: 法学院教学、科研与学生事务通知
+  tags:
+  - 通知
+  updated_at: '2026-03-28'
+- id: fxy-sjyjs
+  name: 实践与竞赛
+  org: 法学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/fxy/xsxz/sjyjs.htm?anchor_point=1#in-list
+  description: 模拟法庭、辩论赛等法律实践与竞赛信息
+  tags:
+  - 竞赛
+  - 活动
+  updated_at: '2026-03-28'
+- id: fxy-xsyky
+  name: 学术与科研
+  org: 法学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/fxy/xsxz/xsyky.htm?anchor_point=1#in-list
+  description: 法学院学术讲座、课题与科研成果动态
+  tags:
+  - 科研
+  - 讲座
+  updated_at: '2026-03-28'
+- id: wc-xyxw
+  name: 学院新闻
+  org: 文学与新闻传播学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/literature/xwzx/xyxw.htm
+  description: 文传学院新闻动态
+  tags:
+  - 新闻
+  updated_at: '2026-03-28'
+- id: wc-ywtz
+  name: 院务通知
+  org: 文学与新闻传播学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/literature/xwzx/ywtz.htm
+  description: 文传学院院务管理与师生事务通知
+  tags:
+  - 通知
+  updated_at: '2026-03-28'
+- id: wc-jwtz
+  name: 教务通知
+  org: 文学与新闻传播学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/literature/xwzx/jwtz.htm
+  description: 教学安排、选课考试等教务通知
+  tags:
+  - 通知
+  - 教学
+  updated_at: '2026-03-28'
+- id: wc-xsjz
+  name: 学术讲座
+  org: 文学与新闻传播学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/literature/xsjz.htm
+  description: 学院学术讲座、名家讲坛预告
+  tags:
+  - 讲座
+  - 科研
+  updated_at: '2026-03-28'
+- id: wc-gshb
+  name: 公示红榜
+  org: 文学与新闻传播学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/literature/dqgz/gshb.htm
+  description: 评优评先、发展对象等公示与表彰
+  tags:
+  - 公示
+  updated_at: '2026-03-28'
+- id: ms-xyxw
+  name: 学院新闻
+  org: 民族学与社会学学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/mz2025/sylm/xyxw.htm
+  description: 民社学院新闻动态
+  tags:
+  - 新闻
+  updated_at: '2026-03-28'
+- id: ms-tzgg
+  name: 通知公告
+  org: 民族学与社会学学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/mz2025/sylm/tzgg.htm
+  description: 民社学院教学、科研与学生事务通知
+  tags:
+  - 通知
+  updated_at: '2026-03-28'
+- id: ms-kydt
+  name: 科研动态
+  org: 民族学与社会学学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/mz2025/xsky/kydt.htm
+  description: 学院科研项目、成果与学术活动动态
+  tags:
+  - 科研
+  updated_at: '2026-03-28'
+- id: ms-jxdt
+  name: 教学动态
+  org: 民族学与社会学学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/mz2025/rcpy/bksjy/jxdt.htm
+  description: 本科教学安排与培养动态
+  tags:
+  - 教学
+  updated_at: '2026-03-28'
+- id: ms-xgdt
+  name: 学工动态
+  org: 民族学与社会学学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/mz2025/xspy/xgdt.htm
+  description: 学院学生工作与活动动态
+  tags:
+  - 学工
+  - 活动
+  updated_at: '2026-03-28'
+- id: wy-xyxw
+  name: 学院新闻
+  org: 外语学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/wyxy/index/xyxw.htm
+  description: 外语学院新闻动态
+  tags:
+  - 新闻
+  updated_at: '2026-03-28'
+- id: wy-tzgg
+  name: 通知公告
+  org: 外语学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/wyxy/index/tzgg.htm
+  description: 外语学院教学、科研与学生事务通知
+  tags:
+  - 通知
+  updated_at: '2026-03-28'
+- id: wy-jxdt
+  name: 教学动态
+  org: 外语学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/wyxy/index/jxdongta.htm
+  description: 教学安排、四六级与专业考试相关动态
+  tags:
+  - 教学
+  updated_at: '2026-03-28'
+- id: wy-kydt
+  name: 科研动态
+  org: 外语学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/wyxy/index/kydt.htm
+  description: 学院科研项目与学术交流动态
+  tags:
+  - 科研
+  updated_at: '2026-03-28'
+- id: wy-cxcy
+  name: 创新创业
+  org: 外语学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/wyxy/index/cxcy.htm
+  description: 外语学院创新创业赛事与项目信息
+  tags:
+  - 竞赛
+  - 活动
+  updated_at: '2026-03-28'
+- id: msxy-xyxw
+  name: 学院新闻
+  org: 美术学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/art/xydt/xyxw.htm
+  description: 美术学院新闻动态
+  tags:
+  - 新闻
+  updated_at: '2026-03-28'
+- id: msxy-xygg
+  name: 学院公告
+  org: 美术学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/art/xydt/xygg.htm
+  description: 美术学院教学、展览与事务公告
+  tags:
+  - 通知
+  - 活动
+  updated_at: '2026-03-28'
+- id: msxy-xshd
+  name: 学生活动
+  org: 美术学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/art/xsgz/xshd.htm
+  description: 学院学生文体与展览活动信息
+  tags:
+  - 活动
+  - 学工
+  updated_at: '2026-03-28'
+- id: msxy-cxcy
+  name: 创新创业
+  org: 美术学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/art/cxcy/cxcy.htm
+  description: 美术学院双创赛事与项目动态
+  tags:
+  - 竞赛
+  - 活动
+  updated_at: '2026-03-28'
+- id: msxy-zcwj
+  name: 政策文件
+  org: 美术学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/art/cxcy/zcwj.htm
+  description: 创新创业相关政策文件与申报指引
+  tags:
+  - 制度
+  updated_at: '2026-03-28'
+- id: mks-xyxw
+  name: 学院新闻
+  org: 马克思主义学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/mkszyxy/index/xyxw.htm
+  description: 马克思主义学院新闻动态
+  tags:
+  - 新闻
+  updated_at: '2026-03-28'
+- id: mks-tzgg
+  name: 通知公告
+  org: 马克思主义学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/mkszyxy/index/tzgg.htm
+  description: 马克思主义学院教学、科研与学生事务通知
+  tags:
+  - 通知
+  updated_at: '2026-03-28'
+- id: mks-jyjx
+  name: 教育教学
+  org: 马克思主义学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/mkszyxy/index/jyjx.htm
+  description: 思政课教学安排与课程建设动态
+  tags:
+  - 教学
+  updated_at: '2026-03-28'
+- id: mks-xsjw
+  name: 学术经纬
+  org: 马克思主义学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/mkszyxy/index/xsjw.htm
+  description: 学院学术讲座与科研动态
+  tags:
+  - 科研
+  - 讲座
+  updated_at: '2026-03-28'
+- id: ty-xyxw
+  name: 学院新闻
+  org: 体育学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/tyxy/index/xyxw.htm
+  description: 体育学院新闻动态
+  tags:
+  - 新闻
+  updated_at: '2026-03-28'
+- id: ty-tzgg
+  name: 通知公告
+  org: 体育学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/tyxy/index/tzgg.htm
+  description: 体育学院教学、体测与学生事务通知
+  tags:
+  - 通知
+  updated_at: '2026-03-28'
+- id: ty-xkjs
+  name: 学科竞赛
+  org: 体育学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/tyxy/index/xkjs.htm
+  description: 体育赛事、运动会与竞赛通知
+  tags:
+  - 竞赛
+  - 活动
+  updated_at: '2026-03-28'
+- id: ty-jxky
+  name: 教学科研
+  org: 体育学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/tyxy/index/jxky.htm
+  description: 体育教学改革与科研动态
+  tags:
+  - 教学
+  - 科研
+  updated_at: '2026-03-28'
+- id: ty-xstd
+  name: 学生天地
+  org: 体育学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/tyxy/index/xstd.htm
+  description: 体育学院学生活动与风采动态
+  tags:
+  - 学工
+  - 活动
+  updated_at: '2026-03-28'
+- id: jyxy-xyxw
+  name: 学院新闻
+  org: 教育学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/jyxy/xyxw.htm
+  description: 教育学院新闻动态
+  tags:
+  - 新闻
+  updated_at: '2026-03-28'
+- id: jyxy-zxtz
+  name: 最新通知
+  org: 教育学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/jyxy/zxtz.htm
+  description: 教育学院教学、科研与学生事务通知
+  tags:
+  - 通知
+  updated_at: '2026-03-28'
+- id: jyxy-xkdt
+  name: 学科动态
+  org: 教育学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/jyxy/xkjs/xkdt.htm
+  description: 学科建设与学术交流动态
+  tags:
+  - 科研
+  updated_at: '2026-03-28'
+- id: jyxy-xsgz
+  name: 学生工作
+  org: 教育学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/jyxy/xsgz.htm
+  description: 学院学生工作与活动动态
+  tags:
+  - 学工
+  - 活动
+  updated_at: '2026-03-28'
+- id: sx-xwzx
+  name: 新闻中心
+  org: 数学与统计学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/math/xwzx.htm
+  description: 数学与统计学学院新闻动态
+  tags:
+  - 新闻
+  updated_at: '2026-03-28'
+- id: sx-xygg
+  name: 学院公告
+  org: 数学与统计学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/math/tzgg/xygg.htm
+  description: 数学与统计学学院教学、科研与学生事务公告
+  tags:
+  - 通知
+  updated_at: '2026-03-28'
+- id: sx-xsyj
+  name: 学术研究
+  org: 数学与统计学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/math/xsyj.htm
+  description: 学院学术讲座与科研动态
+  tags:
+  - 科研
+  - 讲座
+  updated_at: '2026-03-28'
+- id: hx-xyxw
+  name: 学院新闻
+  org: 化学与材料科学学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/hcxy/sylm/xyxw.htm
+  description: 化学与材料学院新闻动态
+  tags:
+  - 新闻
+  updated_at: '2026-03-28'
+- id: hx-tzgg
+  name: 通知公告
+  org: 化学与材料科学学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/hcxy/sylm/tzgg.htm
+  description: 化学与材料学院教学、科研与学生事务通知
+  tags:
+  - 通知
+  updated_at: '2026-03-28'
+- id: hx-hcjt
+  name: 化材讲坛
+  org: 化学与材料科学学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/hcxy/kyjx/hcjt.htm
+  description: 学院品牌学术讲坛与科研动态
+  tags:
+  - 讲座
+  - 科研
+  updated_at: '2026-03-28'
+- id: hx-xsyd
+  name: 学生园地
+  org: 化学与材料科学学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/hcxy/xsgz/xsyd.htm
+  description: 学院学生活动与学工动态
+  tags:
+  - 学工
+  - 活动
+  updated_at: '2026-03-28'
+- id: smkx-xwzx
+  name: 新闻中心
+  org: 生命科学学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/smkx/index/xwzx.htm
+  description: 生命科学学院新闻动态
+  tags:
+  - 新闻
+  updated_at: '2026-03-28'
+- id: smkx-tzgg
+  name: 通知公告
+  org: 生命科学学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/smkx/index/tzgg.htm
+  description: 生命科学学院教学、科研与学生事务通知
+  tags:
+  - 通知
+  updated_at: '2026-03-28'
+- id: smkx-xsdt
+  name: 学术动态
+  org: 生命科学学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/smkx/index/xsdt.htm
+  description: 学院学术讲座与科研动态
+  tags:
+  - 科研
+  - 讲座
+  updated_at: '2026-03-28'
+- id: smkx-jxdt
+  name: 教学动态
+  org: 生命科学学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/smkx/index/jxdt.htm
+  description: 教学安排与培养动态
+  tags:
+  - 教学
+  updated_at: '2026-03-28'
+- id: smkx-xsgz
+  name: 学生工作
+  org: 生命科学学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/smkx/index/xsgz.htm
+  description: 学院学生工作与活动动态
+  tags:
+  - 学工
+  - 活动
+  updated_at: '2026-03-28'
+- id: dxxy-tzgg
+  name: 通知公告
+  org: 电子信息工程学院
+  org_group: 教学科研单位
+  list_url: https://dxxy.scuec.edu.cn/index/tzgg.htm
+  description: 电子信息工程学院教学、科研与学生事务通知
+  tags:
+  - 通知
+  updated_at: '2026-03-28'
+- id: dxxy-jxdt
+  name: 教学动态
+  org: 电子信息工程学院
+  org_group: 教学科研单位
+  list_url: https://dxxy.scuec.edu.cn/index/jxdt.htm
+  description: 教学安排与培养动态
+  tags:
+  - 教学
+  updated_at: '2026-03-28'
+- id: dxxy-kydt
+  name: 科研动态
+  org: 电子信息工程学院
+  org_group: 教学科研单位
+  list_url: https://dxxy.scuec.edu.cn/index/kydt.htm
+  description: 学院学术讲座与科研动态
+  tags:
+  - 科研
+  - 讲座
+  updated_at: '2026-03-28'
+- id: dxxy-xsyd
+  name: 学生园地
+  org: 电子信息工程学院
+  org_group: 教学科研单位
+  list_url: https://dxxy.scuec.edu.cn/index/xsyd.htm
+  description: 学院学生活动与学工动态
+  tags:
+  - 学工
+  - 活动
+  updated_at: '2026-03-28'
+- id: gl-xyxw
+  name: 学院新闻
+  org: 管理学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/som/index/xyxw.htm
+  description: 管理学院新闻动态
+  tags:
+  - 新闻
+  updated_at: '2026-03-28'
+- id: gl-tzgg
+  name: 通知公告
+  org: 管理学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/som/index/tzgg.htm
+  description: 管理学院教学、科研与学生事务通知
+  tags:
+  - 通知
+  updated_at: '2026-03-28'
+- id: gl-kxyj
+  name: 科学研究
+  org: 管理学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/som/kxyj.htm
+  description: 学院科研项目与学术动态
+  tags:
+  - 科研
+  updated_at: '2026-03-28'
+- id: gl-xsgz
+  name: 学生工作
+  org: 管理学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/som/xsgz.htm
+  description: 学院学生工作与活动动态
+  tags:
+  - 学工
+  - 活动
+  updated_at: '2026-03-28'
+- id: yxy-xwzx
+  name: 学院动态
+  org: 药学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/yxy/sylm/xydt.htm
+  description: 药学院新闻动态
+  tags:
+  - 新闻
+  updated_at: '2026-03-28'
+- id: yxy-tzgg
+  name: 通知公告
+  org: 药学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/yxy/sylm/tzgg.htm
+  description: 药学院教学、科研与学生事务通知
+  tags:
+  - 通知
+  updated_at: '2026-03-28'
+- id: yxy-xsdt
+  name: 学术动态
+  org: 药学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/yxy/kxyj/xsdt.htm
+  description: 学院学术讲座与科研动态
+  tags:
+  - 科研
+  - 讲座
+  updated_at: '2026-03-28'
+- id: zh-xyxw
+  name: 学院新闻
+  org: 资源与环境学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/zhxy/xyxw/xyxw.htm
+  description: 资环学院新闻动态
+  tags:
+  - 新闻
+  updated_at: '2026-03-28'
+- id: zh-tzgg
+  name: 通知公告
+  org: 资源与环境学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/zhxy/index/tzgg.htm
+  description: 资环学院教学、科研与学生事务通知
+  tags:
+  - 通知
+  updated_at: '2026-03-28'
+- id: zh-xsdt
+  name: 学术动态
+  org: 资源与环境学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/zhxy/index/xsdt.htm
+  description: 学院学术讲座与科研动态
+  tags:
+  - 科研
+  - 讲座
+  updated_at: '2026-03-28'
+- id: zh-nhhjjt
+  name: 南湖环境讲坛
+  org: 资源与环境学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/zhxy/index/nhhjjt.htm
+  description: 环境学科品牌学术讲坛动态
+  tags:
+  - 讲座
+  - 科研
+  updated_at: '2026-03-28'
+- id: zh-xsyd
+  name: 学生园地
+  org: 资源与环境学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/zhxy/index/xsyd.htm
+  description: 学院学生活动与学工动态
+  tags:
+  - 学工
+  - 活动
+  updated_at: '2026-03-28'
+- id: yd-xyxw
+  name: 学院新闻
+  org: 音乐舞蹈学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/musicdancing/xyxw/xyxw.htm
+  description: 音乐舞蹈学院新闻动态
+  tags:
+  - 新闻
+  updated_at: '2026-03-28'
+- id: yd-tzgg
+  name: 通知公告
+  org: 音乐舞蹈学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/musicdancing/tzgg.htm
+  description: 音乐舞蹈学院教学、演出与学生事务通知
+  tags:
+  - 通知
+  - 活动
+  updated_at: '2026-03-28'
+- id: yk-xyxw
+  name: 学院新闻
+  org: 预科教育学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/ykb/tzdt/xyxw.htm
+  description: 预科教育学院新闻动态
+  tags:
+  - 新闻
+  updated_at: '2026-03-28'
+- id: yk-xsgz
+  name: 学生工作
+  org: 预科教育学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/ykb/xsgz.htm
+  description: 预科班学生管理、结业考核与活动通知
+  tags:
+  - 学工
+  - 通知
+  updated_at: '2026-03-28'
+- id: syxy-tzgg
+  name: 通知公告
+  org: 生物医学工程学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/syxy/lmy-tzgg.jsp?urltype=tree.TreeTempUrl&wbtreeid=1296
+  description: 生物医学工程学院教学、科研与学生事务通知
+  tags:
+  - 通知
+  updated_at: '2026-03-28'
+- id: syxy-xgdt
+  name: 学工动态
+  org: 生物医学工程学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/syxy/lmy-xgdt.jsp?urltype=tree.TreeTempUrl&wbtreeid=1303
+  description: 生物医学工程学院学生工作与活动动态
+  tags:
+  - 学工
+  - 活动
+  updated_at: '2026-03-28'
+- id: ga-xyxw
+  name: 学院新闻
+  org: 国家安全学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/gggl/xyxw/xyxw.htm
+  description: 国家安全学院新闻动态
+  tags:
+  - 新闻
+  updated_at: '2026-03-28'
+- id: ga-ggl
+  name: 公告栏
+  org: 国家安全学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/gggl/tzgg/ggl.htm
+  description: 国家安全学院教学、科研与学生事务公告
+  tags:
+  - 通知
+  updated_at: '2026-03-28'
+- id: ga-jyjx
+  name: 教育教学
+  org: 国家安全学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/gggl/jyjx/jyjx.htm
+  description: 国家安全学院教学安排与培养动态
+  tags:
+  - 教学
+  updated_at: '2026-03-28'
+- id: ga-xsdt
+  name: 学术动态
+  org: 国家安全学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/gggl/xsdt/xsdt.htm
+  description: 国家安全学院学术讲座与科研动态
+  tags:
+  - 科研
+  - 讲座
+  updated_at: '2026-03-28'
+- id: ga-txhd
+  name: 团学活动
+  org: 国家安全学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/gggl/txhd/txhd.htm
+  description: 国家安全学院团委与学生活动动态
+  tags:
+  - 活动
+  - 学工
+  updated_at: '2026-03-28'
+- id: gtty-xyxw
+  name: 新闻动态
+  org: 中华民族共同体学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/gttyjy/xwdt.htm
+  description: 中华民族共同体学院新闻动态
+  tags:
+  - 新闻
+  updated_at: '2026-03-28'
+- id: gtty-tzgg
+  name: 通知公告
+  org: 中华民族共同体学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/gttyjy/tzgg.htm
+  description: 中华民族共同体学院教学、科研与学生事务通知
+  tags:
+  - 通知
+  updated_at: '2026-03-28'
+- id: gtty-jxky
+  name: 教学科研
+  org: 中华民族共同体学院
+  org_group: 教学科研单位
+  list_url: https://www.scuec.edu.cn/gttyjy/jxky.htm
+  description: 中华民族共同体学院教学与科研动态
+  tags:
+  - 教学
+  - 科研
+  updated_at: '2026-03-28'

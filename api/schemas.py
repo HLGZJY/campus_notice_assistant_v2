@@ -709,8 +709,6 @@ class SourceCenterItem(BaseModel):
     list_url: str
     description: str = ""
     tags: list[str] = Field(default_factory=list)
-    status: str = "官方"
-    usage_count: int = 0
     updated_at: str = ""
     adopted: bool = False
 

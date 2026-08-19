@@ -21,13 +21,6 @@
           </template>
         </n-input>
         <n-select
-          v-model:value="store.status"
-          class="filter-status"
-          placeholder="全部状态"
-          clearable
-          :options="statusOptions"
-        />
-        <n-select
           v-model:value="store.tags"
           class="filter-tags"
           multiple
@@ -60,21 +53,37 @@
             <span>学校组织架构</span>
           </div>
         </template>
-        <div
-          class="org-all"
-          :class="{ active: !store.orgKey }"
-          @click="store.orgKey = null"
-        >
-          全部数据源
+        <div class="org-tree">
+          <div
+            class="tree-node root"
+            :class="{ active: !store.orgKey }"
+            @click="selectOrg(null)"
+          >
+            <span class="node-label">全部数据源</span>
+            <span class="node-count">{{ (store.overview.items ?? []).length }}</span>
+          </div>
+          <template v-for="g in store.overview.tree ?? []" :key="g.key">
+            <div class="tree-node group" :class="{ active: store.orgKey === g.key }" @click="selectOrg(g.key)">
+              <span class="node-caret" @click.stop="toggleGroup(g.key)">
+                {{ expandedKeys.has(g.key) ? '▾' : '▸' }}
+              </span>
+              <span class="node-label">{{ g.label }}</span>
+              <span class="node-count">{{ g.count }}</span>
+            </div>
+            <div v-if="expandedKeys.has(g.key)" class="tree-children">
+              <div
+                v-for="c in g.children ?? []"
+                :key="c.key"
+                class="tree-node leaf"
+                :class="{ active: store.orgKey === c.key }"
+                @click="selectOrg(c.key)"
+              >
+                <span class="node-label">{{ c.label }}</span>
+                <span class="node-count">{{ c.count }}</span>
+              </div>
+            </div>
+          </template>
         </div>
-        <n-tree
-          block-line
-          expand-on-click
-          :data="treeData"
-          :default-expanded-keys="defaultExpandedKeys"
-          :selected-keys="store.orgKey ? [store.orgKey] : []"
-          @update:selected-keys="onTreeSelect"
-        />
       </n-card>
 
       <div class="cards-col">
@@ -82,23 +91,14 @@
           <div v-for="it in store.filtered" :key="it.id" class="source-card">
             <div class="card-head">
               <div class="card-name" :title="`${it.org}-${it.name}`">{{ it.name }}</div>
-              <n-tag :bordered="false" size="small" :type="statusType(it.status)">{{ it.status }}</n-tag>
+              <div class="card-org" :title="it.org">{{ it.org }}</div>
             </div>
-            <div class="card-org">
-              <n-icon size="12"><SchoolOutline /></n-icon>
-              <span>{{ it.org }}</span>
-              <span class="dot">·</span>
-              <span class="card-updated">更新于 {{ it.updated_at }}</span>
-            </div>
+            <div class="card-updated">更新于 {{ it.updated_at }}</div>
             <div class="card-desc">{{ it.description }}</div>
             <div class="card-tags">
-              <n-tag v-for="t in it.tags" :key="t" size="small" :bordered="false" round class="tag-chip">
+              <n-tag v-for="t in it.tags ?? []" :key="t" size="small" :bordered="false" round class="tag-chip">
                 {{ t }}
               </n-tag>
-              <div class="card-usage">
-                <n-icon size="12" color="var(--text-3)"><PeopleOutline /></n-icon>
-                <span>{{ it.usage_count }} 人使用</span>
-              </div>
             </div>
             <div class="card-actions">
               <n-button quaternary size="small" @click="openPreview(it)">
@@ -125,45 +125,6 @@
         <n-empty v-else description="没有符合条件的数据源" class="empty-box" />
       </div>
     </div>
-
-    <!-- 底部推荐区 -->
-    <div class="recommend-grid">
-      <n-card :bordered="false" class="recommend-card">
-        <template #header>
-          <div class="org-title">
-            <n-icon size="15" color="var(--warning)"><FlameOutline /></n-icon>
-            <span>热门数据源 Top 5</span>
-          </div>
-        </template>
-        <div v-for="(it, idx) in store.hotTop5" :key="it.id" class="hot-row">
-          <span class="hot-rank" :class="{ top: idx < 3 }">{{ idx + 1 }}</span>
-          <div class="hot-info">
-            <div class="hot-name">{{ it.org }}-{{ it.name }}</div>
-            <div class="hot-meta">{{ it.usage_count }} 人使用 · {{ it.status }}</div>
-          </div>
-          <n-button v-if="!it.adopted" size="tiny" type="primary" ghost @click="onAdopt(it)">
-            选用
-          </n-button>
-          <n-tag v-else :bordered="false" type="success" size="small">已选用</n-tag>
-        </div>
-      </n-card>
-
-      <n-card :bordered="false" class="recommend-card">
-        <template #header>
-          <div class="org-title">
-            <n-icon size="15" color="var(--success)"><TrendingUpOutline /></n-icon>
-            <span>其他用户也在用</span>
-          </div>
-        </template>
-        <div class="other-grid">
-          <div v-for="it in store.popularOthers" :key="it.id" class="other-item">
-            <div class="other-name" :title="it.name">{{ it.org }}-{{ it.name }}</div>
-            <div class="other-meta">{{ it.usage_count }} 人使用</div>
-            <n-button size="tiny" type="primary" ghost block @click="onAdopt(it)">选用</n-button>
-          </div>
-        </div>
-      </n-card>
-    </div>
   </n-space>
 
   <!-- 预览弹窗 -->
@@ -176,9 +137,7 @@
   >
     <template v-if="previewItem">
       <div class="preview-meta">
-        <n-tag :bordered="false" size="small" :type="statusType(previewItem.status)">{{ previewItem.status }}</n-tag>
         <n-tag v-for="t in previewItem.tags ?? []" :key="t" size="small" :bordered="false" round>{{ t }}</n-tag>
-        <span class="preview-usage">{{ previewItem.usage_count }} 人使用</span>
       </div>
       <div class="preview-desc">{{ previewItem.description }}</div>
       <n-input
@@ -225,22 +184,18 @@
 </template>
 
 <script setup lang="ts">
-import { computed, h, onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useDialog, useMessage } from 'naive-ui'
-import type { TreeOption } from 'naive-ui'
 import {
   AddOutline,
   CheckmarkCircleOutline,
   EyeOutline,
-  FlameOutline,
   LibraryOutline,
-  PeopleOutline,
   SchoolOutline,
   SearchOutline,
-  TrendingUpOutline,
 } from '@vicons/ionicons5'
 import { useSourceCenterStore } from '../stores/useSourceCenterStore'
-import type { SourceCenterItem, SourceCenterNode, SourceCenterPreviewItem } from '../api/schema'
+import type { SourceCenterItem, SourceCenterPreviewItem } from '../api/schema'
 
 const message = useMessage()
 const dialog = useDialog()
@@ -253,11 +208,8 @@ const previewError = ref('')
 const previewItems = ref<SourceCenterPreviewItem[]>([])
 const actingId = ref<string | null>(null)
 
-const statusOptions = [
-  { label: '官方', value: '官方' },
-  { label: '推荐', value: '推荐' },
-  { label: '最新', value: '最新' },
-]
+// 组织树展开状态（默认展开一级分组）
+const expandedKeys = ref<Set<string>>(new Set())
 
 const tagOptions = computed(() => store.allTags.map((t) => ({ label: t, value: t })))
 
@@ -269,38 +221,15 @@ const orgOptions = computed(() => {
   return opts
 })
 
-function renderLabel(node: SourceCenterNode) {
-  return h('span', { class: 'tree-label' }, [
-    h('span', { class: 'tree-label-text' }, node.label),
-    h('span', { class: 'tree-label-count' }, String(node.count)),
-  ])
+function selectOrg(key: string | null) {
+  store.orgKey = key
 }
 
-const treeData = computed<TreeOption[]>(() =>
-  (store.overview.tree ?? []).map((g) => ({
-    key: g.key,
-    label: g.label,
-    count: g.count,
-    renderLabel: () => renderLabel(g),
-    children: (g.children ?? []).map((c) => ({
-      key: c.key,
-      label: c.label,
-      count: c.count,
-      renderLabel: () => renderLabel(c),
-    })),
-  })),
-)
-
-const defaultExpandedKeys = computed(() => (store.overview.tree ?? []).map((g) => g.key))
-
-function onTreeSelect(keys: Array<string | number>) {
-  store.orgKey = keys.length ? String(keys[0]) : null
-}
-
-function statusType(s: string): 'info' | 'warning' | 'success' {
-  if (s === '推荐') return 'warning'
-  if (s === '最新') return 'success'
-  return 'info'
+function toggleGroup(key: string) {
+  const next = new Set(expandedKeys.value)
+  if (next.has(key)) next.delete(key)
+  else next.add(key)
+  expandedKeys.value = next
 }
 
 async function openPreview(it: SourceCenterItem) {
@@ -367,8 +296,9 @@ async function copyUrl() {
   }
 }
 
-onMounted(() => {
-  store.fetchOverview().catch(() => {})
+onMounted(async () => {
+  await store.fetchOverview().catch(() => {})
+  expandedKeys.value = new Set((store.overview.tree ?? []).map((g) => g.key))
 })
 </script>
 
@@ -399,9 +329,6 @@ onMounted(() => {
 .filter-search {
   width: 340px;
   max-width: 100%;
-}
-.filter-status {
-  width: 130px;
 }
 .filter-tags {
   width: 220px;
@@ -437,36 +364,71 @@ onMounted(() => {
   font-weight: 600;
   color: var(--text-1);
 }
-.org-all {
-  padding: 6px 10px;
-  margin-bottom: 4px;
-  border-radius: var(--radius-md);
+
+/* ---- 自定义组织树（点击即筛选，展开独立控制） ---- */
+.org-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   font-size: 13px;
+}
+.tree-node {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: var(--radius-md);
   color: var(--text-2);
   cursor: pointer;
-  transition: all 0.15s;
+  user-select: none;
+  transition: background 0.15s, color 0.15s;
 }
-.org-all:hover {
+.tree-node:hover {
   background: var(--bg-soft);
 }
-.org-all.active {
+.tree-node.active {
   background: var(--primary-soft);
   color: var(--primary);
   font-weight: 600;
 }
-.tree-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  width: 100%;
+.tree-node.root {
+  font-weight: 600;
+  color: var(--text-1);
 }
-.tree-label-count {
+.tree-node.group {
+  margin-top: 4px;
+  font-weight: 600;
+  color: var(--text-1);
+}
+.node-caret {
+  width: 14px;
+  flex-shrink: 0;
+  font-size: 10px;
+  color: var(--text-3);
+  text-align: center;
+}
+.tree-node.leaf {
+  padding-left: 30px;
+}
+.node-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.node-count {
   font-size: 11px;
   color: var(--text-3);
   background: var(--bg-soft);
   border-radius: 8px;
   padding: 0 6px;
   line-height: 16px;
+  flex-shrink: 0;
+}
+.tree-node.active .node-count {
+  background: var(--primary-soft);
+  color: var(--primary);
 }
 
 .cards-col {
@@ -493,9 +455,10 @@ onMounted(() => {
 }
 .card-head {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   justify-content: space-between;
   gap: 8px;
+  min-width: 0;
 }
 .card-name {
   font-size: 14px;
@@ -505,22 +468,20 @@ onMounted(() => {
   text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
+  flex: 1;
 }
 .card-org {
-  display: flex;
-  align-items: center;
-  gap: 4px;
   font-size: 12px;
   color: var(--text-3);
-  min-width: 0;
-}
-.card-org .dot {
-  margin: 0 2px;
-}
-.card-updated {
+  flex-shrink: 0;
+  max-width: 40%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.card-updated {
+  font-size: 11px;
+  color: var(--text-3);
 }
 .card-desc {
   font-size: 12px;
@@ -536,18 +497,9 @@ onMounted(() => {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
-  align-items: center;
 }
 .tag-chip {
   font-size: 11px;
-}
-.card-usage {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  font-size: 11px;
-  color: var(--text-3);
-  margin-left: auto;
 }
 .card-actions {
   display: flex;
@@ -562,89 +514,10 @@ onMounted(() => {
   padding: 60px 0;
 }
 
-.recommend-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
-}
-.hot-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 4px;
-  border-bottom: 1px dashed var(--border);
-}
-.hot-row:last-child {
-  border-bottom: none;
-}
-.hot-rank {
-  width: 20px;
-  height: 20px;
-  border-radius: 6px;
-  background: var(--bg-soft);
-  color: var(--text-3);
-  font-size: 12px;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-.hot-rank.top {
-  background: var(--warning-soft);
-  color: var(--warning);
-}
-.hot-info {
-  flex: 1;
-  min-width: 0;
-}
-.hot-name {
-  font-size: 13px;
-  color: var(--text-1);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.hot-meta {
-  font-size: 11px;
-  color: var(--text-3);
-}
-.other-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-}
-.other-item {
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  padding: 8px 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.other-name {
-  font-size: 12px;
-  color: var(--text-1);
-  font-weight: 500;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.other-meta {
-  font-size: 11px;
-  color: var(--text-3);
-}
-
 .preview-meta {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  align-items: center;
-}
-.preview-usage {
-  font-size: 12px;
-  color: var(--text-3);
-  margin-left: auto;
 }
 .preview-desc {
   font-size: 13px;
@@ -711,7 +584,7 @@ onMounted(() => {
   margin-top: 8px;
 }
 
-/* 响应式：960 以下树收起为下拉，推荐区转单列 */
+/* 响应式：960 以下树收起为下拉 */
 @media (max-width: 960px) {
   .center-layout {
     grid-template-columns: 1fr;
@@ -722,17 +595,8 @@ onMounted(() => {
   .filter-org-mobile {
     display: inline-flex;
   }
-  .recommend-grid {
-    grid-template-columns: 1fr;
-  }
   .filter-search {
     width: 100%;
-  }
-}
-
-@media (max-width: 540px) {
-  .other-grid {
-    grid-template-columns: 1fr 1fr;
   }
 }
 </style>

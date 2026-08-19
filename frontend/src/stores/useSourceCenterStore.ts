@@ -25,9 +25,8 @@ export const useSourceCenterStore = defineStore('sourceCenter', () => {
     adopted_count: 0,
   })
 
-  // 筛选态（搜索 / 状态 / 标签 / 组织树）
+  // 筛选态（搜索 / 标签 / 组织树）
   const keyword = ref('')
-  const status = ref<string | null>(null)
   const tags = ref<string[]>([])
   const orgKey = ref<string | null>(null) // 树节点 key：group:xxx 或 group:xxx:yyy
 
@@ -41,10 +40,12 @@ export const useSourceCenterStore = defineStore('sourceCenter', () => {
   const filtered = computed<SourceCenterItem[]>(() => {
     const kw = keyword.value.trim().toLowerCase()
     return (overview.value.items ?? []).filter((it) => {
-      if (status.value && it.status !== status.value) return false
       if (tags.value.length && !tags.value.some((t) => (it.tags ?? []).includes(t))) return false
       if (orgKey.value) {
-        const [group, org] = orgKey.value.split(':').slice(1)
+        // 树节点 key 形如 group:校级机构 或 group:教学科研单位:计算机学院
+        const parts = orgKey.value.split(':')
+        const group = parts[1]
+        const org = parts[2]
         if (it.org_group !== group) return false
         if (org && it.org !== org) return false
       }
@@ -55,18 +56,6 @@ export const useSourceCenterStore = defineStore('sourceCenter', () => {
       return true
     })
   })
-
-  const hotTop5 = computed(() =>
-    [...(overview.value.items ?? [])].sort((a, b) => b.usage_count - a.usage_count).slice(0, 5),
-  )
-
-  // 「其他用户也在用」：已选用之外按使用人数抽样推荐（最多 6 条）
-  const popularOthers = computed(() =>
-    (overview.value.items ?? [])
-      .filter((it) => !it.adopted)
-      .sort((a, b) => b.usage_count - a.usage_count)
-      .slice(0, 6),
-  )
 
   async function fetchOverview() {
     loading.value = true
@@ -102,7 +91,6 @@ export const useSourceCenterStore = defineStore('sourceCenter', () => {
 
   function resetFilters() {
     keyword.value = ''
-    status.value = null
     tags.value = []
     orgKey.value = null
   }
@@ -111,13 +99,10 @@ export const useSourceCenterStore = defineStore('sourceCenter', () => {
     loading,
     overview,
     keyword,
-    status,
     tags,
     orgKey,
     allTags,
     filtered,
-    hotTop5,
-    popularOthers,
     fetchOverview,
     adopt,
     remove,
