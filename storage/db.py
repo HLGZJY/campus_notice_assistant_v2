@@ -153,6 +153,45 @@ CREATE TABLE IF NOT EXISTS tasks (
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
 CREATE INDEX IF NOT EXISTS idx_tasks_type ON tasks(type);
 CREATE INDEX IF NOT EXISTS idx_tasks_created ON tasks(created_at);
+
+CREATE TABLE IF NOT EXISTS qa_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    question_text TEXT NOT NULL,       -- 原始问题文本
+    question_hash TEXT NOT NULL,       -- SHA-256(空白折叠后)，精确去重键
+    answer_text TEXT NOT NULL,         -- 完整答案
+    sources_json TEXT,                 -- QAResult.sources 的 JSON 序列化
+    retrieved_chunks INTEGER DEFAULT 0,-- 引用 chunk 数
+    embedding_blob BLOB,               -- 问题文本的 512 维 embedding（float32 序列化）
+    user_session_id TEXT,              -- 前端会话标识（localStorage 生成 UUID），用于多端隔离
+    hit_count INTEGER DEFAULT 0,       -- 缓存命中次数（统计用）
+    created_at TEXT NOT NULL,          -- 首次写入时间
+    updated_at TEXT NOT NULL,          -- 最近命中时间
+    expires_at TEXT NOT NULL           -- TTL 过期时间（created_at + cache_ttl）
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_qa_history_hash ON qa_history(question_hash);
+CREATE INDEX IF NOT EXISTS idx_qa_history_created ON qa_history(created_at);
+CREATE INDEX IF NOT EXISTS idx_qa_history_expires ON qa_history(expires_at);
+CREATE INDEX IF NOT EXISTS idx_qa_history_session ON qa_history(user_session_id);
+
+-- 问答历史日志（append-only，每条问答无论状态都记录，与缓存表 qa_history 解耦）
+CREATE TABLE IF NOT EXISTS qa_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_session_id TEXT,              -- 前端会话标识，用于多端隔离
+    question_text TEXT NOT NULL,       -- 原始问题文本
+    answer_text TEXT,                  -- 完整答案（error 时可为友好提示文案）
+    sources_json TEXT,                 -- 引用来源 JSON（as_source 契约形态）
+    retrieved_chunks INTEGER DEFAULT 0,-- 引用 chunk 数
+    status TEXT NOT NULL DEFAULT 'answer', -- answer | cache_hit | fallback | error
+    created_at TEXT NOT NULL           -- 提问完成时间
+);
+CREATE INDEX IF NOT EXISTS idx_qa_messages_session ON qa_messages(user_session_id, created_at);
+
+-- 历史日志回填标记（保证 qa_messages 从 qa_history 只回填一次；
+-- 之后即便 qa_messages 被清空也不再从缓存复活，避免「清空全部历史」失效）
+CREATE TABLE IF NOT EXISTS qa_backfill_log (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    done INTEGER NOT NULL DEFAULT 0
+);
 """
 
 # M2 结构化提取新增列（对已存在的库做 ALTER 迁移）
@@ -221,6 +260,38 @@ def _migrate(conn: sqlite3.Connection) -> None:
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_tasks_lock ON tasks(type, lock_key, status)"
     )
+
+    # qa_history 冗余保险索引（SCHEMA 已幂等创建表与索引，这里兜底旧库漏建；表已在上面 SCHEMA 执行后存在）
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_qa_history_hash ON qa_history(question_hash)"
+    )
+
+    # qa_messages 历史日志表：从既有 qa_history 缓存记录回填一次。
+    # 真正幂等：用 qa_backfill_log 持久标记，仅首次且 qa_messages 为空时执行；
+    # 之后即便 qa_messages 被清空也不再复活（否则「清空全部历史」会失效）。
+    _table_names = {r[0] for r in conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table'"
+    ).fetchall()}
+    if "qa_messages" in _table_names:
+        flag = conn.execute("SELECT done FROM qa_backfill_log WHERE id = 1").fetchone()
+        if (flag is None or not flag["done"]) and "qa_history" in _table_names:
+            cnt = conn.execute("SELECT COUNT(*) AS c FROM qa_messages").fetchone()["c"]
+            if cnt == 0:
+                conn.execute(
+                    """INSERT INTO qa_messages
+                       (user_session_id, question_text, answer_text, sources_json,
+                        retrieved_chunks, status, created_at)
+                       SELECT user_session_id, question_text, answer_text, sources_json,
+                              retrieved_chunks,
+                              CASE WHEN hit_count > 0 THEN 'cache_hit' ELSE 'answer' END,
+                              created_at
+                       FROM qa_history"""
+                )
+            # 无论是否实际插入，均标记已完成，避免清空后再次从缓存复活
+            conn.execute(
+                "INSERT INTO qa_backfill_log (id, done) VALUES (1, 1) "
+                "ON CONFLICT(id) DO UPDATE SET done = 1"
+            )
 
     # 回填已有正文的 content_hash，避免升级后首轮抓取触发全量"变更"
     if "content_hash" in notices_cols or "content_hash" in _table_cols("notices"):

@@ -31,6 +31,7 @@ from config.schema import (
     ModelProfile,
     ModelsConfig,
     ProviderConfig,
+    QAConfig,
     SchedulerConfig,
     SchoolConfig,
     SourceConfig,
@@ -137,6 +138,9 @@ class ConfigStore:
     def get_extract(self) -> ExtractConfig:
         return self._data.extract
 
+    def get_qa(self) -> QAConfig:
+        return self._data.qa
+
     def get_scheduler(self) -> SchedulerConfig:
         return self._data.scheduler
 
@@ -173,6 +177,7 @@ class ConfigStore:
             "providers": providers,
             "crawl": self._data.crawl.model_dump(),
             "extract": self._data.extract.model_dump(),
+            "qa": self._data.qa.model_dump(),
             "scheduler": self._data.scheduler.model_dump(),
         }
 
@@ -200,6 +205,7 @@ class ConfigStore:
                 providers=self._data.providers,
                 crawl=self._data.crawl,
                 extract=self._data.extract,
+                qa=self._data.qa,
                 scheduler=self._data.scheduler,
             )
             return self._save_app_config(new_data)
@@ -213,6 +219,7 @@ class ConfigStore:
                 providers=providers,
                 crawl=self._data.crawl,
                 extract=self._data.extract,
+                qa=self._data.qa,
                 scheduler=self._data.scheduler,
             )
             return self._save_app_config(new_data)
@@ -242,6 +249,7 @@ class ConfigStore:
                     },
                     crawl=self._data.crawl,
                     extract=self._data.extract,
+                    qa=self._data.qa,
                     scheduler=self._data.scheduler,
                 )
                 self._save_app_config(new_data)
@@ -261,6 +269,7 @@ class ConfigStore:
                 providers=self._data.providers,
                 crawl=crawl,
                 extract=self._data.extract,
+                qa=self._data.qa,
                 scheduler=self._data.scheduler,
             )
             return self._save_app_config(new_data)
@@ -274,6 +283,7 @@ class ConfigStore:
                 providers=self._data.providers,
                 crawl=self._data.crawl,
                 extract=extract,
+                qa=self._data.qa,
                 scheduler=self._data.scheduler,
             )
             return self._save_app_config(new_data)

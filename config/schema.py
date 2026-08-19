@@ -261,6 +261,35 @@ class ExtractConfig(BaseModel):
         return v
 
 
+class QAConfig(BaseModel):
+    """QA 问答模块配置（缓存 + 历史记录）。"""
+
+    # 是否启用问答缓存（精确 hash + 语义 cosine 双层）
+    enable_cache: bool = True
+    # 缓存 TTL（小时）
+    cache_ttl_hours: int = 24
+    # 语义匹配 cosine 阈值（>= 该值才命中）
+    similarity_threshold: float = 0.85
+    # 历史记录上限（条），超出按 LRU(updated_at) 淘汰
+    max_history: int = 500
+    # 语义检索扫描窗口大小（最近 N 条）
+    semantic_scan_limit: int = 200
+
+    @field_validator("cache_ttl_hours", "max_history", "semantic_scan_limit")
+    @classmethod
+    def _positive(cls, v: int) -> int:
+        if v < 1:
+            raise ValueError("必须 >= 1")
+        return v
+
+    @field_validator("similarity_threshold")
+    @classmethod
+    def _threshold_range(cls, v: float) -> float:
+        if not 0.0 <= v <= 1.0:
+            raise ValueError("similarity_threshold 必须在 0.0~1.0 之间")
+        return v
+
+
 class SchedulerConfig(BaseModel):
     """调度器配置（阶段 6：并入后端进程后，CLI --no-* 开关映射为配置项）。
 
@@ -284,6 +313,7 @@ class AppConfig(BaseModel):
     providers: dict[str, ProviderConfig]
     crawl: CrawlConfig = Field(default_factory=CrawlConfig)
     extract: ExtractConfig = Field(default_factory=ExtractConfig)
+    qa: QAConfig = Field(default_factory=QAConfig)
     scheduler: SchedulerConfig = Field(default_factory=SchedulerConfig)
 
     @field_validator("active_school")
