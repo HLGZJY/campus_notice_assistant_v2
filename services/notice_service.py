@@ -385,6 +385,12 @@ def extract_notice(notice_id: int, auto_index: bool = True) -> dict:
             try:
                 index = _get_vector_index()
                 index_info = index.add_notice(dict(updated_notice))
+                # 新增：通知入库后清除受影响的 QA 缓存
+                try:
+                    from services.qa_service import invalidate_cache_for_notice
+                    invalidate_cache_for_notice(notice_id)
+                except Exception as e:
+                    logger.warning("QA 缓存失效钩子失败 notice_id=%s: %s", notice_id, e)
             except Exception as e:
                 logger.warning("自动索引失败: %s", e)
                 index_info = {"error": str(e)}
@@ -593,6 +599,12 @@ def extract_batch(
                     try:
                         updated = get_notice_by_id(conn2, notice["id"])
                         await asyncio.to_thread(_get_vector_index().add_notice, dict(updated))
+                        # 新增：通知入库后清除受影响的 QA 缓存
+                        try:
+                            from services.qa_service import invalidate_cache_for_notice
+                            await asyncio.to_thread(invalidate_cache_for_notice, notice["id"])
+                        except Exception as e:
+                            logger.warning("QA 缓存失效钩子失败 notice_id=%s: %s", notice["id"], e)
                     except Exception as e:
                         logger.warning("自动索引失败 notice_id=%s: %s", notice["id"], e)
                 return {
@@ -624,6 +636,12 @@ def extract_batch(
                     try:
                         updated = get_notice_by_id(conn2, notice["id"])
                         await asyncio.to_thread(_get_vector_index().add_notice, dict(updated))
+                        # 新增：通知入库后清除受影响的 QA 缓存
+                        try:
+                            from services.qa_service import invalidate_cache_for_notice
+                            await asyncio.to_thread(invalidate_cache_for_notice, notice["id"])
+                        except Exception as e:
+                            logger.warning("QA 缓存失效钩子失败 notice_id=%s: %s", notice["id"], e)
                     except Exception as e:
                         logger.warning("自动索引失败 notice_id=%s: %s", notice["id"], e)
 
