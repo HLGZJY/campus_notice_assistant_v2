@@ -225,6 +225,9 @@ async function refresh() {
     if (c.from) params.crawled_from = c.from;
     if (c.to) params.crawled_to = c.to;
     await notices.fetchNotices(params);
+    // 同步数据源下拉：抓取完成后新来源才能进入筛选栏（不阻塞列表渲染，失败静默）。
+    // 用可选链：若浏览器仍缓存旧版 store（HMR 未生效）时静默降级，不弹错误框
+    notices.fetchSources?.().catch(() => {});
     await loadMatchMap();
   } catch (e) {
     message.error(e instanceof Error ? e.message : String(e));

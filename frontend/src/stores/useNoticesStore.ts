@@ -32,6 +32,20 @@ export const useNoticesStore = defineStore('notices', () => {
     total.value = res.total
     page.value = res.page
     pageSize.value = res.page_size
+    // 把当前页出现的来源并进下拉（只增不减），保证列表里看得见的来源一定可筛选，
+    // 即使 sources 全量接口暂时失败也不至于缺失可见项
+    mergeSources(res.items.map((n) => n.source).filter((s): s is string => !!s))
+  }
+
+  function mergeSources(names: string[]) {
+    if (!names.length) return
+    const merged = [...new Set([...sources.value, ...names])].sort()
+    if (merged.length !== sources.value.length) sources.value = merged
+  }
+
+  /** 仅刷新数据源下拉（全量 DB 去重来源），用于抓取/删除等可能新增来源的操作之后 */
+  async function fetchSources() {
+    sources.value = await get<string[]>(endpoints.notices.sources)
   }
 
   async function fetchDetail(id: number) {
@@ -88,6 +102,7 @@ export const useNoticesStore = defineStore('notices', () => {
     meta,
     fetchNotices,
     fetchDetail,
+    fetchSources,
     fetchFilters,
     fetchStatusCounts,
     fetchMeta,
