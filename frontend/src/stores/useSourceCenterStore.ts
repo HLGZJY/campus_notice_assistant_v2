@@ -7,6 +7,7 @@ import type {
   SourceCenterItem,
   SourceCenterOverview,
   SourceCenterPreview,
+  SourceCenterPreviewByUrlResult,
 } from '../api/schema'
 
 /**
@@ -93,6 +94,10 @@ export const useSourceCenterStore = defineStore('sourceCenter', () => {
     return await get<SourceCenterPreview>(endpoints.sourceCenter.preview(sourceId), { limit })
   }
 
+  async function previewByUrl(url: string, limit = 10) {
+    return await post<SourceCenterPreviewByUrlResult>(endpoints.sourceCenter.previewUrl, { url, limit })
+  }
+
   function resetFilters() {
     keyword.value = ''
     tags.value = []
@@ -111,6 +116,7 @@ export const useSourceCenterStore = defineStore('sourceCenter', () => {
     adopt,
     remove,
     preview,
+    previewByUrl,
     resetFilters,
   }
 })

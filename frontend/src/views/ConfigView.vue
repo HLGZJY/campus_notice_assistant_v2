@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { useDialog, useMessage } from 'naive-ui'
 import {
   CheckmarkCircleOutline,
@@ -28,13 +29,13 @@ import type {
   ModelsConfig,
   ProviderConfig,
   ReloadResult,
-  SourceConfig,
   TokenUsageRow,
   TokenUsageSummary,
 } from '../api/schema'
 
 const message = useMessage()
 const dialog = useDialog()
+const router = useRouter()
 const cfg = useConfigStore()
 const activeTab = ref('models')
 
@@ -45,16 +46,13 @@ const savingKey = ref<Record<string, boolean>>({})
 const pendingModel = ref<Record<string, string>>({})
 const advancedOpen = ref<Record<string, boolean>>({})
 const testResult = ref<Record<string, { ok: boolean; latency?: number; error?: string }>>({})
-const sourcesDraft = ref<SourceConfig[]>([])
 const crawlDraft = ref<CrawlConfig | null>(null)
 const extractDraft = ref<ExtractConfig | null>(null)
 const testModelInput = ref<Record<string, string>>({})
 const testBusy = ref<Record<string, boolean>>({})
-const sourceTestBusy = ref<Record<string, boolean>>({})
 const saving = ref(false)
 const reloading = ref(false)
 const loading = ref(false)
-const sourceExpanded = ref<Record<number, boolean>>({})
 const providerExpanded = ref<Record<string, boolean>>({})
 const crawlExpanded = ref(false)
 const extractExpanded = ref(false)
@@ -102,18 +100,8 @@ function isInteractiveTarget(e: MouseEvent): boolean {
   )
 }
 
-function srcShow(idx: number) {
-  return !!sourceExpanded.value[idx]
-}
 function provShow(name: string) {
   return !!providerExpanded.value[name]
-}
-function toggleSource(idx: number, e: MouseEvent) {
-  if (isInteractiveTarget(e)) {
-    sourceExpanded.value[idx] = true
-    return
-  }
-  sourceExpanded.value[idx] = !sourceExpanded.value[idx]
 }
 function toggleProvider(name: string, e: MouseEvent) {
   if (isInteractiveTarget(e)) {
@@ -152,12 +140,6 @@ const taskLabels: Record<string, string> = {
   todo: '待办生成',
   embedding: '向量嵌入',
 }
-
-const crawlModeOptions = [
-  { label: '增量抓取（推荐：已入库的不重复抓，变更靠深度检查）', value: 'incremental' },
-  { label: '全量抓取（每轮重抓全部详情页，耗时高）', value: 'full' },
-  { label: '仅列表（只抓列表页标题/链接，不抓正文）', value: 'list_only' },
-]
 
 // 按供应商类型内置的常用模型建议（与 config/defaults.py 对齐）；手动输入自定义模型不受此表限制
 const MODEL_PRESETS: Record<string, string[]> = {
@@ -222,10 +204,8 @@ function initDrafts() {
   providerKeyDraft.value = {}
   pendingModel.value = {}
   testResult.value = {}
-  sourcesDraft.value = (cfg.sources?.sources ?? []).map((s) => ({ ...s }))
   crawlDraft.value = cfg.crawl ? { ...cfg.crawl } : null
   extractDraft.value = cfg.extract ? { ...cfg.extract } : null
-  sourceExpanded.value = {}
   providerExpanded.value = {}
   crawlExpanded.value = false
   extractExpanded.value = false
@@ -237,12 +217,6 @@ function handleMutation(res: ConfigMutationResult, okText = '保存成功') {
   } else {
     message.error(res.error || '保存失败')
   }
-}
-
-function normalizeUrl(url: string): string {
-  const u = (url || '').trim()
-  if (!u) return u
-  return /^https?:\/\//i.test(u) ? u : `https://${u}`
 }
 
 async function saveModels() {
@@ -456,48 +430,6 @@ async function saveProviderKey(name: string) {
   }
 }
 
-async function saveSources() {
-  saving.value = true
-  try {
-    handleMutation(await cfg.updateSources(sourcesDraft.value))
-  } catch (e) {
-    message.error(e instanceof Error ? e.message : String(e))
-  } finally {
-    saving.value = false
-  }
-}
-
-function addSource() {
-  sourcesDraft.value.push({
-    name: '',
-    type: 'web',
-    list_url: '',
-    url_pattern: null,
-    max_pages: 5,
-    enabled: true,
-    crawl_mode: 'incremental',
-    max_age_days: null,
-    fetch_detail: true,
-    deep_check: false,
-  })
-  sourceExpanded.value[sourcesDraft.value.length - 1] = true
-}
-
-function removeSource(idx: number) {
-  sourcesDraft.value.splice(idx, 1)
-  sourceExpanded.value = shiftKeyMap(sourceExpanded.value, idx)
-}
-
-function shiftKeyMap(m: Record<number, boolean>, idx: number) {
-  const next: Record<number, boolean> = {}
-  for (const k of Object.keys(m)) {
-    const n = Number(k)
-    if (n < idx) next[n] = m[n]
-    else if (n > idx) next[n - 1] = m[n]
-  }
-  return next
-}
-
 async function testProvider(name: string) {
   const model = (testModelInput.value[name] || '').trim()
   if (!model) {
@@ -519,31 +451,6 @@ async function testProvider(name: string) {
     message.error(e instanceof Error ? e.message : String(e))
   } finally {
     testBusy.value[name] = false
-  }
-}
-
-async function testSourceUrl(idx: number, url: string) {
-  if (!url.trim()) {
-    message.warning('请先填写 list_url')
-    return
-  }
-  sourceTestBusy.value[idx] = true
-  try {
-    const res = await cfg.testSource({ url, timeout: 15 })
-    if (res.ok) {
-      message.success(`链接可达（${res.latency_ms}ms，发现 ${res.link_count} 条链接）`)
-      const s = sourcesDraft.value[idx]
-      if (res.suggested_pattern && !s.url_pattern) {
-        s.url_pattern = res.suggested_pattern
-        message.info(`已根据页面自动填充 URL 模式：${res.suggested_pattern}`)
-      }
-    } else {
-      message.error(res.error || '链接测试失败')
-    }
-  } catch (e) {
-    message.error(e instanceof Error ? e.message : String(e))
-  } finally {
-    sourceTestBusy.value[idx] = false
   }
 }
 
@@ -586,6 +493,10 @@ async function reloadConfig() {
   } finally {
     reloading.value = false
   }
+}
+
+function goSources() {
+  router.push('/sources')
 }
 </script>
 
@@ -810,115 +721,14 @@ async function reloadConfig() {
         </n-tab-pane>
 
         <n-tab-pane name="sources" tab="数据源">
-          <n-descriptions :column="2" size="small" style="margin-bottom: 12px">
-            <n-descriptions-item label="学校">{{ cfg.sources?.name || '—' }}</n-descriptions-item>
-            <n-descriptions-item label="代码">{{ cfg.sources?.code || '—' }}</n-descriptions-item>
-          </n-descriptions>
-          <n-space vertical size="large">
-            <n-card
-              v-for="(s, idx) in sourcesDraft"
-              :key="idx"
-              size="small"
-              class="collapsible-card"
-              @click="toggleSource(idx, $event)"
-            >
-              <template #header>
-                <div class="card-header-bar">
-                  <span class="header-index">#{{ idx + 1 }}</span>
-                  <span class="card-header-title">{{ s.name || '未命名' }}</span>
-                  <n-tag size="small" :bordered="false" type="info">{{ s.type }}</n-tag>
-                  <n-tag size="small" :bordered="false" :type="s.enabled ? 'success' : 'default'">
-                    {{ s.enabled ? '已启用' : '已停用' }}
-                  </n-tag>
-                  <a
-                    v-if="s.list_url"
-                    class="header-link"
-                    :href="normalizeUrl(s.list_url)"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    @click.stop
-                  >
-                    ↗ {{ s.list_url }}
-                  </a>
-                  <span v-else class="header-muted">未填写列表地址</span>
-                  <span class="header-spacer" />
-                  <n-button size="small" quaternary type="error" @click.stop="removeSource(idx)">删除</n-button>
-                  <n-icon size="14" color="var(--text-3)">
-                    <component :is="srcShow(idx) ? ChevronUpOutline : ChevronDownOutline" />
-                  </n-icon>
-                </div>
-              </template>
-              <n-collapse-transition :show="srcShow(idx)">
-              <n-form label-placement="left" label-width="110">
-                <n-form-item label="名称">
-                  <n-input v-model:value="s.name" placeholder="如 教务处" />
-                </n-form-item>
-                <n-form-item label="启用">
-                  <n-switch v-model:value="s.enabled" />
-                  <span style="margin-left: 8px; color: #999; font-size: 12px">停用后定时抓取与全量抓取会跳过该来源</span>
-                </n-form-item>
-                <n-form-item label="类型">
-                  <n-select
-                    v-model:value="s.type"
-                    :options="[{ label: 'web', value: 'web' }]"
-                    style="width: 140px"
-                  />
-                </n-form-item>
-                <n-form-item label="列表地址">
-                  <n-input v-model:value="s.list_url" placeholder="https://...">
-                    <template #suffix>
-                      <a
-                        v-if="s.list_url"
-                        class="input-suffix-link"
-                        :href="normalizeUrl(s.list_url)"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        @click.stop
-                        title="在新窗口打开列表页"
-                      >
-                        ↗
-                      </a>
-                      <span v-else class="input-suffix-disabled" title="请先填写列表地址">↗</span>
-                    </template>
-                  </n-input>
-                </n-form-item>
-                <n-form-item label="URL 模式">
-                  <n-input v-model:value="s.url_pattern" placeholder="可选，正文链接正则；留空时点“测试链接”自动填充" />
-                  <template #feedback>
-                    只抓取匹配该正则的链接；留空则抓取全部发现链接
-                  </template>
-                </n-form-item>
-                <n-form-item label="抓取模式">
-                  <n-select v-model:value="s.crawl_mode" :options="crawlModeOptions" style="width: 380px" />
-                </n-form-item>
-                <n-form-item label="最近 N 天">
-                  <n-input-number v-model:value="s.max_age_days" :min="1" clearable style="width: 120px" />
-                  <template #feedback>留空 = 不限；只抓取发布时间在 N 天以内的通知</template>
-                </n-form-item>
-                <n-form-item label="最大页数">
-                  <n-input-number v-model:value="s.max_pages" :min="1" style="width: 120px" />
-                </n-form-item>
-                <n-form-item label="抓取正文">
-                  <n-switch v-model:value="s.fetch_detail" />
-                  <span style="margin-left: 8px; color: #999; font-size: 12px">关闭后仅入库标题与链接（节省流量）</span>
-                </n-form-item>
-                <n-form-item label="深度检查">
-                  <n-switch v-model:value="s.deep_check" />
-                  <span style="margin-left: 8px; color: #999; font-size: 12px">增量模式下周期重抓详情页比对内容变更</span>
-                </n-form-item>
-                <n-form-item label=" ">
-                  <n-button size="small" secondary :loading="sourceTestBusy[idx]" @click="testSourceUrl(idx, s.list_url)">
-                    测试链接
-                  </n-button>
-                </n-form-item>
-              </n-form>
-              </n-collapse-transition>
-            </n-card>
-            <n-space>
-              <n-button secondary @click="addSource">添加数据源</n-button>
-              <n-button type="primary" :loading="saving" @click="saveSources">保存数据源配置</n-button>
-            </n-space>
-          </n-space>
+          <n-alert type="info" :show-icon="true">
+            <template #default>
+              数据源管理已移至「数据源中心」，增删改与参数调整统一在那里完成，改完即生效
+              <n-button size="small" quaternary type="primary" @click="goSources" style="margin-left: 8px">
+                前往数据源中心 →
+              </n-button>
+            </template>
+          </n-alert>
         </n-tab-pane>
 
         <n-tab-pane name="crawl" tab="抓取与提取">

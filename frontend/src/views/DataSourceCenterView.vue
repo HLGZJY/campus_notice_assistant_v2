@@ -1,15 +1,32 @@
 <template>
   <div class="page-root">
-    <!-- 顶部：搜索 + 筛选 -->
+    <!-- 顶部：视图切换 + 搜索/筛选（公共库） -->
     <n-card :bordered="false" class="filter-card">
       <template #header>
         <div class="section-title-wrap">
           <n-icon size="18" color="var(--primary)"><LibraryOutline /></n-icon>
-          <span class="section-title-text">数据源中心</span>
-          <span class="section-title-sub">公共数据源库 · 一键选用即加入「我的数据源」</span>
+          <span class="section-title-text">数据源</span>
+          <span class="section-title-sub">公共数据源库 · 我的数据源 · 改完即存</span>
         </div>
       </template>
-      <div class="filter-bar">
+      <div class="view-tabs">
+        <n-tabs v-model:value="activeView" type="segment" size="small" animated>
+          <n-tab-pane name="catalog" tab="公共数据源" />
+          <n-tab-pane name="mine" tab="我的数据源" />
+        </n-tabs>
+        <div v-if="activeView === 'catalog'" class="stat-line">
+          <n-tag :bordered="false" type="info" size="small">共 {{ (store.overview.items ?? []).length }} 个公共数据源</n-tag>
+          <n-tag :bordered="false" type="success" size="small">已选用 {{ store.overview.adopted_count }} 个</n-tag>
+          <n-tag :bordered="false" type="warning" size="small">当前筛选 {{ store.filtered.length }} 个</n-tag>
+        </div>
+        <div v-else class="stat-line">
+          <n-tag :bordered="false" type="success" size="small">我的数据源 {{ mySources.length }} 个</n-tag>
+          <n-tag v-if="saveBusy" :bordered="false" type="warning" size="small">保存中…</n-tag>
+          <n-tag v-else-if="hasPending" :bordered="false" type="error" size="small">有修改未保存</n-tag>
+          <n-tag v-else :bordered="false" type="default" size="small">所有修改已生效</n-tag>
+        </div>
+      </div>
+      <div v-if="activeView === 'catalog'" class="filter-bar">
         <n-input
           v-model:value="store.keyword"
           class="filter-search"
@@ -37,15 +54,10 @@
         />
         <n-button quaternary size="small" @click="store.resetFilters()">重置</n-button>
       </div>
-      <div class="stat-line">
-        <n-tag :bordered="false" type="info" size="small">共 {{ (store.overview.items ?? []).length }} 个公共数据源</n-tag>
-        <n-tag :bordered="false" type="success" size="small">已选用 {{ store.overview.adopted_count }} 个</n-tag>
-        <n-tag :bordered="false" type="warning" size="small">当前筛选 {{ store.filtered.length }} 个</n-tag>
-      </div>
     </n-card>
 
-    <!-- 主体：左三级组织树 + 右卡片网格（固定高度 + 分页） -->
-    <div class="center-layout">
+    <!-- 视图一：公共数据源库（左三级组织树 + 右卡片网格） -->
+    <div v-if="activeView === 'catalog'" class="center-layout">
       <n-card :bordered="false" class="org-card">
         <template #header>
           <div class="org-title">
@@ -63,7 +75,6 @@
             <span class="node-count">{{ (store.overview.items ?? []).length }}</span>
           </div>
           <template v-for="g in store.overview.tree ?? []" :key="g.key">
-            <!-- 一级：校级机构 / 教学科研单位 -->
             <div class="tree-node group" :class="{ active: store.orgKey === g.key }" @click="selectOrg(g.key)">
               <span class="node-caret" @click.stop="toggleGroup(g.key)">
                 {{ expandedGroups.has(g.key) ? '▾' : '▸' }}
@@ -73,7 +84,6 @@
             </div>
             <div v-if="expandedGroups.has(g.key)" class="tree-children">
               <template v-for="o in g.children ?? []" :key="o.key">
-                <!-- 二级：学院 / 部门 -->
                 <div class="tree-node org" :class="{ active: store.orgKey === o.key }" @click="selectOrg(o.key)">
                   <span class="node-caret" @click.stop="toggleOrg(o.key)">
                     {{ expandedOrgs.has(o.key) ? '▾' : '▸' }}
@@ -82,7 +92,6 @@
                   <span class="node-count">{{ o.count }}</span>
                 </div>
                 <div v-if="expandedOrgs.has(o.key)" class="tree-children">
-                  <!-- 三级：具体栏目 -->
                   <div
                     v-for="c in o.children ?? []"
                     :key="c.key"
@@ -146,6 +155,153 @@
         </div>
       </div>
     </div>
+
+    <!-- 视图二：我的数据源（改完即存） -->
+    <div v-else class="mine-layout">
+      <div class="mine-toolbar">
+        <div class="mine-toolbar-left">
+          <span class="mine-tip">参数修改后自动保存并立即生效，无需手动保存</span>
+        </div>
+        <n-button secondary size="small" @click="addSource">
+          <template #icon><n-icon><AddOutline /></n-icon></template>
+          添加数据源
+        </n-button>
+      </div>
+      <n-spin :show="myLoading" class="mine-spin">
+        <template v-if="mySources.length">
+          <div class="mine-list">
+            <n-card
+              v-for="(s, idx) in mySources"
+              :key="idx"
+              size="small"
+              class="mine-card"
+              :class="{ 'mine-card-invalid': invalidIdx.has(idx) }"
+            >
+              <div class="mine-card-head" @click="toggleMine(idx)">
+                <span class="header-index">#{{ idx + 1 }}</span>
+                <span class="mine-card-title">{{ s.name || '未命名' }}</span>
+                <n-tag
+                  v-if="fromCatalogMap.get(s.list_url)"
+                  size="small"
+                  :bordered="false"
+                  type="info"
+                  class="mine-from-catalog"
+                  @click.stop="jumpToCatalog(s.list_url)"
+                  title="来自公共数据源库，点击定位"
+                >
+                  公共库
+                </n-tag>
+                <n-tag size="small" :bordered="false" :type="s.enabled ? 'success' : 'default'">
+                  {{ s.enabled ? '已启用' : '已停用' }}
+                </n-tag>
+                <span class="mine-save-state" v-if="saveBusy && savingIdx === idx">
+                  <n-spin :size="12" /> 保存中…
+                </span>
+                <span class="mine-save-state ok" v-else-if="lastSavedAt[idx]">已保存 {{ lastSavedAt[idx] }}</span>
+                <span class="mine-save-state pending" v-else-if="pendingIdxSet.has(idx)">待保存…</span>
+                <span class="header-spacer" />
+                <n-button size="tiny" quaternary type="error" @click.stop="removeMine(idx)">删除</n-button>
+                <n-icon size="14" color="var(--text-3)">
+                  <component :is="expandedMine.has(idx) ? ChevronUpOutline : ChevronDownOutline" />
+                </n-icon>
+              </div>
+              <div
+                v-if="!expandedMine.has(idx)"
+                class="mine-card-summary"
+                :class="{ clickable: !!s.list_url }"
+                :title="s.list_url ? '点击预览样例' : ''"
+                @click="openPreviewUrl(s.name, s.list_url)"
+              >
+                <n-icon v-if="s.list_url" size="12" class="summary-icon"><EyeOutline /></n-icon>
+                {{ s.list_url || '未填写列表地址' }}
+              </div>
+              <n-collapse-transition :show="expandedMine.has(idx)">
+                <div class="mine-card-body">
+                  <n-form label-placement="left" label-width="96">
+                    <n-form-item label="名称">
+                      <n-input v-model:value="s.name" placeholder="如 教务处-通知公告" @update:value="markDirty(idx)" />
+                    </n-form-item>
+                    <n-form-item label="启用">
+                      <n-switch v-model:value="s.enabled" @update:value="markDirty(idx)" />
+                      <span class="field-hint">停用后定时抓取与全量抓取会跳过该来源</span>
+                    </n-form-item>
+                    <n-form-item label="列表地址">
+                      <n-input v-model:value="s.list_url" placeholder="https://..." @update:value="markDirty(idx)">
+                        <template #suffix>
+                          <a
+                            v-if="s.list_url"
+                            class="input-suffix-link"
+                            :href="normalizeUrl(s.list_url)"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            @click.stop
+                            title="在新窗口打开列表页"
+                          >
+                            ↗
+                          </a>
+                          <span v-else class="input-suffix-disabled" title="请先填写列表地址">↗</span>
+                        </template>
+                      </n-input>
+                    </n-form-item>
+                    <n-form-item label="URL 模式">
+                      <n-input
+                        v-model:value="s.url_pattern"
+                        placeholder="可选，正文链接正则；留空时点“测试链接”自动填充"
+                        @update:value="markDirty(idx)"
+                      />
+                      <template #feedback>只抓取匹配该正则的链接；留空则抓取全部发现链接</template>
+                    </n-form-item>
+                    <n-form-item label="抓取模式">
+                      <n-select v-model:value="s.crawl_mode" :options="crawlModeOptions" style="width: 320px" @update:value="markDirty(idx)" />
+                    </n-form-item>
+                    <n-form-item label="最近 N 天">
+                      <n-input-number v-model:value="s.max_age_days" :min="1" clearable style="width: 120px" @update:value="markDirty(idx)" />
+                      <template #feedback>留空 = 不限；只抓取发布时间在 N 天以内的通知</template>
+                    </n-form-item>
+                    <n-form-item label="最大页数">
+                      <n-input-number v-model:value="s.max_pages" :min="1" style="width: 120px" @update:value="markDirty(idx)" />
+                    </n-form-item>
+                    <n-form-item label="抓取正文">
+                      <n-switch v-model:value="s.fetch_detail" @update:value="markDirty(idx)" />
+                      <span class="field-hint">关闭后仅入库标题与链接（节省流量）</span>
+                    </n-form-item>
+                    <n-form-item label="深度检查">
+                      <n-switch v-model:value="s.deep_check" @update:value="markDirty(idx)" />
+                      <span class="field-hint">增量模式下周期重抓详情页比对内容变更</span>
+                    </n-form-item>
+                    <n-form-item label=" ">
+                      <div class="mine-actions-row">
+                        <n-button size="small" secondary :loading="testBusyMine[idx]" @click="testMine(idx, s.list_url)">
+                          测试链接
+                        </n-button>
+                        <n-button size="small" secondary :disabled="!s.list_url" @click="openPreviewUrl(s.name, s.list_url)">
+                          <template #icon><n-icon><EyeOutline /></n-icon></template>
+                          预览样例
+                        </n-button>
+                      </div>
+                    </n-form-item>
+                  </n-form>
+                </div>
+              </n-collapse-transition>
+            </n-card>
+          </div>
+        </template>
+        <n-empty v-else-if="!myLoading" class="empty-box">
+          <template #description>
+            <div class="mine-empty">
+              <div>还没有「我的数据源」</div>
+              <div class="mine-empty-sub">去公共数据源库一键选用，或点击右上角「添加数据源」手动创建</div>
+            </div>
+          </template>
+          <template #extra>
+            <n-button type="primary" size="small" @click="activeView = 'catalog'">
+              <template #icon><n-icon><LibraryOutline /></n-icon></template>
+              去公共数据源库选用
+            </n-button>
+          </template>
+        </n-empty>
+      </n-spin>
+    </div>
   </div>
 
   <!-- 预览弹窗 -->
@@ -153,7 +309,7 @@
     v-model:show="previewOpen"
     preset="card"
     class="preview-modal"
-    :title="previewItem ? `${previewItem.org}-${previewItem.name}` : '数据源预览'"
+    :title="previewTitle"
     :style="{ width: 'min(640px, 92vw)' }"
   >
     <template v-if="previewItem">
@@ -161,31 +317,31 @@
         <n-tag v-for="t in previewItem.tags ?? []" :key="t" size="small" :bordered="false" round>{{ t }}</n-tag>
       </div>
       <div class="preview-desc">{{ previewItem.description }}</div>
-      <n-input
-        :value="previewItem.list_url"
-        readonly
-        size="small"
-        class="preview-url"
-        @click="copyUrl"
-      />
-      <n-divider style="margin: 12px 0" />
-      <div class="preview-title">样例数据（抓取自列表页，仅预览不落库）</div>
-      <n-spin :show="previewLoading">
-        <n-alert v-if="previewError" type="warning" :show-icon="false" class="preview-error">
-          {{ previewError }}
-        </n-alert>
-        <n-list v-else-if="previewItems.length" bordered class="preview-list">
-          <n-list-item v-for="(s, i) in previewItems" :key="i">
-            <div class="sample-row">
-              <span class="sample-idx">{{ i + 1 }}</span>
-              <a :href="s.url" target="_blank" rel="noopener" class="sample-title">{{ s.title }}</a>
-              <span class="sample-date">{{ s.date ? s.date.slice(0, 10) : '' }}</span>
-            </div>
-          </n-list-item>
-        </n-list>
-        <n-empty v-else-if="!previewLoading" description="暂未解析到样例数据" :size="'small'" />
-      </n-spin>
     </template>
+    <n-input
+      :value="previewUrl"
+      readonly
+      size="small"
+      class="preview-url"
+      @click="copyUrl"
+    />
+    <n-divider style="margin: 12px 0" />
+    <div class="preview-title">样例数据（抓取自列表页，仅预览不落库）</div>
+    <n-spin :show="previewLoading">
+      <n-alert v-if="previewError" type="warning" :show-icon="false" class="preview-error">
+        {{ previewError }}
+      </n-alert>
+      <n-list v-else-if="previewItems.length" bordered class="preview-list">
+        <n-list-item v-for="(s, i) in previewItems" :key="i">
+          <div class="sample-row">
+            <span class="sample-idx">{{ i + 1 }}</span>
+            <a :href="s.url" target="_blank" rel="noopener" class="sample-title">{{ s.title }}</a>
+            <span class="sample-date">{{ s.date ? s.date.slice(0, 10) : '' }}</span>
+          </div>
+        </n-list-item>
+      </n-list>
+      <n-empty v-else-if="!previewLoading" description="暂未解析到样例数据" :size="'small'" />
+    </n-spin>
     <template #footer>
       <div class="preview-footer">
         <n-button @click="previewOpen = false">关闭</n-button>
@@ -198,36 +354,52 @@
           <template #icon><n-icon><AddOutline /></n-icon></template>
           选用该数据源
         </n-button>
-        <n-tag v-else :bordered="false" type="success">已在我的数据源中</n-tag>
+        <n-tag v-else-if="previewItem" :bordered="false" type="success">已在我的数据源中</n-tag>
       </div>
     </template>
   </n-modal>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
-import { useDialog, useMessage } from 'naive-ui'
+import { computed, h, onMounted, ref, watch } from 'vue'
+import { NButton, useDialog, useMessage, useNotification } from 'naive-ui'
 import {
   AddOutline,
   CheckmarkCircleOutline,
+  ChevronDownOutline,
+  ChevronUpOutline,
   EyeOutline,
   LibraryOutline,
   SchoolOutline,
   SearchOutline,
 } from '@vicons/ionicons5'
 import { useSourceCenterStore } from '../stores/useSourceCenterStore'
-import type { SourceCenterItem, SourceCenterPreviewItem } from '../api/schema'
+import { useConfigStore } from '../stores/useConfigStore'
+import type { SourceCenterItem, SourceCenterPreviewItem, SourceConfig } from '../api/schema'
 
 const message = useMessage()
+const notification = useNotification()
 const dialog = useDialog()
 const store = useSourceCenterStore()
+const cfg = useConfigStore()
+
+// ---------- 双视图切换 ----------
+const activeView = ref<'catalog' | 'mine'>('catalog')
 
 const previewOpen = ref(false)
 const previewItem = ref<SourceCenterItem | null>(null)
+const previewUrlName = ref('')
+const previewUrlValue = ref('')
 const previewLoading = ref(false)
 const previewError = ref('')
 const previewItems = ref<SourceCenterPreviewItem[]>([])
 const actingId = ref<string | null>(null)
+
+// 弹窗标题 / 展示 URL：公共库预览用目录条目，我的数据源预览用卡片 URL
+const previewTitle = computed(() =>
+  previewItem.value ? `${previewItem.value.org}-${previewItem.value.name}` : previewUrlName.value || '数据源预览',
+)
+const previewUrl = computed(() => previewItem.value?.list_url ?? previewUrlValue.value)
 
 // 每页条数（3 列 × 4 行），多余栏目进下一页
 const PAGE_SIZE = 12
@@ -268,7 +440,7 @@ function selectOrg(key: string | null) {
   store.orgKey = key
 }
 
-function toggleExpanded(set: Set<string>, key: string): Set<string> {
+function toggleExpanded<T>(set: Set<T>, key: T): Set<T> {
   const next = new Set(set)
   if (next.has(key)) next.delete(key)
   else next.add(key)
@@ -285,6 +457,8 @@ function toggleOrg(key: string) {
 
 async function openPreview(it: SourceCenterItem) {
   previewItem.value = it
+  previewUrlName.value = ''
+  previewUrlValue.value = ''
   previewOpen.value = true
   previewItems.value = []
   previewError.value = ''
@@ -303,13 +477,54 @@ async function openPreview(it: SourceCenterItem) {
   }
 }
 
+async function openPreviewUrl(name: string, url: string) {
+  const u = (url || '').trim()
+  if (!u) {
+    message.warning('请先填写列表地址')
+    return
+  }
+  previewItem.value = null
+  previewUrlName.value = name
+  previewUrlValue.value = u
+  previewOpen.value = true
+  previewItems.value = []
+  previewError.value = ''
+  previewLoading.value = true
+  try {
+    const res = await store.previewByUrl(u, 10)
+    if (res.ok) {
+      previewItems.value = res.items ?? []
+    } else {
+      previewError.value = res.error || '预览失败'
+    }
+  } catch (e) {
+    previewError.value = e instanceof Error ? e.message : String(e)
+  } finally {
+    previewLoading.value = false
+  }
+}
+
 async function onAdopt(it: SourceCenterItem) {
   if (actingId.value) return
   actingId.value = it.id
   try {
     const res = await store.adopt(it.id)
     if (res.ok) {
-      message.success(res.already ? '该数据源已在「我的数据源」中' : `已选用「${it.org}-${it.name}」，可在系统配置-数据源中管理`)
+      if (res.already) {
+        message.success('该数据源已在「我的数据源」中')
+      } else {
+        notification.success({
+          title: '选用成功',
+          content: `「${it.org}-${it.name}」已加入我的数据源，配置已写入并立即生效`,
+          duration: 5000,
+          action: () =>
+            h(
+              NButton,
+              { size: 'small', type: 'primary', onClick: () => { notification.destroyAll(); switchToMine() } },
+              { default: () => '去调整参数' },
+            ),
+        })
+      }
     } else {
       message.error(res.error || '选用失败')
     }
@@ -338,14 +553,246 @@ function onRemove(it: SourceCenterItem) {
 }
 
 async function copyUrl() {
-  if (!previewItem.value) return
+  const u = previewUrl.value
+  if (!u) return
   try {
-    await navigator.clipboard.writeText(previewItem.value.list_url)
+    await navigator.clipboard.writeText(u)
     message.success('链接已复制')
   } catch {
-    message.info(previewItem.value.list_url)
+    message.info(u)
   }
 }
+
+// ---------- 我的数据源（改完即存） ----------
+
+const mySources = ref<SourceConfig[]>([])
+const myLoading = ref(false)
+const mineLoaded = ref(false)
+const expandedMine = ref<Set<number>>(new Set())
+const invalidIdx = ref<Set<number>>(new Set())
+const pendingIdxSet = ref<Set<number>>(new Set())
+const lastSavedAt = ref<Record<number, string>>({})
+const saveBusy = ref(false)
+const savingIdx = ref<number | null>(null)
+const testBusyMine = ref<Record<number, boolean>>({})
+
+let saveTimer: ReturnType<typeof setTimeout> | undefined
+let pendingResave = false
+
+const crawlModeOptions = [
+  { label: '增量（自动早停）', value: 'incremental' },
+  { label: '全量（翻页+变更检测）', value: 'full' },
+  { label: '仅列表（不抓详情）', value: 'list_only' },
+]
+
+// list_url → 公共库目录条目（用于「来自公共库」标记与跳转）
+const fromCatalogMap = computed<Map<string, SourceCenterItem>>(() => {
+  const m = new Map<string, SourceCenterItem>()
+  for (const it of store.overview.items ?? []) m.set(it.list_url, it)
+  return m
+})
+
+const hasPending = computed(() => pendingIdxSet.value.size > 0)
+
+function normalizeUrl(url: string): string {
+  const u = (url || '').trim()
+  if (!u) return u
+  return /^https?:\/\//i.test(u) ? u : `https://${u}`
+}
+
+async function loadMySources() {
+  if (mineLoaded.value) return
+  myLoading.value = true
+  try {
+    await cfg.fetchSources()
+    mySources.value = (cfg.sources?.sources ?? []).map((s) => ({ ...s }))
+    mineLoaded.value = true
+    // 默认收起：卡片仅展示头部摘要，点击标题/箭头展开编辑
+    expandedMine.value = new Set<number>()
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : String(e))
+  } finally {
+    myLoading.value = false
+  }
+}
+
+function toggleMine(idx: number) {
+  const next = new Set(expandedMine.value)
+  if (next.has(idx)) next.delete(idx)
+  else next.add(idx)
+  expandedMine.value = next
+}
+
+function markDirty(idx: number) {
+  invalidIdx.value = new Set(invalidIdx.value)
+  invalidIdx.value.delete(idx)
+  pendingIdxSet.value = new Set(pendingIdxSet.value)
+  pendingIdxSet.value.add(idx)
+  const saved = { ...lastSavedAt.value }
+  delete saved[idx]
+  lastSavedAt.value = saved
+  scheduleSave()
+}
+
+function validateMine(): boolean {
+  const bad: number[] = []
+  mySources.value.forEach((s, i) => {
+    if (!(s.name || '').trim() || !(s.list_url || '').trim()) bad.push(i)
+  })
+  invalidIdx.value = new Set(bad)
+  return bad.length === 0
+}
+
+function scheduleSave() {
+  if (!validateMine()) return
+  if (saveTimer) clearTimeout(saveTimer)
+  saveTimer = setTimeout(flushSave, 800)
+}
+
+async function flushSave() {
+  if (saveBusy.value) {
+    pendingResave = true
+    return
+  }
+  if (!validateMine()) return
+  if (saveTimer) {
+    clearTimeout(saveTimer)
+    saveTimer = undefined
+  }
+  saveBusy.value = true
+  savingIdx.value = mySources.value.findIndex((_, i) => pendingIdxSet.value.has(i))
+  try {
+    const res = await cfg.updateSources(mySources.value)
+    if (res.ok) {
+      const now = new Date().toTimeString().slice(0, 8)
+      const m: Record<number, string> = {}
+      mySources.value.forEach((_, i) => {
+        m[i] = now
+      })
+      lastSavedAt.value = m
+      pendingIdxSet.value = new Set()
+      invalidIdx.value = new Set()
+    } else {
+      message.error(res.error || '保存失败')
+      await rollbackMine()
+    }
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : String(e))
+    await rollbackMine()
+  } finally {
+    saveBusy.value = false
+    savingIdx.value = null
+    if (pendingResave) {
+      pendingResave = false
+      scheduleSave()
+    }
+  }
+}
+
+async function rollbackMine() {
+  // 保存失败：以服务端配置为准回滚本地编辑，避免静默漂移
+  try {
+    await cfg.fetchSources()
+    mySources.value = (cfg.sources?.sources ?? []).map((s) => ({ ...s }))
+  } catch {
+    /* 回滚失败则保留本地编辑，下次保存再试 */
+  }
+  pendingIdxSet.value = new Set()
+  invalidIdx.value = new Set()
+  lastSavedAt.value = {}
+}
+
+function addSource() {
+  mySources.value.push({
+    name: '',
+    type: 'web',
+    list_url: '',
+    url_pattern: null,
+    max_pages: 5,
+    enabled: true,
+    crawl_mode: 'incremental',
+    max_age_days: null,
+    fetch_detail: true,
+    deep_check: false,
+  })
+  const idx = mySources.value.length - 1
+  expandedMine.value = new Set([...expandedMine.value, idx])
+}
+
+function removeMine(idx: number) {
+  const s = mySources.value[idx]
+  dialog.warning({
+    title: '删除数据源',
+    content: `确定从「我的数据源」中删除「${s.name || '未命名'}」吗？已抓取入库的通知不会受影响，删除立即生效。`,
+    positiveText: '删除',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      mySources.value.splice(idx, 1)
+      // 删除后索引整体前移，重建本地状态
+      const re = (m: Record<number, unknown>) => {
+        const next: Record<number, unknown> = {}
+        for (const k of Object.keys(m)) {
+          const n = Number(k)
+          if (n < idx) next[n] = m[n]
+          else if (n > idx) next[n - 1] = m[n]
+        }
+        return next
+      }
+      pendingIdxSet.value = new Set([...pendingIdxSet.value].filter((i) => i !== idx).map((i) => (i > idx ? i - 1 : i)))
+      lastSavedAt.value = re(lastSavedAt.value) as Record<number, string>
+      invalidIdx.value = new Set([...invalidIdx.value].filter((i) => i !== idx).map((i) => (i > idx ? i - 1 : i)))
+      expandedMine.value = new Set([...expandedMine.value].filter((i) => i !== idx).map((i) => (i > idx ? i - 1 : i)))
+      testBusyMine.value = re(testBusyMine.value) as Record<number, boolean>
+      await flushSave()
+    },
+  })
+}
+
+async function testMine(idx: number, url: string) {
+  if (!(url || '').trim()) {
+    message.warning('请先填写列表地址')
+    return
+  }
+  testBusyMine.value = { ...testBusyMine.value, [idx]: true }
+  try {
+    const res = await cfg.testSource({ url, timeout: 15 })
+    if (res.ok) {
+      message.success(`链接可达（${res.latency_ms}ms，发现 ${res.link_count} 条链接）`)
+      const s = mySources.value[idx]
+      if (res.suggested_pattern && !s.url_pattern) {
+        s.url_pattern = res.suggested_pattern
+        message.info(`已根据页面自动填充 URL 模式：${res.suggested_pattern}`)
+        markDirty(idx)
+      }
+    } else {
+      message.error(res.error || '链接测试失败')
+    }
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : String(e))
+  } finally {
+    testBusyMine.value = { ...testBusyMine.value, [idx]: false }
+  }
+}
+
+function switchToMine() {
+  activeView.value = 'mine'
+  loadMySources()
+}
+
+function jumpToCatalog(listUrl: string) {
+  const it = fromCatalogMap.value.get(listUrl)
+  activeView.value = 'catalog'
+  if (it) store.orgKey = `item:${it.id}`
+}
+
+watch(activeView, (v) => {
+  if (v === 'mine') {
+    loadMySources()
+  } else {
+    // 切回公共库时刷新 adopted 状态（我的数据源可能刚增删）
+    store.fetchOverview().catch(() => {})
+  }
+})
 
 onMounted(async () => {
   await store.fetchOverview().catch(() => {})
@@ -383,11 +830,21 @@ onMounted(async () => {
 .filter-card {
   flex-shrink: 0;
 }
+.view-tabs {
+  margin-top: 2px;
+}
+.stat-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
 .filter-bar {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
   align-items: center;
+  margin-top: 10px;
 }
 .filter-search {
   width: 340px;
@@ -399,12 +856,6 @@ onMounted(async () => {
 .filter-org-mobile {
   display: none;
   width: 200px;
-}
-.stat-line {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 12px;
 }
 
 .center-layout {
@@ -596,6 +1047,140 @@ onMounted(async () => {
   justify-content: center;
 }
 
+/* ---- 我的数据源 ---- */
+.mine-layout {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.mine-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.mine-toolbar-left {
+  min-width: 0;
+}
+.mine-tip {
+  font-size: 12px;
+  color: var(--text-3);
+}
+.mine-spin {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.mine-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.mine-card {
+  border: 1px solid var(--border);
+  transition: border-color 0.15s;
+}
+.mine-card-invalid {
+  border-color: var(--error-color, #d03050);
+}
+.mine-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  cursor: pointer;
+  user-select: none;
+}
+.header-index {
+  font-size: 11px;
+  color: var(--text-3);
+  flex-shrink: 0;
+}
+.mine-card-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1;
+}
+.mine-from-catalog {
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.mine-save-state {
+  font-size: 11px;
+  color: var(--text-3);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.mine-save-state.ok {
+  color: var(--success-color, #18a058);
+}
+.mine-save-state.pending {
+  color: var(--warning-color, #f0a020);
+}
+.header-spacer {
+  flex: 1;
+}
+.mine-card-summary {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.mine-card-summary.clickable {
+  color: var(--primary);
+  cursor: pointer;
+}
+.mine-card-summary.clickable:hover {
+  text-decoration: underline;
+}
+.summary-icon {
+  flex-shrink: 0;
+}
+.mine-actions-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.mine-card-body {
+  padding-top: 12px;
+  border-top: 1px dashed var(--border);
+  margin-top: 8px;
+}
+.field-hint {
+  margin-left: 8px;
+  color: var(--text-3);
+  font-size: 12px;
+}
+.input-suffix-link {
+  color: var(--primary);
+  text-decoration: none;
+  font-size: 13px;
+}
+.input-suffix-disabled {
+  color: var(--text-4, #c2c2c2);
+  font-size: 13px;
+}
+.mine-empty-sub {
+  font-size: 12px;
+  color: var(--text-3);
+  margin-top: 4px;
+}
+
 .preview-meta {
   display: flex;
   flex-wrap: wrap;
@@ -686,6 +1271,14 @@ onMounted(async () => {
   }
   .filter-search {
     width: 100%;
+  }
+}
+@media (max-width: 720px) {
+  .mine-card-body :deep(.n-form-item) {
+    display: block;
+  }
+  .mine-card-body :deep(.n-form-item-label) {
+    margin-bottom: 4px;
   }
 }
 </style>

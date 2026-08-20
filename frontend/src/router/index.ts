@@ -17,7 +17,7 @@ const routes = [
   { path: '/config', component: ConfigView, meta: { title: '系统配置', subtitle: '模型 · 供应商 · 数据源' } },
   { path: '/subscriptions', component: SubscriptionsView, meta: { title: '订阅管理', subtitle: '关键词订阅与命中跟踪' } },
   { path: '/market', component: MarketView, meta: { title: '服务市场', subtitle: '可扩展服务' } },
-  { path: '/sources', component: DataSourceCenterView, meta: { title: '数据源中心', subtitle: '公共数据源 · 搜索筛选 · 一键选用' } },
+  { path: '/sources', component: DataSourceCenterView, meta: { title: '数据源', subtitle: '公共数据源库 · 我的数据源 · 改完即存' } },
 ]
 
 const router = createRouter({

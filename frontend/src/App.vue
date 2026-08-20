@@ -41,7 +41,7 @@ const menuItems = [
   { key: '/todos', label: '待办清单', icon: CheckmarkDoneCircleOutline },
   { key: '/qa', label: '智能问答', icon: ChatbubbleEllipsesOutline },
   { key: '/subscriptions', label: '订阅管理', icon: NotificationsOutline },
-  { key: '/sources', label: '数据源中心', icon: LibraryOutline },
+  { key: '/sources', label: '数据源', icon: LibraryOutline },
   { key: '/config', label: '系统配置', icon: SettingsOutline },
   { key: '/market', label: '服务市场', icon: StorefrontOutline },
 ]
@@ -122,7 +122,8 @@ onUnmounted(() => {
   >
     <n-message-provider>
       <n-dialog-provider>
-        <n-layout position="absolute" has-sider style="inset: 0">
+        <n-notification-provider>
+          <n-layout position="absolute" has-sider style="inset: 0">
           <n-layout-sider
             bordered
             :width="280"
@@ -220,6 +221,7 @@ onUnmounted(() => {
             </n-layout-content>
           </n-layout>
         </n-layout>
+        </n-notification-provider>
       </n-dialog-provider>
     </n-message-provider>
   </n-config-provider>

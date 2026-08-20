@@ -74,6 +74,7 @@ export const endpoints = {
   sourceCenter: {
     overview: `${API_BASE}/source-center`,
     preview: (sourceId: string) => `${API_BASE}/source-center/${sourceId}/preview`,
+    previewUrl: `${API_BASE}/source-center/preview-url`,
     adopt: (sourceId: string) => `${API_BASE}/source-center/${sourceId}/adopt`,
     remove: (sourceId: string) => `${API_BASE}/source-center/${sourceId}/remove`,
   },
