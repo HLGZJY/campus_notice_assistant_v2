@@ -43,9 +43,57 @@ except ImportError:
     )
     from storage.models import CrawlResult, NoticeItem, NoticeRecord
 
-from .base import ListPageConfig, ListPageParser, PageFetcher
+from .base import (
+    ListPageConfig,
+    ListPageParser,
+    PageFetcher,
+    _extract_date_from_fragment,
+)
 
 logger = logging.getLogger(__name__)
+
+
+def _is_error_page(html: Optional[str]) -> bool:
+    """详情页是否为 404/错误提示页（此类页面不应入库，也不应提取日期）。"""
+    if not html:
+        return True
+    import re
+
+    head = html[:4000]
+    return bool(
+        re.search(
+            r"<title>\s*404|404\s*错误|页面不存在|无法找到该页|错误提示|您访问的页面",
+            head,
+            re.I,
+        )
+    )
+
+
+def _extract_date_from_detail_html(html: Optional[str]) -> Optional[str]:
+    """从详情页 HTML 提取发布时间（newspaper4k 无法解析时兜底）。
+
+    学校网站常见形态：<span>发布时间：2026/07/16</span>、2026-07-16、2026年07月16日。
+    返回规范化 'YYYY-MM-DD'；无则 None。
+    若页面为 404/错误提示页则直接返回 None（避免误取错误页模板里的日期）。
+    """
+    if not html:
+        return None
+    import re
+
+    # 404 / 错误页防护：避免把错误页模板里的日期当成文章发布时间
+    if _is_error_page(html):
+        return None
+
+    # 优先找"发布时间/日期"标签附近的日期
+    m = re.search(
+        r"发布\s*时间?[:：]?\s*((?:20\d{2})[-/.年]\d{1,2}[-/.月]\d{1,2}日?)",
+        html,
+    )
+    if not m:
+        m = re.search(r"((?:20\d{2})[-/.年]\d{1,2}[-/.月]\d{1,2}日?)", html)
+    if not m:
+        return None
+    return _extract_date_from_fragment(m.group(1))
 
 
 def _match_notice_by_url(url: str) -> None:
@@ -65,7 +113,7 @@ def _match_notice_by_url(url: str) -> None:
 
 
 def _parse_published_date(value: Optional[str]) -> Optional[datetime]:
-    """宽容解析列表页日期（date-only / ISO / 带空格）。"""
+    """宽容解析列表页日期（date-only / ISO / 中文年月日 / 斜杠 / 点号）。"""
     if not value:
         return None
     text = value.strip()
@@ -75,7 +123,15 @@ def _parse_published_date(value: Optional[str]) -> Optional[datetime]:
         pass
     import re
 
-    m = re.search(r"(\d{4})-(\d{1,2})-(\d{1,2})", text)
+    # 通用分隔格式：YYYY-MM-DD / YYYY/MM/DD / YYYY.MM.DD
+    m = re.search(r"(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})", text)
+    if m:
+        try:
+            return datetime(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+        except ValueError:
+            return None
+    # 中文格式：YYYY年M月D日
+    m = re.search(r"(\d{4})年(\d{1,2})月(\d{1,2})日", text)
     if m:
         try:
             return datetime(int(m.group(1)), int(m.group(2)), int(m.group(3)))
@@ -230,6 +286,25 @@ class WebCrawler:
                         raw_content="",
                         published_at=item.published_at,
                     )
+                # 时效兜底：列表页无日期时，用详情页提取的日期做 max_age_days 过滤
+                # （列表页无日期的站点在 _age_ok 阶段全部放行，这里补最后一层拦截）
+                if (
+                    self.config.max_age_days
+                    and not item.published_at
+                    and record.published_at
+                ):
+                    published = _parse_published_date(record.published_at)
+                    if published is not None:
+                        cutoff = datetime.now() - timedelta(
+                            days=self.config.max_age_days
+                        )
+                        if published < cutoff:
+                            result.total_skipped += 1
+                            logger.info(
+                                f"[{result.source}] 详情页日期超期，跳过入库: "
+                                f"{url} ({record.published_at})"
+                            )
+                            continue
                 record.content_hash = compute_content_hash(record.raw_content)
                 insert_notice(conn, record)
                 result.total_new += 1
@@ -373,12 +448,20 @@ class WebCrawler:
                 # newspaper4k 提取失败，用 fallback
                 content = self._fallback_extract(url)
 
-            # newspaper4k 日期优先，列表页日期作为 fallback
+            # newspaper4k 日期优先，列表页日期作为 fallback；
+            # 两者都无时从详情页 HTML 兜底提取"发布时间"（如 发布时间：2026/07/16）
             published_at = None
             if article.publish_date:
                 published_at = article.publish_date.isoformat()
             elif list_page_date:
                 published_at = list_page_date
+            else:
+                try:
+                    published_at = _extract_date_from_detail_html(
+                        self.fetcher.fetch(url)
+                    )
+                except Exception:
+                    published_at = None
 
             return NoticeRecord(
                 url=url,
@@ -392,13 +475,18 @@ class WebCrawler:
             # fallback：用 BeautifulSoup 提取
             try:
                 html = self.fetcher.fetch(url)
+                # 404/错误页不入库（如公示类文章过期被删除）
+                if _is_error_page(html):
+                    logger.info(f"详情页为错误页，不入库: {url}")
+                    return None
                 content = self._fallback_extract_from_html(html)
                 return NoticeRecord(
                     url=url,
                     source=self.config.source_name,
                     title=fallback_title,
                     raw_content=content,
-                    published_at=list_page_date,
+                    published_at=list_page_date
+                    or _extract_date_from_detail_html(html),
                 )
             except Exception:
                 return None

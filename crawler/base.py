@@ -71,6 +71,80 @@ class PaginationInfo:
     total_pages: int = 1
 
 
+def _extract_date_from_fragment(text: Optional[str]) -> Optional[str]:
+    """从任意文本片段提取日期，返回规范化 'YYYY-MM-DD'；无完整日期返回 None。
+
+    支持：YYYY-MM-DD / YYYY/MM/DD / YYYY.MM.DD / YYYY年M月D日。
+    用于兜底：部分站点把日期拼在链接文本里（标题尾缀/前缀），无独立日期元素。
+    """
+    if not text:
+        return None
+    m = re.search(r"(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})", text)
+    if not m:
+        m = re.search(r"(\d{4})年(\d{1,2})月(\d{1,2})日", text)
+    if not m:
+        return None
+    try:
+        y, mo, d = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        if not (1 <= mo <= 12 and 1 <= d <= 31):
+            return None
+        return f"{y:04d}-{mo:02d}-{d:02d}"
+    except ValueError:
+        return None
+
+
+def _extract_split_date(container) -> Optional[str]:
+    """拆分日期：容器内 class~=date/time 的元素里「日」+「年月」分两段显示。
+
+    典型结构：
+      <div class="date"><p>04</p><span>2026-02</span></div>   （学校主页）
+      <div class="date"><b>12</b><span>2026-02</span></div>   （经济学院）
+    """
+    if container is None:
+        return None
+    for el in container.find_all(["div", "span"], class_=re.compile(r"date|time", re.I)):
+        day_el = el.find(["p", "b", "i", "em", "strong"])
+        ym_el = el.find(["span", "em", "small"])
+        if not day_el or not ym_el or day_el is ym_el:
+            continue
+        day_m = re.search(r"(\d{1,2})", day_el.get_text(strip=True))
+        ym_m = re.search(r"(\d{4})[-/.](\d{1,2})", ym_el.get_text(strip=True))
+        if day_m and ym_m:
+            try:
+                y, mo, d = int(ym_m.group(1)), int(ym_m.group(2)), int(day_m.group(1))
+                if not (1 <= mo <= 12 and 1 <= d <= 31):
+                    continue
+                return f"{y:04d}-{mo:02d}-{d:02d}"
+            except ValueError:
+                continue
+    return None
+
+
+def _strip_title_date(title: str) -> str:
+    """剥离标题开头/结尾拼贴的完整日期（部分站点把日期拼进链接文本）。
+
+    覆盖形态：
+      - 完整日期：2026年07月16日 / 2026-07-16 / 2026/07/16（首尾均可）
+      - 拆分日期拼接：13 2026-07 标题（<b>日</b>+<span>年月</span> 渲染成文本）
+    只剥离"年月日齐全"或"日+年月"的形态，不影响标题中"2026年本科新生课程"
+    这类年份短语（缺月/日，不匹配）。
+    """
+    if not title:
+        return title
+    # 前缀：完整日期 或 拆分日期（日 + 年月）
+    t = re.sub(
+        r"^\s*(?:(?:20\d{2})[-/.年]\d{1,2}[-/.月]\d{1,2}日?"
+        r"|\d{1,2}\s*(?:20\d{2})[-/.年]\d{1,2}[-/.月]?)\s*",
+        "",
+        title,
+    )
+    # 后缀：完整日期
+    t = re.sub(
+        r"\s*(?:20\d{2})[-/.年]\d{1,2}[-/.月]\d{1,2}日?\s*$", "", t
+    )
+    return t.strip()
+
+
 class ListPageParser:
     """列表页解析器：自动发现通知链接和翻页。
 
@@ -117,7 +191,7 @@ class ListPageParser:
         return [
             NoticeItem(
                 url=url,
-                title=text,
+                title=_strip_title_date(text),
                 list_source=self.base_url,
                 published_at=date_map.get(url),
             )
@@ -245,13 +319,25 @@ class ListPageParser:
             links.append((text, full_url))
         return links
 
+    # 翻页/导航关键词（用于从候选链接中排除，避免聚类选错模式）
+    PAGINATION_WORDS = (
+        NEXT_PAGE_KEYWORDS + LAST_PAGE_KEYWORDS + PAGE_KEYWORDS
+    )
+
+    def _is_pagination_link(self, text: str) -> bool:
+        """翻页标签判定：纯数字页码 或 翻页关键词。"""
+        t = text.strip()
+        return re.fullmatch(r"\d{1,3}", t) is not None or any(
+            kw in t for kw in self.PAGINATION_WORDS
+        )
+
     def _auto_discover_links(
         self, all_links: list[tuple[str, str]]
     ) -> list[tuple[str, str]]:
         """自动发现通知链接：URL 模式聚类。
 
-        把 URL 中的数字部分替换为 {N}，按模式分组，
-        取数量最多的模式作为通知链接模式。
+        先把明显的翻页/导航链接（标题为数字/翻页词）从候选剔除，
+        避免分页链接数量多时被误选为"通知模式"（PAGINATION 类问题）。
         """
         # 生成 URL 模式（数字替换为 {N}）
         pattern_counter: Counter[str] = Counter()
@@ -263,6 +349,10 @@ class ListPageParser:
             base_parsed = urlparse(self.base_url)
             if parsed.netloc and parsed.netloc != base_parsed.netloc:
                 continue  # 跳过外站链接
+
+            # 排除翻页/导航标签（1 2 3 4 下页 尾页 等）
+            if self._is_pagination_link(text):
+                continue
 
             # 生成模式：把路径中的数字替换为 {N}
             path = parsed.path
@@ -333,6 +423,41 @@ class ListPageParser:
                         if date_pattern.search(date_text):
                             date_map[full_url] = date_text
                             break
+
+        # 格式4: 通用兜底 —— 仅对上面三格式未命中的链接生效，不覆盖已有日期。
+        # 覆盖结构：嵌套 <li><ul><li><a>（无独立日期元素）、链接文本自带日期、
+        # 以及 class~=date 的拆分日期（<p>日</p> + <span>年月</span>）。
+        for a in self.soup.find_all("a", href=True):
+            full_url = urljoin(self.base_url, a["href"])
+            if full_url in date_map:
+                continue
+            # 4a. 链接文本本身（如标题尾缀"2026年04月13日"、标题前缀"2026-07-03"）
+            date_text = _extract_date_from_fragment(a.get_text(" ", strip=True))
+            if date_text:
+                date_map[full_url] = date_text
+                continue
+            # 4b. 从链接所在列表项容器（li/dt/tr/td/div）中提取；
+            # 遇到 ul/ol/table 等多列表项容器立即停止，避免给同容器所有链接误配同一日期
+            parent = a.parent
+            for _ in range(4):
+                if parent is None:
+                    break
+                if parent.name in ("ul", "ol", "table", "body", "html"):
+                    break
+                if parent.name in ("li", "dt", "tr", "td", "div"):
+                    # 拆分日期（p日 + span年月）
+                    date_text = _extract_split_date(parent)
+                    if date_text:
+                        date_map[full_url] = date_text
+                        break
+                    # 容器文本中的完整日期
+                    date_text = _extract_date_from_fragment(
+                        parent.get_text(" ", strip=True)
+                    )
+                    if date_text:
+                        date_map[full_url] = date_text
+                        break
+                parent = parent.parent
 
         return date_map
 
