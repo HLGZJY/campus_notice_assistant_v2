@@ -10,13 +10,16 @@
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 
 from api.deps import require_auth
 from api.schemas import (
+    SourceCenterAdoptRequest,
     SourceCenterAdoptResult,
     SourceCenterOverview,
     SourceCenterPreview,
+    SourceCenterPreviewByUrlRequest,
+    SourceCenterPreviewByUrlResult,
 )
 from services import source_center_service
 
@@ -31,6 +34,16 @@ router = APIRouter(
 def source_center_overview() -> SourceCenterOverview:
     """数据源中心总览：学校信息 + 分类树 + 目录条目（adopted 按 list_url 联动）。"""
     return SourceCenterOverview(**source_center_service.get_overview())
+
+
+@router.post("/preview-url", response_model=SourceCenterPreviewByUrlResult)
+def source_center_preview_by_url(body: SourceCenterPreviewByUrlRequest) -> SourceCenterPreviewByUrlResult:
+    """按 URL 预览样例数据（「我的数据源」卡片点击链接预览用，不要求 URL 在公共目录中）。
+
+    网络不可达/解析失败返回 ok=false + error（HTTP 200，前端展示降级信息）。
+    """
+    result = source_center_service.preview_url(body.url, limit=body.limit)
+    return SourceCenterPreviewByUrlResult(**result)
 
 
 @router.get("/{source_id}/preview", response_model=SourceCenterPreview)
@@ -49,9 +62,17 @@ def source_center_preview(
 
 
 @router.post("/{source_id}/adopt", response_model=SourceCenterAdoptResult)
-def source_center_adopt(source_id: str) -> SourceCenterAdoptResult:
-    """选用数据源：追加到个人数据源（按 list_url 判重，重复选用幂等返回）。"""
-    result = source_center_service.adopt_source(source_id)
+def source_center_adopt(
+    source_id: str,
+    body: SourceCenterAdoptRequest | None = Body(default=None),
+) -> SourceCenterAdoptResult:
+    """选用数据源：追加到个人数据源（按 list_url 判重，重复选用幂等返回）。
+
+    body 可选：携带抓取参数（url_pattern / max_pages / max_age_days 等）时，
+    选用即按该参数写入并立即生效，无需再到「系统配置-数据源」页重复保存。
+    """
+    overrides = body.model_dump(exclude_none=True) if body else None
+    result = source_center_service.adopt_source(source_id, overrides=overrides)
     if not result.get("ok"):
         raise HTTPException(status_code=404 if "不存在" in (result.get("error") or "") else 400, detail=result.get("error"))
     return SourceCenterAdoptResult(**result)

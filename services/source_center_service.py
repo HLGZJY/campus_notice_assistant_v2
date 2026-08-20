@@ -150,27 +150,19 @@ def get_overview() -> dict:
     }
 
 
-def preview_source(source_id: str, limit: int = 10, timeout: int = 12) -> dict:
-    """预览样例数据：抓取列表页，解析前 N 条标题/链接/日期（只读，不落库）。
+def _fetch_preview(url: str, limit: int, timeout: int) -> tuple[list[dict], Optional[str], int]:
+    """抓取列表页并解析前 N 条样例数据（预览共用，只读不落库）。
 
-    失败返回 ok=False + error（网络不可达 / 解析异常等），不抛异常。
+    Returns:
+        (items, error, latency_ms)：error 为 None 表示成功。
     """
-    entry = _find_entry(source_id)
-    if entry is None:
-        return {"ok": False, "source_id": source_id, "list_url": "", "items": [], "error": "数据源不存在"}
-    url = entry.get("list_url", "")
+    start = time.time()
     try:
-        start = time.time()
         resp = requests.get(url, headers=_PREVIEW_HEADERS, timeout=timeout)
         resp.encoding = resp.apparent_encoding
         if resp.status_code != 200:
-            return {
-                "ok": False,
-                "source_id": source_id,
-                "list_url": url,
-                "items": [],
-                "error": f"HTTP {resp.status_code}（{int((time.time() - start) * 1000)}ms）",
-            }
+            latency = int((time.time() - start) * 1000)
+            return [], f"HTTP {resp.status_code}（{latency}ms）", latency
         parser = ListPageParser(resp.text, url)
         links = parser.discover_notice_links()
         items = [
@@ -181,28 +173,50 @@ def preview_source(source_id: str, limit: int = 10, timeout: int = 12) -> dict:
             }
             for item in links[:limit]
         ]
-        return {
-            "ok": True,
-            "source_id": source_id,
-            "list_url": url,
-            "items": items,
-            "error": None,
-        }
+        return items, None, int((time.time() - start) * 1000)
     except Exception as e:
-        return {
-            "ok": False,
-            "source_id": source_id,
-            "list_url": url,
-            "items": [],
-            "error": f"{type(e).__name__}: {e}",
-        }
+        return [], f"{type(e).__name__}: {e}", int((time.time() - start) * 1000)
+
+
+def preview_source(source_id: str, limit: int = 10, timeout: int = 12) -> dict:
+    """预览样例数据：抓取目录条目列表页，解析前 N 条标题/链接/日期（只读，不落库）。
+
+    失败返回 ok=False + error（网络不可达 / 解析异常等），不抛异常。
+    """
+    entry = _find_entry(source_id)
+    if entry is None:
+        return {"ok": False, "source_id": source_id, "list_url": "", "items": [], "error": "数据源不存在"}
+    url = entry.get("list_url", "")
+    items, error, _ = _fetch_preview(url, limit, timeout)
+    return {
+        "ok": error is None,
+        "source_id": source_id,
+        "list_url": url,
+        "items": items,
+        "error": error,
+    }
+
+
+def preview_url(url: str, limit: int = 10, timeout: int = 12) -> dict:
+    """按 URL 预览样例数据（「我的数据源」卡片点击链接预览用，不要求 URL 在公共目录中）。"""
+    url = (url or "").strip()
+    if not url:
+        return {"ok": False, "url": url, "items": [], "error": "列表地址为空"}
+    items, error, latency_ms = _fetch_preview(url, limit, timeout)
+    return {"ok": error is None, "url": url, "items": items, "error": error, "latency_ms": latency_ms}
 
 
 # ---------- 选用 / 移除（与「我的数据源」联动） ----------
 
 
-def adopt_source(source_id: str) -> dict:
-    """选用目录条目：追加到个人数据源（按 list_url 判重，已存在则幂等返回）。"""
+def adopt_source(source_id: str, overrides: Optional[dict] = None) -> dict:
+    """选用目录条目：追加到个人数据源（按 list_url 判重，已存在则幂等返回）。
+
+    Args:
+        overrides: 可选抓取参数（url_pattern / max_pages / max_age_days / enabled /
+            crawl_mode / fetch_detail / deep_check），缺省使用 SourceConfig 默认值。
+            选用即写盘生效（与「系统配置-数据源」页同一保存路径）。
+    """
     entry = _find_entry(source_id)
     if entry is None:
         return {"ok": False, "source_id": source_id, "adopted": False, "already": False, "error": "数据源不存在"}
@@ -219,12 +233,15 @@ def adopt_source(source_id: str) -> dict:
 
     # 命名沿用「组织-栏目」惯例（如 计算机学院-通知公告）
     name = f"{entry.get('org', '')}-{entry.get('name', '')}" if entry.get("org") else entry.get("name", "")
-    new_source = SourceConfig(name=name, list_url=url)
+    params: dict = {}
+    if overrides:
+        params = {k: v for k, v in overrides.items() if v is not None}
+    new_source = SourceConfig(name=name, list_url=url, **params)
     new_sources = [SourceConfig(**s) for s in user_sources] + [new_source]
     result = store.save_sources(school.code, SchoolConfig(name=school.name, code=school.code, sources=new_sources))
     if not result.get("ok"):
         return {"ok": False, "source_id": source_id, "adopted": False, "already": False, "error": result.get("error", "保存失败")}
-    logger.info("数据源中心选用: %s → %s（%d 个个人数据源）", source_id, url, len(new_sources))
+    logger.info("数据源中心选用: %s → %s（%d 个个人数据源，参数=%s）", source_id, url, len(new_sources), params or "默认")
     return {"ok": True, "source_id": source_id, "adopted": True, "already": False, "error": None}
 
 

@@ -723,6 +723,21 @@ class SourceCenterOverview(BaseModel):
     adopted_count: int = 0
 
 
+class SourceCenterAdoptRequest(BaseModel):
+    """选用数据源时可选的自定义抓取参数（缺省 = 使用默认参数）。
+
+    与「系统配置-数据源」页的 SourceConfig 字段一致，选用即写入个人数据源并生效。
+    """
+
+    url_pattern: Optional[str] = None
+    max_pages: Optional[int] = None
+    max_age_days: Optional[int] = None
+    enabled: Optional[bool] = None
+    crawl_mode: Optional[str] = None
+    fetch_detail: Optional[bool] = None
+    deep_check: Optional[bool] = None
+
+
 class SourceCenterAdoptResult(BaseModel):
     """选用/移除结果（already=目录条目已存在于个人数据源的幂等返回）。"""
 
@@ -749,3 +764,20 @@ class SourceCenterPreview(BaseModel):
     list_url: str = ""
     items: list[SourceCenterPreviewItem] = Field(default_factory=list)
     error: Optional[str] = None
+
+
+class SourceCenterPreviewByUrlRequest(BaseModel):
+    """按 URL 预览请求（「我的数据源」卡片点击链接预览用，不要求 URL 在公共目录中）。"""
+
+    url: str
+    limit: int = Field(default=10, ge=1, le=30)
+
+
+class SourceCenterPreviewByUrlResult(BaseModel):
+    """按 URL 预览结果。"""
+
+    ok: bool
+    url: str = ""
+    items: list[SourceCenterPreviewItem] = Field(default_factory=list)
+    error: Optional[str] = None
+    latency_ms: int = 0

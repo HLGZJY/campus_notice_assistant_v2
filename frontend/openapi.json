@@ -3880,6 +3880,66 @@
         }
       }
     },
+    "/api/v1/source-center/preview-url": {
+      "post": {
+        "tags": [
+          "source-center"
+        ],
+        "summary": "Source Center Preview By Url",
+        "description": "按 URL 预览样例数据（「我的数据源」卡片点击链接预览用，不要求 URL 在公共目录中）。\n\n网络不可达/解析失败返回 ok=false + error（HTTP 200，前端展示降级信息）。",
+        "operationId": "source_center_preview_by_url_api_v1_source_center_preview_url_post",
+        "parameters": [
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SourceCenterPreviewByUrlRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceCenterPreviewByUrlResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/source-center/{source_id}/preview": {
       "get": {
         "tags": [
@@ -3957,7 +4017,7 @@
           "source-center"
         ],
         "summary": "Source Center Adopt",
-        "description": "选用数据源：追加到个人数据源（按 list_url 判重，重复选用幂等返回）。",
+        "description": "选用数据源：追加到个人数据源（按 list_url 判重，重复选用幂等返回）。\n\nbody 可选：携带抓取参数（url_pattern / max_pages / max_age_days 等）时，\n选用即按该参数写入并立即生效，无需再到「系统配置-数据源」页重复保存。",
         "operationId": "source_center_adopt_api_v1_source_center__source_id__adopt_post",
         "parameters": [
           {
@@ -3986,6 +4046,23 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/SourceCenterAdoptRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -5920,6 +5997,90 @@
         "title": "SchoolConfig",
         "description": "单个学校的数据源配置。"
       },
+      "SourceCenterAdoptRequest": {
+        "properties": {
+          "url_pattern": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url Pattern"
+          },
+          "max_pages": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Pages"
+          },
+          "max_age_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Age Days"
+          },
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled"
+          },
+          "crawl_mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Crawl Mode"
+          },
+          "fetch_detail": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fetch Detail"
+          },
+          "deep_check": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deep Check"
+          }
+        },
+        "type": "object",
+        "title": "SourceCenterAdoptRequest",
+        "description": "选用数据源时可选的自定义抓取参数（缺省 = 使用默认参数）。\n\n与「系统配置-数据源」页的 SourceConfig 字段一致，选用即写入个人数据源并生效。"
+      },
       "SourceCenterAdoptResult": {
         "properties": {
           "ok": {
@@ -6124,6 +6285,69 @@
         ],
         "title": "SourceCenterPreview",
         "description": "预览结果：抓取列表页返回样例数据（只读，不落库）。"
+      },
+      "SourceCenterPreviewByUrlRequest": {
+        "properties": {
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "limit": {
+            "type": "integer",
+            "maximum": 30.0,
+            "minimum": 1.0,
+            "title": "Limit",
+            "default": 10
+          }
+        },
+        "type": "object",
+        "required": [
+          "url"
+        ],
+        "title": "SourceCenterPreviewByUrlRequest",
+        "description": "按 URL 预览请求（「我的数据源」卡片点击链接预览用，不要求 URL 在公共目录中）。"
+      },
+      "SourceCenterPreviewByUrlResult": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url",
+            "default": ""
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SourceCenterPreviewItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "latency_ms": {
+            "type": "integer",
+            "title": "Latency Ms",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "ok"
+        ],
+        "title": "SourceCenterPreviewByUrlResult",
+        "description": "按 URL 预览结果。"
       },
       "SourceCenterPreviewItem": {
         "properties": {

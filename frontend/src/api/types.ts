@@ -1086,6 +1086,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/source-center/preview-url": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Source Center Preview By Url
+         * @description 按 URL 预览样例数据（「我的数据源」卡片点击链接预览用，不要求 URL 在公共目录中）。
+         *
+         *     网络不可达/解析失败返回 ok=false + error（HTTP 200，前端展示降级信息）。
+         */
+        post: operations["source_center_preview_by_url_api_v1_source_center_preview_url_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/source-center/{source_id}/preview": {
         parameters: {
             query?: never;
@@ -1120,6 +1142,9 @@ export interface paths {
         /**
          * Source Center Adopt
          * @description 选用数据源：追加到个人数据源（按 list_url 判重，重复选用幂等返回）。
+         *
+         *     body 可选：携带抓取参数（url_pattern / max_pages / max_age_days 等）时，
+         *     选用即按该参数写入并立即生效，无需再到「系统配置-数据源」页重复保存。
          */
         post: operations["source_center_adopt_api_v1_source_center__source_id__adopt_post"];
         delete?: never;
@@ -2051,6 +2076,28 @@ export interface components {
             sources: components["schemas"]["SourceConfig"][];
         };
         /**
+         * SourceCenterAdoptRequest
+         * @description 选用数据源时可选的自定义抓取参数（缺省 = 使用默认参数）。
+         *
+         *     与「系统配置-数据源」页的 SourceConfig 字段一致，选用即写入个人数据源并生效。
+         */
+        SourceCenterAdoptRequest: {
+            /** Url Pattern */
+            url_pattern?: string | null;
+            /** Max Pages */
+            max_pages?: number | null;
+            /** Max Age Days */
+            max_age_days?: number | null;
+            /** Enabled */
+            enabled?: boolean | null;
+            /** Crawl Mode */
+            crawl_mode?: string | null;
+            /** Fetch Detail */
+            fetch_detail?: boolean | null;
+            /** Deep Check */
+            deep_check?: boolean | null;
+        };
+        /**
          * SourceCenterAdoptResult
          * @description 选用/移除结果（already=目录条目已存在于个人数据源的幂等返回）。
          */
@@ -2177,6 +2224,41 @@ export interface components {
             items?: components["schemas"]["SourceCenterPreviewItem"][];
             /** Error */
             error?: string | null;
+        };
+        /**
+         * SourceCenterPreviewByUrlRequest
+         * @description 按 URL 预览请求（「我的数据源」卡片点击链接预览用，不要求 URL 在公共目录中）。
+         */
+        SourceCenterPreviewByUrlRequest: {
+            /** Url */
+            url: string;
+            /**
+             * Limit
+             * @default 10
+             */
+            limit: number;
+        };
+        /**
+         * SourceCenterPreviewByUrlResult
+         * @description 按 URL 预览结果。
+         */
+        SourceCenterPreviewByUrlResult: {
+            /** Ok */
+            ok: boolean;
+            /**
+             * Url
+             * @default
+             */
+            url: string;
+            /** Items */
+            items?: components["schemas"]["SourceCenterPreviewItem"][];
+            /** Error */
+            error?: string | null;
+            /**
+             * Latency Ms
+             * @default 0
+             */
+            latency_ms: number;
         };
         /**
          * SourceCenterPreviewItem
@@ -4846,6 +4928,41 @@ export interface operations {
             };
         };
     };
+    source_center_preview_by_url_api_v1_source_center_preview_url_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SourceCenterPreviewByUrlRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceCenterPreviewByUrlResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     source_center_preview_api_v1_source_center__source_id__preview_get: {
         parameters: {
             query?: {
@@ -4892,7 +5009,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["SourceCenterAdoptRequest"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
