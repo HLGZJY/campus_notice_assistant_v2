@@ -50,3 +50,7 @@ data/benchmark_*.json
 p.out
 probe_sse.*
 vite.log
+_bwc_tztg.html
+_test_adopt.py
+_verify_history_log.py
+data/scan_source_catalog_*
