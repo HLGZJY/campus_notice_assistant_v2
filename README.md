@@ -1,90 +1,231 @@
-# 校园通知智能助手
+# 校园通知智能助手 Campus Notice Assistant
 
-> Campus Notice Assistant — 把校园通知变成可执行的待办清单
+> **把散落各处的校园通知，变成可执行的结构化信息与待办清单。**
+>
+> 一个覆盖「多源抓取 → LLM 结构化提取 → RAG 智能问答 → 待办管理 → 截止提醒」全链路的  
+> **全栈 AI 应用**（FastAPI + Vue3 + OpenAI Agents SDK + Chroma），单开发者从 0 到 1  
+> 独立设计、开发并持续迭代 118 次提交。
 
-## 这是什么
+`FastAPI` `Vue 3` `TypeScript` `OpenAI Agents SDK` `RAG` `Chroma` `BM25+RRF` `SSE 流式` `APScheduler` `SQLite` `Docker`
 
-一个能自动抓取学校各类通知网站、用 LLM 提取关键信息（截止时间、地点、报名链接、面向对象）、生成个性化待办清单的智能助手。
+---
 
-- **前端**：Vue 3 + Vite + Naive UI（`frontend/`）
-- **后端**：FastAPI + uvicorn（`api/`，`/api/v1`），复用 MVP 时代的 services/引擎层
-- 本项目源于 `Llama 3.1 本地 RAG` 项目的延伸，从"与单个网页对话"演进到"自动监控多来源通知 + 结构化提取 + 待办管理"。
+## 一、项目简介
 
-## 核心能力
+### 1.1 解决的问题
 
-- **多来源抓取**：学校官网、学院/部门网站、教务处通知
-- **结构化提取**：自动识别通知类型、截止时间、地点、报名链接、面向对象
-- **待办生成**：把通知转成可执行的待办项（按需生成，支持编辑/延期/备注）
-- **截止提醒**：对截止前 3 天 / 1 天的通知自动生成站内提醒（首页红点 + 待办中心提醒区，可已读/忽略），由调度器扫描生成，不依赖前端
-- **智能问答**：基于已抓取的通知回答自然语言问题（混合检索 + SSE 流式）
-- **关键词订阅**：纯规则匹配，命中通知自动标记 + 全库回填
-- **数据管理**：通知删除/重置/重新提取/批量操作（异步任务化）
-- **学校可配置**：通用架构，通过配置文件适配不同学校
+大学生面临的**通知信息过载**：通知分散在学校官网、学院网站、教务处等十几个渠道；重要截止时间（报名、比赛、选课）容易错过；通知正文冗长，关键信息需要自己提炼；缺少统一入口管理「我该做什么」。
 
-## 架构速览
+### 1.2 解决方案
+
+系统自动抓取各数据源通知，用 LLM 提取**类型、截止时间、地点、报名方式、面向对象**等结构化字段，构建向量知识库，提供自然语言问答、关键词订阅与截止提醒，把「读通知」变成「按清单做事」。
+
+### 1.3 核心链路
 
 ```
-frontend/   Vue3 + Naive UI（7 路由）──▶ POST /api/v1/events（埋点）
-   │ HTTP /api/v1（openapi.json 契约对齐，openapi-typescript 生成类型）
-   ▼
-api/        FastAPI 应用工厂 + 9 路由模块 + deps 鉴权占位
-   ├── tasks/    TaskManager（asyncio 单 worker，长耗时 202→轮询）
-   └── lifespan  拉起 scheduler（APScheduler，5 job）与 TaskManager
-   ▼
-services/   业务编排层（notice / todo / qa / subscription / reminder /
-            config / admin / tracking / health / usage）
-   ▼
-core/ + storage/ + crawler/ + config/ + utils/   引擎层
+抓取（增量/指纹检测）→ 提取（LLM 结构化 + 规则预筛）→ 索引（Chroma 向量库）
+        → 问答（混合检索 + SSE 流式）→ 待办 / 订阅 / 截止提醒（自动化）
 ```
 
-## 文档导航
+### 1.4 项目规模
 
-| 文档                                           | 内容                         | 给谁看    |
-| ---------------------------------------------- | ---------------------------- | --------- |
-| [docs/PRD.md](docs/PRD.md)                     | 产品需求、用户故事、功能清单 | 产品/需求 |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)   | 技术架构、模块设计、数据流   | 开发      |
-| [docs/DATA-MODEL.md](docs/DATA-MODEL.md)       | 数据表结构、Pydantic 模型    | 开发      |
-| [docs/ROADMAP.md](docs/ROADMAP.md)             | 开发路线图、里程碑           | 项目管理  |
-| [docs/DEMO.md](docs/DEMO.md)                   | 订阅+提醒全链路演示          | 演示      |
-| [docs/RAG-POLLUTION.md](docs/RAG-POLLUTION.md) | RAG 污染防护专项             | 开发      |
+| 维度   | 数据                                                         |
+| ---- | ---------------------------------------------------------- |
+| 代码规模 | 后端 Python ≈ 26,500 行，前端 TypeScript/Vue ≈ 13,700 行          |
+| 迭代历史 | 118 次 Git 提交，历经 MVP → 短线开发 → 前后端分离重构 → 工程优化四个里程碑           |
+| 测试资产 | 32 个离线验收测试脚本（爬虫 / 检索 / 任务 / 缓存 / 并发 / 崩溃恢复等）               |
+| 数据层  | SQLite 13 张业务表；Chroma 向量库 + BM25 稀疏索引双路检索                  |
+| 接口层  | 11 个路由模块 / 68 个 REST 端点（57 条路径，/api/v1）+ SSE 流式问答 + 异步任务接口 |
+| 页面   | 8 个前端页面（通知浏览 / 待办中心 / 智能问答 / 订阅管理 / 系统配置 / 数据源中心等）         |
 
-> 更细的开发记录见 `docs-local/`（短线开发各阶段 / 长线开发前后端分离）。
+### 1.5 设计哲学
 
-## 技术栈
+> 三条贯穿全项目的工程原则，也是所有选型与架构决策的出发点：
 
-| 层         | 选型                                         | 说明                                    |
-| ---------- | -------------------------------------------- | --------------------------------------- |
-| 后端框架   | FastAPI + uvicorn                            | `/api/v1`，OpenAPI 契约导出             |
-| 前端       | Vue 3 + Vite + Naive UI                      | vue-router + pinia + openapi-typescript |
-| LLM        | 可配置（默认阿里云百炼 bailian qwen3.7-max） | OpenAI 兼容接口，按任务选择模型         |
-| Embedding  | 本地 `models/bge-small-zh-v1.5`              | 本地轻量模型，中文检索效果好            |
-| 向量库     | Chroma                                       | 轻量，嵌入式                            |
-| Agent 框架 | OpenAI Agents SDK                            | Capstone 课程要求                       |
-| 数据存储   | SQLite（10 张表）                            | 轻量，单文件                            |
-| 定时调度   | APScheduler（5 job）                         | 并入后端 lifespan，可 CLI 独立运行      |
-| 配置       | YAML + 环境变量                              | `config/app.yaml` / `.env`              |
-| 抓取       | newspaper4k                                  | 列表页发现 + 详情页提取                 |
+- **确定性优先**：能用规则 / 模板 / 解析器解决的问题绝不交给 LLM——提取前置规则预筛（不通过不调 LLM 并落原因）、自研中文时间解析器、订阅纯规则匹配、问答来源引用从检索元数据确定性导出（杜绝幻觉引用）。LLM 只做它擅长的：结构化抽取、语义理解、归因生成。
+- **限制模型犯错空间**：`output_type` 硬约束采样 + 校验失败回传重试（≤2 次）+ 模型失败切换 + 三层问答缓存，把 LLM 的不确定性包在一个可靠的软件边界内。
+- **评估闭环**：黄金集 24/24（提取）、100%（截止时间解析）、20 题检索测试集、32 个验收测试脚本——每个 Agent 环节都有可复现的度量。
 
-## 快速开始
+---
+
+## 二、技术架构说明
+
+### 2.1 分层架构
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ 前端 frontend/  Vue 3 + TypeScript + Vite + Naive UI         │
+│  8 页面 · Pinia 状态 · vue-router 守卫埋点 · useTaskPoll 轮询  │
+│  契约：openapi.json ──openapi-typescript──▶ types.ts（零漂移） │
+└──────────────────────────┬──────────────────────────────────┘
+                           │ HTTP /api/v1（REST + SSE）
+┌──────────────────────────▼──────────────────────────────────┐
+│ 接口层 api/  FastAPI 应用工厂                                 │
+│  11 个路由模块 · Pydantic 响应模型 · deps 鉴权占位             │
+│  TaskManager 异步任务（202 → 轮询，单 worker，崩溃恢复）       │
+│  lifespan 拉起 APScheduler（5 job，可 CLI 独立运行）           │
+└──────────────────────────┬──────────────────────────────────┘
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│ 业务服务层 services/  11 个服务（返回统一 dict 契约）           │
+│  notice / todo / qa / subscription / reminder / config       │
+│  / admin / tracking / usage / health / source_center         │
+└──────────────────────────┬──────────────────────────────────┘
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│ 引擎层                                                       │
+│  core/      LLM Agent（提取 / 待办 / 问答）+ 中文时间解析器     │
+│  crawler/   newspaper4k 列表发现 + 详情提取 + 指纹变更检测      │
+│  storage/   SQLite（13 表）+ Chroma + BM25/RRF 混合检索        │
+│  utils/     LLM 统一调用点（模型失败切换 + token 计量）         │
+│  config/    Pydantic + YAML（三层 fallback + 原子写 + 热更新） │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 2.2 技术选型
+
+| 层         | 选型                                                 | 选型理由                                 | 为什么不选 X |
+| --------- | -------------------------------------------------- | ------------------------------------ | ------------------------------------ |
+| 后端框架      | **FastAPI + uvicorn**（Python 3.11）                 | 异步原生，天然契合 SSE / 异步任务；自动生成 OpenAPI 契约 | 不选 Flask/Django：同步 WSGI 模型对 SSE / 长连接支持弱，需额外引入方案 |
+| 前端        | **Vue 3.5 + TypeScript + Vite + Naive UI + Pinia** | 组合式 API 开发效率高；Naive UI 组件质量与 TS 支持好  | 不选 React：个人技术栈连贯性优先；组合式 API 逻辑复用贴合本项目页面形态 |
+| 前后端契约     | **openapi-typescript**                             | openapi.json 为唯一事实源，类型零漂移，杜绝字段对不上    | 不选手写类型 / GraphQL：手写易漂移；GraphQL 对 68 个 REST 端点过重 |
+| Agent 框架  | **OpenAI Agents SDK**（`output_type` 结构化输出）         | Function Calling 硬约束采样空间，适合通知字段提取    | 不选 LangGraph：本任务边界清晰、无动态分支需求，图状态机是过度设计；用 workflow 提供边界、agent 在边界内自主 |
+| LLM       | 阿里云百炼 qwen（OpenAI 兼容接口），**按任务配置 + 模型失败切换**         | 供应商可插拔，免费/付费模型配额不足时自动降级              | 不锁单一供应商：模型迭代快，兼容接口层保证随时可替换 |
+| Embedding | 本地 **bge-small-zh-v1.5**                           | 中文语义效果好，本地推理零 API 成本                 | 不选云端 embedding：中文场景效果优先，数据不出本地，无 API 成本 |
+| 向量库       | **Chroma**（langchain-chroma）                       | 嵌入式轻量，单机部署零运维                        | 不选 Milvus/Weaviate：当前单机万级 chunk 规模，重型分布式向量库是过度设计；多租户/高并发再迁移（storage 层已抽象） |
+| 混合检索      | **BM25（rank_bm25 + jieba）+ RRF 融合**                | 稀疏+稠密双路互补，中文分词适配                     | 不选纯向量检索：中文专有名词（比赛缩写 / 英文混排）稀疏召回不足 |
+| 数据存储      | **SQLite**（13 表，含迁移与断点续跑）                          | 单文件零依赖；storage 层已抽象，可平替 PG           | 不选 PostgreSQL：个人规模 + 单写者模型足够，引入 PG 增加运维成本 |
+| 定时调度      | **APScheduler**（5 job）                             | 并入后端 lifespan 或 CLI 独立运行，失败落库可恢复     | 不选 Celery/独立调度服务：任务量级轻、进程内足够，避免多组件运维 |
+| 抓取        | **newspaper4k**                                    | 列表页链接发现 + 详情页正文提取，免手写选择器             | 不选手写 CSS/XPath 选择器：站点改版维护成本高，库自带降级策略 |
+| 部署        | **Docker Multi-stage**（Node 构建 → Python 运行时）       | 前端产物由后端直接托管，单镜像启动                    | 不选前后端分离部署：单机场景单镜像零运维，需要扩容时再拆分 |
+
+---
+
+## 三、核心功能模块
+
+| 模块             | 功能说明                                         | 关键技术                                                                                                        |
+| -------------- | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| **多源抓取**       | 定时/手动抓取学校各网站通知，支持来源级策略（启停 / 模式 / 时效 / 是否抓正文） | 增量抓取：已入库不重抓、整页已知立即早停（6 源全库一轮 ≈ 3.5s）；正文**内容指纹**变更检测，深检周期可配                                                  |
+| **LLM 结构化提取**  | 从正文提取类型 / 截止时间 / 地点 / 报名方式 / 关键时间点 / 摘要等字段   | Agent `output_type` 硬约束 + **校验失败回传重试**（≤2 次）；自研中文时间解析器（年份推断、跨年回退、公示期拆分）；**规则预筛**先行，跳过项不调 LLM 并落原因           |
+| **待办生成**       | 把通知转为可执行待办项（按需生成，支持编辑 / 延期 / 备注 / 状态流转）      | LLM 生成 + **确定性模板兜底**；按截止时间升序排序                                                                              |
+| **RAG 智能问答**   | 基于已抓取通知的自然语言问答，SSE 流式输出                      | **BM25 + RRF 混合检索**；过期三档策略（不过滤 / 降权 / 排除）；来源引用从检索元数据确定性导出，杜绝 LLM 幻觉引用；**三层问答缓存**（精确 hash / 语义 cosine / LRU） |
+| **关键词订阅**      | 纯规则子串匹配，命中自动标记 + 全库回填                        | 两步式交互（预览 → 确认）；命中明细与徽标                                                                                      |
+| **截止提醒**       | 对截止前 3 天 / 1 天通知自动生成站内提醒（首页红点 + 待办提醒区）       | 调度器扫描生成、幂等落库；已读 / 忽略状态管理                                                                                    |
+| **异步任务系统**     | 抓取 / 批量提取 / 重匹配等长耗时操作统一任务化                   | `POST /tasks` 返回 202 → 前端轮询；**实时进度回调**；任务锁幂等去重；**崩溃恢复**（重启自动标记遗留任务）                                         |
+| **系统配置**       | 模型 / 供应商 / 数据源 / 抓取提取参数可视化配置                 | Pydantic + YAML 三层 fallback；**原子写**；配置热更新（调度器 60s 轮询）；供应商 API Key 免重启生效                                     |
+| **Token 用量计量** | 所有 LLM 调用成功/失败统一记账，按任务×供应商×模型聚合              | LLM **统一调用点**（`run_agent` / `run_agent_stream`），三条链路共用一处埋点                                                  |
+| **数据源中心**      | 公共数据源目录（**112 个**高校来源），组织树三级筛选、链接预览、一键选用     | 目录与个人数据源按 `list_url` 判重联动，双向同步                                                                              |
+| **埋点与体检**      | 页面浏览 / 行为埋点 + 每日健康检查 + 向量一致性自动修复             | 埋点写库失败不阻塞主流程；RAG 污染三层防线兜底                                                                                   |
+
+---
+
+## 四、项目亮点与技术难点
+
+> 以下均为实际开发中遇到并解决的工程问题，每个都配有「问题 → 方案 → 成效」。
+
+### 4.1 RAG 污染防护：幽灵结果专项治理
+
+- **问题**：通知从 SQLite 删除后，其向量 chunk 仍残留在 Chroma，问答检索会召回已删除/已过期通知，LLM 引用「幽灵结果」作答。
+- **方案**：三层防线——① 删除通知时按 `notice_id` 元数据**级联删向量**（按真实 chunk id 删除，规避 where 删除语义不确定）；② 重建索引先 `delete_collection()` 再全量重建；③ 每日体检自动跑一致性校验清理。判定基准取 SQLite 全量通知 ID，避免把 raw 状态通知的有效向量误删。
+- **成效**：`check_vector_consistency.py` 一键校验（退出码 0=一致）；`reproduce_pollution.py` 沙箱复现验收「删除后检索不到」。
+
+### 4.2 异步任务系统：长耗时操作不阻塞 Web
+
+- **问题**：爬取 / 批量提取 / 全库重匹配耗时数十秒到数分钟，同步执行会拖垮 API 响应。
+- **方案**：进程内 TaskManager（asyncio 单 worker 串行，天然规避 SQLite 单写者 / 配置写权唯一 / Chroma 单 collection 并发冲突）；提交返回 `202 + task_id`，前端轮询；业务函数经 `asyncio.to_thread` 运行，进度经回调写库。
+- **成效**：**任务锁幂等去重**——同 `(type, lock_key)` 的 queued/running 任务直接返回已有 id（202 而非 409），重复点击不重复执行；`BEGIN IMMEDIATE` 事务串行化 check-then-insert；进程重启自动恢复遗留任务，用户可重新提交。
+
+### 4.3 批量提取并发失效修复：asyncio 事件循环被阻塞
+
+- **问题**：并发提取实测被串行化——`_process_one` 中同步阻塞操作（embedding 的 `requests.post`、Chroma 写入）在 async 函数内**直接调用**，阻塞事件循环，导致其他协程的 LLM 响应无法处理。
+- **方案**：定位后将 `match_notice`、`add_notice` 包装进 `asyncio.to_thread`；`Semaphore + gather` 控制并发。
+- **成效**：2 条并发提取 **3.21s vs 串行 5.88s**，并发收益真实落地。
+
+### 4.4 LLM 成本控制体系（Token 用量下降数倍）
+
+- **问题**：全量抓取 + 全量提取 + 重复问答的 LLM 开销不可控。
+- **方案**：三层节流——① **增量抓取**（已入库不重抓详情页，整页已知早停）；② **提取规则预筛**（时效 → 正文长度 → 关键词 → 时间线索 → 订阅命中，不通过**不调 LLM**，落 `extract_skipped_reason`）；③ **模型失败切换**（有序候选列表，`is_failover_worthy` 判定：400/401/403 不切，429/5xx/网络错误切换）。
+- **成效**：所有调用统一经 `utils/llm.py` 计量（成功/失败都记账），实测已累计 **2,778 条 token 用量记录**，可审计、可聚合、可做预算。
+
+### 4.5 三层问答缓存：重复问题零 LLM 调用
+
+- **问题**：相近问题反复调用 LLM，延迟与成本双高。
+- **方案**：一级精确 hash 命中（TTL + hit_count）→ 二级**语义 cosine 相似**命中（embedding 按需计算，best-effort 不阻断链路）→ 三级 UPSERT 写入 + LRU 淘汰；通知重新提取/删除时经**失效钩子**精准清缓存；同一问题不同会话隔离。
+- **成效**：二次提问直接命中缓存不调 LLM；缓存命中徽标常驻前端；`test_qa_cache` 9 节 32 项全链路验证。
+
+### 4.6 混合检索：中文场景的 BM25 + RRF
+
+- **问题**：纯向量检索对专有名词（比赛缩写、英文混排）召回不足。
+- **方案**：Chroma 稠密检索 + BM25 稀疏检索双路，**RRF（k=60）排名融合**；jieba 中文分词（中文保留原词、英文数字小写归一）；BM25 语料与向量库**同源拉取**，杜绝重切分漂移；与向量路共用过期三档策略。
+- **成效**：20 题检索测试集持续验证；召回质量显著优于单路向量检索。
+
+### 4.7 中文时间解析：非结构化日期 → ISO 8601
+
+- **问题**：校园通知日期写法五花八门（「即日起至7月16日17：00」「2026年07月16日」「7月中旬」），LLM 直接输出 deadline 不可靠。
+- **方案**：LLM 提取 `deadline_raw` 原文片段，系统用**自研解析器**重算（年份按发布时间推断、早于发布时间跨年回退、公示期拆分为起止两条 key_dates、剥离「即日起至」「前」等噪声词）。
+- **成效**：黄金集 deadline 解析**准确率 100%**。
+
+### 4.8 SSE 流式问答与错误契约
+
+- **问题**：问答延迟高（首字等待长），且流中断时异常细节直接暴露给前端。
+- **方案**：`GET /qa/ask/stream` 逐 token 输出，扩展阶段事件（`status: retrieval/thinking/generating`）；中断时产出统一错误事件 `{"type":"error","message":"推理中断，请稍后重试"}`，**不泄露异常细节**。
+- **成效**：首字更快、打字机体验；前端按契约解析，故障文案友好统一。
+
+### 4.9 契约驱动的前后端协作
+
+- **问题**：前后端分离后接口字段极易漂移。
+- **方案**：后端导出 `openapi.json` 为**单一事实源**，前端 `openapi-typescript` 生成 `types.ts`；新增/修改端点必须先导契约再改前端类型。
+- **成效**：前后端类型零手工维护、零漂移；配合 vite 代理 + SPA fallback，单进程即可部署。
+
+### 4.10 工程韧性：面向崩溃与异常的防御设计
+
+- **问题**：抓取/调度进程可能被 kill、数据库可能被并发写坏、Chroma 客户端可能初始化失败。
+- **方案与成效**：任务与调度运行记录落库（重启可恢复，kill 后不重复抓取——`notices.url UNIQUE` 去重）；`asyncio.gather` 子任务抛 `BaseException` 时手动 cancel 未完成任务并等待收尾，保证「整体中断」语义；Chroma `PersistentClient` 懒建加锁 + 失败自动重试 3 次（旧进程未完全退出导致的存储占用可自愈）；配置原子写（`.tmp → .bak → os.replace`）。
+
+---
+
+## 五、项目成果与应用场景
+
+> **评估体系**：以下关键指标均可复现、可回归——`evaluate_extraction.py`（24 条黄金标注集 → 字段级准确率）、`evaluate_retrieval.py`（20 题检索测试集 + RAG 污染两阶段验收）、`evaluate_todo.py` / `evaluate_hybrid.py` / `spot_check.py` 抽检。每次改动跑一遍，bad case 进集迭代，形成「发现坏例 → 修复 → 回归」闭环。
+
+### 5.1 关键成果指标
+
+| 指标        | 结果                                               | 验证方式                                               |
+| --------- | ------------------------------------------------ | -------------------------------------------------- |
+| 结构化提取准确率  | 黄金集 **24/24（100%）**                              | `evaluate_extraction.py` + 黄金标注集                   |
+| 截止时间解析准确率 | **100%**（黄金集）                                    | 自研中文时间解析器 + 黄金集回归                                  |
+| 批量提取并发    | **3.21s**（串行 5.88s，2 条并发）                        | `test_batch_concurrency.py`                        |
+| 增量抓取      | 6 源全库一轮 **≈ 3.5s**                               | 调度器实测                                              |
+| 检索质量      | 20 题检索测试集（含 RAG 污染专项 2 阶段验收）                     | `evaluate_retrieval.py` / `reproduce_pollution.py` |
+| 自动化测试     | 32 个测试脚本，覆盖爬虫 / 检索 / 任务 / 缓存 / 并发 / 崩溃恢复         | `test_*.py` 离线验收                                   |
+| 系统真实运行    | 1,065 条抓取日志、2,778 条 LLM 用量记录、1,793 条行为埋点（开发环境实测） | SQLite 数据审计                                        |
+
+### 5.2 应用场景
+
+- **个人学习助手**：自动聚合全校通知，比赛/报名/选课截止一目了然，配合待办清单与截止提醒，杜绝错过关键节点。
+- **班委/辅导员**：通过订阅规则过滤出班级相关通知，一键转发结构化摘要。
+- **学院/课题组信息监控**：关键词订阅 + 每日体检，可扩展为任意校园站点的信息雷达。
+- **通用 Agent 应用样板**：完整展示「抓取 → 提取 → 索引 → 问答 → 自动化」Agent 应用全链路工程化方法，可作为 AI 应用的架构参考。
+
+### 5.3 架构可扩展性
+
+- **多学校适配**：学校数据源配置化（`config/schools/<code>.yaml`），新增学校零代码。
+- **多用户鉴权**：`api/deps.py` 预留替换点，业务路由零改动可接入 JWT/OAuth。
+- **数据库平替**：storage 层已抽象，可无痛切换到 PostgreSQL。
+- **站外推送**：提醒/订阅的数据模型已就绪，可扩展邮件 / 微信 / 桌面通知。
+
+---
+
+## 六、快速开始
 
 ### 后端
 
 ```bash
-# 1. 安装后端依赖（引擎 + 开发依赖；运行镜像最小包见 requirements-backend.txt）
-pip install -r requirements.txt
+pip install -r requirements.txt        # 安装依赖
+cp .env.example .env                   # 配置 API key（如 DASHSCOPE_API_KEY）
+# 按需修改 config/app.yaml（模型/供应商/调度开关）与 config/schools/scuec.yaml（数据源）
 
-# 2. 配置环境变量
-cp .env.example .env
-# 编辑 .env 填入 API key（如 DASHSCOPE_API_KEY，供应商与 app.yaml 的 api_key_env 对应）
-
-# 3. 确认 / 修改配置（二选一）
-# 方式 A：直接编辑 YAML
-code config/app.yaml          # 模型 / 供应商 / 活跃学校 / 调度开关
-code config/schools/scuec.yaml # 数据源
-# 方式 B：启动后在「系统配置」页面可视化修改
-
-# 4. 启动后端（数据库首次连接自动建表，无需手动初始化）
-.venv\Scripts\python.exe -m uvicorn api.main:app --host 0.0.0.0 --port 8000
+uvicorn api.main:app --host 0.0.0.0 --port 8000   # 启动（DB 首次连接自动建表）
 ```
 
 ### 前端
@@ -92,148 +233,80 @@ code config/schools/scuec.yaml # 数据源
 ```bash
 cd frontend
 npm install
-
-# 开发模式（/api 代理到 127.0.0.1:8000）
-npm run dev            # http://localhost:5173
-
-# 或构建产物后由后端直接提供（SPA fallback 返回 index.html）
-npm run build
-# 访问 http://localhost:8000
+npm run dev        # 开发模式 http://localhost:5173（/api 代理到 8000）
+npm run build      # 或构建产物由后端直接托管 http://localhost:8000
 ```
 
-### 常用 CLI / 脚本（复用同一 services 层）
+### Docker
 
 ```bash
-# 抓取 / 提取 / 索引 / 问答 / 待办（M1–M4 入口，运维/调试用）
-python crawl.py                        # 抓取全部数据源
-python crawl.py --source 教务处-通知公告   # 只抓指定来源
-python extract.py                      # 批量提取 status=raw 的通知（带前置过滤）
-python extract.py --no-prefilter       # 关闭提取前置过滤（全部调 LLM）
-python extract.py --status failed      # 重试提取失败的通知
-python index.py                        # 把已提取通知切分并索引到 Chroma
-python qa.py "最近有哪些比赛？"         # 单次问答
-python todo.py --list                  # 待办清单（按截止升序）
-
-# 调度器（独立运行；API lifespan 已自动拉起，二选一）
-python scheduler.py                    # 前台运行
-python scheduler.py --once             # 只跑一轮完整闭环后退出（验证用）
-python scheduler.py --interval 1       # 覆盖抓取间隔为 1 分钟（快速验证）
-
-# 订阅 + 截止提醒全链路演示（W3，5 分钟，详见 docs/DEMO.md）
-python tools/demo_reminder.py --demo   # 发布→命中→提醒→待办→用户处理，自动校验幂等
-python tools/demo_reminder.py --clean  # 清理演示数据（只清 source="演示数据"，不碰真实数据）
-
-# 评估 / 检查
-python evaluate_extraction.py          # 用黄金集评估提取准确率
-python check_vector_consistency.py     # 向量一致性检查（RAG 污染防护）
-python check_db.py --summary           # 每日体检汇总
+docker build -t campus-notice:latest .
+docker run -p 8000:8000 campus-notice:latest
+curl http://localhost:8000/api/v1/health   # {"status":"ok","version":"1.0.0",...}
 ```
 
-> **两步式交互**：订阅新增/编辑、重匹配全部通知、提醒「忽略」均为「第一步预览 → 第二步确认执行」，
-> 长时写库操作经异步任务（202 → `GET /tasks/{id}` 轮询）执行，前端用 `useTaskPoll` 展示进度。
+### 常用 CLI（复用同一 services 层，运维/调试）
 
-## 调度器（scheduler.py）
-
-基于 APScheduler，由 API lifespan 拉起（`scheduler.enabled` 控制）或 CLI 独立运行。五个 job：
-
-| job          | 触发                                                           | 说明                                                                                          |
-| ------------ | -------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| crawl        | 每 `crawl.interval_minutes`（默认 60，运行中改配置自动热更新） | 抓取所有数据源（增量模式：已入库不重抓，整页已知立即早停；每 `deep_check_interval_cycles` 轮自动深检一轮内容变更） |
-| extract      | 紧跟抓取（晚 20s）                                             | 提取 `status=raw` 的通知（先按 `extract` 前置过滤规则预筛，跳过项不调 LLM），成功后增量索引  |
-| daily        | 每日 03:00                                                     | 过期清理（默认只报告不删除；`cleanup_enabled=true` 才删）+ 向量一致性检查（自动清理幽灵向量） |
-| reminder     | 每日 03:00                                                     | 截止提醒扫描：对截止前 3 天 / 1 天的通知生成提醒，幂等                                        |
-| config-watch | 每 60s                                                         | 监控配置变更，热更新抓取间隔等                                                                |
-
-- 失败不吞异常：异常写日志 + 落 `scheduler_log` 表（含连续失败计数），下一周期自动重跑。
-- 崩溃恢复：每次运行落库，重启时打印最近运行记录；已抓 URL 由 `notices.url UNIQUE` 去重，kill 后重启不会重复抓取。
-- `config/app.yaml` 的 `scheduler.enabled / enable_daily / enable_extract / enable_reminder / enable_health` 对应 CLI 的 `--no-*` 开关。
-- 验证自动抓取：把 `crawl.interval_minutes` 改成 1，重启，观察 `data/logs/scheduler.log` 每分钟一轮抓取。
-
-### 增量抓取与提取预筛（阶段 7）
-
-- **增量抓取（默认）**：每轮只抓「新 URL」的详情页；已入库通知不再重抓，列表页出现「整页全部已知」立即停止翻页。
-  首轮全量入库后，常规轮次单来源耗时从分钟级降到秒级（实测 6 源全库一轮 ≈ 3.5s）。
-- **深度变更检测**：内容更新检测改为两种方式——每 `crawl.deep_check_interval_cycles` 轮调度器自动深检一轮
-  （默认 24 轮 ≈ 每日一次），或前端「深度抓取」按钮手动触发；深检会重抓已入库详情页比对内容指纹，
-  有变更则重置为待提取。手动深检 = 抓取对话框打开「深度检查」开关后执行。
-- **来源级策略**：每个数据源可配置 `enabled`（停用后定时/全量抓取跳过）、`crawl_mode`（incremental / full / list_only）、
-  `max_age_days`（只抓最近 N 天）、`fetch_detail`（关闭则仅收录标题/链接）、`deep_check`（是否参与周期深检）。
-- **手动抓取**：通知列表「抓取」按钮打开对话框——数据源多选（不选 = 全部启用来源，停用来源始终跳过）、
-  模式 / 最大页数 / 深度检查开关；勾选只抓选中的来源（不再抓未选来源）。
-- **提取前置过滤**：批量提取前按 `config.extract` 规则预筛（时效 → 正文长度 → 关键词白名单 → 标题黑名单 →
-  时间线索 → 仅订阅命中），不通过的通知**不调 LLM**，落 `extract_skipped_reason` 并保持 raw 状态，
-  后续轮次不再重复判定；「重置」或正文变更会清除该标记恢复候选资格。时效按**发布时间**计算
-  （发布时间缺失时回退抓取时间）。
-- **提取前预览**：通知列表「批量提取」先弹预览（`POST /notices/extract-preview`，dry-run 预筛），
-  展示将提取/跳过明细及跳过原因，可取消勾选后只提取选中的通知（提交 `notice_ids`）。
-- **跳过 LLM 提取**：`config.extract.skip_llm=true` 时不调 LLM，通知仅入库 + 建向量索引（状态置「部分提取」），
-  最省 Token 模式；问答（RAG）不受影响（索引的一直是全文）。
-- **任务进度**：抓取/批量提取任务运行时按钮区显示实时进度条（后端任务系统原生支持 progress 上报）。
-
-### Windows 后台运行（独立 CLI 方式）
-
-- **推荐（任务计划程序）**：`schtasks /create /tn "notice_scheduler" /tr "F:\...\.venv\Scripts\python.exe F:\...\scheduler.py" /sc onlogon /f`，开机自动后台运行；`schtasks /end /tn "notice_scheduler"` 停止。
-- **无窗口隐藏启动**：PowerShell `Start-Process -FilePath ".venv\Scripts\python.exe" -ArgumentList "scheduler.py" -WindowStyle Hidden`，日志写在 `data/logs/scheduler.log`。
-- **当前会话后台**：`start /B python scheduler.py`（关控制台即停，适合临时测试）。
-- 停止：`taskkill /F /IM python.exe`（会停掉所有 python 进程，慎用）或通过任务计划程序停止。
-
-## 配置说明
-
-配置文件位于 `config/`：
-
-- `config/app.yaml`：应用主配置，包含 `active_school`、`models`（按任务配置模型）、`providers`（供应商注册表）、`crawl`（全局抓取参数）、`extract`（提取前置过滤参数）、`scheduler`（调度开关）。
-- `config/schools/<code>.yaml`：学校数据源配置，每个学校一个文件（含来源级抓取策略）。
-- `.env`：存放 API key 等敏感信息，通过 `api_key_env` 被 YAML 引用。
-
-模型配置示例（当前默认）。`models.<task>.models` 为有序候选列表：先尝试在前，同供应商内失败自动切换下一个（缓解免费模型配额不足）：
-
-```yaml
-models:
-  extraction:
-    provider: bailian
-    models: [qwen3.7-flash, qwen3.7-max]
-  qa:
-    provider: bailian
-    models: [qwen3.7-flash, qwen3.7-max]
-  todo:
-    provider: bailian
-    models: [qwen3.7-flash, qwen3.7-max]
-  embedding:
-    provider: local
-    models: [models/bge-small-zh-v1.5]
+```bash
+python crawl.py --source 教务处-通知公告   # 抓取指定来源
+python extract.py --status failed         # 重试提取失败通知
+python index.py --rebuild                 # 重建向量索引（自动清残留）
+python qa.py "最近有哪些比赛？"            # 单次问答
+python scheduler.py --once                # 调度器单轮闭环（验证用）
+python check_vector_consistency.py        # 向量一致性检查（RAG 污染防护）
+python evaluate_extraction.py             # 黄金集提取准确率评估
 ```
-
-新增供应商只需在 `providers` 下添加条目（含可选模型列表 `models`，作为「系统配置」页模型下拉的候选数据源）、实例名 `display_name` 与类型 `type`（留空按 base_url 自动推断）并配置对应的环境变量名即可；API key 也可在「系统配置 → 供应商」页面直接输入，后端会自动写入 `.env` 并同步环境变量（免重启生效）。切换模型在「系统配置」页面或 YAML 中修改后保存生效；`app.yaml` 写入权唯一归后端 API 进程（调度器/CLI 只读）。旧版单 `model:` 字段会自动迁移为 `models: [xxx]`；`name` 为供应商唯一标识（任务模型引用它），不可在页面改名（如需改名编辑 YAML）。
-
-## 项目状态
-
-- [x] 概念验证（RAG 与网页对话）— 已在 `Llama 3.1 本地 RAG` 项目完成
-- [x] MVP 开发（M1–M6：抓取/提取/待办/问答/配置）
-- [x] 短线开发（W1–W4：调度运维 / 检索质量 / 订阅提醒 / 埋点体检）
-- [x] 前后端分离（Phase 0–8：FastAPI + Vue3 + 异步任务 + SSE + Docker）
-- [ ] 多学校适配
-- [ ] 站外主动推送（邮件 / 微信 / 桌面通知）
-- [ ] 多用户 + 鉴权（`api/deps.py` 已预留替换点）
-
-## 关联项目
-
-- [Local Lllama-3.1 with RAG](https://github.com/Shubhamsaboo/awesome-llm-apps.git) — 本项目的前身，验证了 RAG 与网页对话的可行性
 
 ---
 
-## Docker（Multi-stage）
+## 七、项目结构
 
-`Dockerfile` 先在 Node 镜像构建 `frontend/`，再在 Python 镜像安装 `requirements-backend.txt` 并拷贝静态产物。
-
-```bash
-# Build
-docker build -t campus-notice:phase8 .
-# Run
-docker run -p 8000:8000 campus-notice:phase8
-# 健康检查 / 访问
-curl http://localhost:8000/api/v1/health   # {"status":"ok","version":"1.0.0",...}
-# 浏览器打开 http://localhost:8000（SPA 静态挂载）
+```
+├── frontend/            # Vue 3 + TS + Naive UI（8 页面）
+│   ├── src/api/         #   HTTP 客户端 + openapi-typescript 生成类型
+│   ├── src/views/       #   8 个页面视图
+│   ├── src/stores/      #   Pinia 状态（含全局任务轮询 store）
+│   └── openapi.json     #   前后端唯一契约
+├── api/                 # FastAPI（/api/v1，11 路由模块）
+│   ├── routes/          #   薄转发层：校验 + 调服务 + 序列化
+│   ├── tasks/           #   TaskManager + WORKERS 注册表 + 任务锁
+│   └── main.py          #   应用工厂：CORS + 路由 + lifespan + SPA 挂载
+├── services/            # 业务编排层（11 个服务，统一 dict 契约）
+├── core/                # LLM Agent（提取/待办/问答）+ 中文时间解析
+├── storage/             # SQLite（13 表）+ Chroma + BM25/RRF 混合检索
+├── crawler/             # newspaper4k 抓取 + 内容指纹
+├── config/              # Pydantic + YAML（app.yaml / schools/ / source_catalog.yaml）
+├── utils/               # LLM 统一调用点（失败切换 + token 计量）+ embedding
+├── scheduler.py         # APScheduler 常驻服务（5 job）
+├── crawl.py / extract.py / index.py / qa.py / todo.py   # CLI 入口
+├── evaluate_*.py / check_*.py / reproduce_*.py          # 评估与检查工具
+└── test_*.py            # 32 个离线验收测试
 ```
 
-> 若需在镜像内启用完整引擎功能（Chroma、LangChain、重 ML 依赖），把对应包加入
-> `requirements-backend.txt` 后重新构建；`requirements-backend.txt` 已含 extractor/crawler 依赖。
+## 八、文档导航
+
+| 文档                                             | 内容                  |
+| ---------------------------------------------- | ------------------- |
+| [docs/PRD.md](docs/PRD.md)                     | 产品需求、用户故事、功能清单与交付状态 |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)   | 技术架构、模块设计、数据流、选型理由  |
+| [docs/DATA-MODEL.md](docs/DATA-MODEL.md)       | 数据表结构、Pydantic 模型   |
+| [docs/ROADMAP.md](docs/ROADMAP.md)             | 开发路线图与里程碑           |
+| [docs/RAG-POLLUTION.md](docs/RAG-POLLUTION.md) | RAG 污染防护专项          |
+| [docs/DEMO.md](docs/DEMO.md)                   | 订阅 + 提醒全链路演示        |
+
+## 九、开发路线图
+
+- [x] **MVP**（M1–M6）：抓取 / 提取 / 待办 / RAG 问答 / 配置管理
+- [x] **短线开发**（W1–W4）：调度运维 / 检索质量 / 订阅提醒 / 埋点体检
+- [x] **前后端分离重构**（Phase 0–8）：FastAPI + Vue3 + 异步任务 + SSE + Docker
+- [x] **工程优化**（阶段 7）：增量抓取 / 提取预筛 / 模型失败切换 / Token 计量 / 问答缓存 / 数据源中心
+- [ ] **规划中**：多学校适配、站外主动推送（邮件/微信/桌面）、多用户鉴权
+
+## 十、关联项目
+
+- [Local Llama-3.1 with RAG](https://github.com/Shubhamsaboo/awesome-llm-apps.git) — 本项目前身，验证了本地 LLM + RAG 与网页对话的可行性（本项目在此基础上演进为完整的工程化应用）。
+
+---
+
+*本项目为独立完成的课程 Capstone 与个人全栈 AI 项目，所有模块（前端 / 后端 / 引擎 / 测试 / 文档）均为个人原创实现。*
+
