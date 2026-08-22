@@ -293,6 +293,8 @@ python evaluate_extraction.py             # 黄金集提取准确率评估
 | [docs/ROADMAP.md](docs/ROADMAP.md)             | 开发路线图与里程碑           |
 | [docs/RAG-POLLUTION.md](docs/RAG-POLLUTION.md) | RAG 污染防护专项          |
 | [docs/DEMO.md](docs/DEMO.md)                   | 订阅 + 提醒全链路演示        |
+| [docs/PACKAGING.md](docs/PACKAGING.md)         | 打包发布方案（PyInstaller + Inno Setup）实践记录 |
+| [docs/USAGE.md](docs/USAGE.md)                 | **打包版使用说明**：需要什么模型、怎么获取/配置 API Key |
 
 ## 九、开发路线图
 

@@ -1173,6 +1173,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/update/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Update Check
+         * @description 检查 GitHub Releases 是否有新版本（静默失败，不影响主功能）。
+         */
+        get: operations["get_update_check_api_v1_update_check_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/health": {
         parameters: {
             query?: never;
@@ -2817,6 +2837,67 @@ export interface components {
             total?: {
                 [key: string]: unknown;
             };
+        };
+        /**
+         * UpdateAsset
+         * @description Release 附件（安装包）信息。
+         */
+        UpdateAsset: {
+            /** Name */
+            name: string;
+            /**
+             * Size
+             * @default 0
+             */
+            size: number;
+            /**
+             * Browser Download Url
+             * @default
+             */
+            browser_download_url: string;
+        };
+        /**
+         * UpdateCheckResult
+         * @description 检查更新响应。
+         *
+         *     静默失败契约：任何异常都以 200 返回（update_available=false + error 说明），
+         *     不影响主功能使用。
+         */
+        UpdateCheckResult: {
+            /**
+             * Update Available
+             * @default false
+             */
+            update_available: boolean;
+            /**
+             * Current Version
+             * @default 0.0.0
+             */
+            current_version: string;
+            /**
+             * Latest Version
+             * @default
+             */
+            latest_version: string;
+            /**
+             * Notes
+             * @default
+             */
+            notes: string;
+            /**
+             * Html Url
+             * @default
+             */
+            html_url: string;
+            /** Assets */
+            assets?: components["schemas"]["UpdateAsset"][];
+            /**
+             * Checked At
+             * @default
+             */
+            checked_at: string;
+            /** Error */
+            error?: string | null;
         };
         /** ValidationError */
         ValidationError: {
@@ -5055,6 +5136,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SourceCenterAdoptResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_update_check_api_v1_update_check_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UpdateCheckResult"];
                 };
             };
             /** @description Validation Error */

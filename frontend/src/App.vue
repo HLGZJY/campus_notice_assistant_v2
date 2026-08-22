@@ -19,6 +19,7 @@ import {
 } from '@vicons/ionicons5'
 import { endpoints } from './api/endpoints'
 import { get } from './api/http'
+import type { UpdateCheckResult } from './api/schema'
 import router from './router'
 import { useTaskStore } from './stores/useTaskStore'
 import { useThemeStore, type ThemeMode } from './stores/useThemeStore'
@@ -30,6 +31,26 @@ const theme = useThemeStore()
 const taskStore = useTaskStore()
 const pendingCount = ref(0)
 const collapsed = ref(false)
+
+// ---- 启动静默检查更新（打包发布方案：失败不打扰，有新版才弹窗） ----
+const updateInfo = ref<UpdateCheckResult | null>(null)
+const showUpdateModal = ref(false)
+
+async function silentCheckUpdate() {
+  try {
+    const result = await get<UpdateCheckResult>(endpoints.update.check)
+    if (result.update_available) {
+      updateInfo.value = result
+      showUpdateModal.value = true
+    }
+  } catch {
+    // 静默失败：后端不可达 / 未配置 repo 时完全不打扰用户
+  }
+}
+
+function openDownload(url: string) {
+  window.open(url, '_blank', 'noopener')
+}
 
 function renderIcon(icon: unknown) {
   return () => h(NIcon, { size: 18 }, { default: () => h(icon as never) })
@@ -105,6 +126,8 @@ onMounted(() => {
   timer = setInterval(fetchPendingCount, 30000)
   taskStore.fetchList()
   taskStore.startGlobalPolling()
+  // 启动静默检查更新：延迟 3s，避开首屏加载高峰
+  setTimeout(silentCheckUpdate, 3000)
 })
 
 onUnmounted(() => {
@@ -224,10 +247,51 @@ onUnmounted(() => {
         </n-notification-provider>
       </n-dialog-provider>
     </n-message-provider>
+
+    <n-modal
+      v-model:show="showUpdateModal"
+      preset="card"
+      title="发现新版本"
+      style="max-width: 520px"
+      :bordered="false"
+    >
+      <n-space vertical size="medium" v-if="updateInfo">
+        <n-descriptions :column="1" size="small" bordered>
+          <n-descriptions-item label="最新版本">{{ updateInfo.latest_version }}</n-descriptions-item>
+          <n-descriptions-item label="当前版本">v{{ updateInfo.current_version }}</n-descriptions-item>
+        </n-descriptions>
+        <div v-if="updateInfo.notes" class="update-notes">{{ updateInfo.notes }}</div>
+        <n-space vertical v-if="updateInfo.assets?.length">
+          <n-button
+            v-for="a in updateInfo.assets ?? []"
+            :key="a.name"
+            size="small"
+            secondary
+            type="primary"
+            @click="openDownload(a.browser_download_url)"
+          >
+            下载 {{ a.name }}
+          </n-button>
+        </n-space>
+        <n-text depth="3" style="font-size: 12px">
+          下载后运行安装包覆盖安装即可，数据不会丢失。也可稍后在「系统配置 → 检查更新」手动查看。
+        </n-text>
+      </n-space>
+    </n-modal>
   </n-config-provider>
 </template>
 
 <style scoped>
+.update-notes {
+  white-space: pre-wrap;
+  font-size: 13px;
+  line-height: 1.6;
+  max-height: 220px;
+  overflow-y: auto;
+  background: var(--bg-2, rgba(127, 127, 127, 0.08));
+  border-radius: 8px;
+  padding: 12px;
+}
 .sider-inner {
   display: flex;
   flex-direction: column;

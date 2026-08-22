@@ -101,6 +101,7 @@ def create_app() -> FastAPI:
             subscriptions,
             tasks,
             todos,
+            update,
             usage,
         )
         # 业务路由（统一 /api/v1 前缀）
@@ -117,6 +118,7 @@ def create_app() -> FastAPI:
         app.include_router(events.router, prefix="/api/v1")
         app.include_router(usage.router, prefix="/api/v1")
         app.include_router(source_center.router, prefix="/api/v1")
+        app.include_router(update.router, prefix="/api/v1")
     except Exception as e:
         logger.warning("Skipping registering routers due to import error: %s", e)
 
@@ -135,9 +137,11 @@ def create_app() -> FastAPI:
             logger.warning("Health check degraded: %s", e)
             db_status = "unavailable"
             notices = 0
+        from utils.app_paths import get_version
+
         return {
             "status": "ok",
-            "version": "1.0.0",
+            "version": get_version(),
             "db": db_status,
             "notices": notices,
         }
@@ -146,9 +150,9 @@ def create_app() -> FastAPI:
     # 如果 frontend/dist 存在，则挂载为 /static 并添加 SPA fallback
     from fastapi.staticfiles import StaticFiles
     from fastapi.responses import FileResponse
-    import pathlib
+    from utils.app_paths import get_frontend_dist
 
-    dist_path = pathlib.Path(__file__).resolve().parents[1] / "frontend" / "dist"
+    dist_path = get_frontend_dist()
     if dist_path.exists():
         app.mount("/static", StaticFiles(directory=str(dist_path)), name="static")
 

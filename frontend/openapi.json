@@ -4146,6 +4146,56 @@
         }
       }
     },
+    "/api/v1/update/check": {
+      "get": {
+        "tags": [
+          "update"
+        ],
+        "summary": "Get Update Check",
+        "description": "检查 GitHub Releases 是否有新版本（静默失败，不影响主功能）。",
+        "operationId": "get_update_check_api_v1_update_check_get",
+        "parameters": [
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateCheckResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/health": {
       "get": {
         "tags": [
@@ -7383,6 +7433,85 @@
         "type": "object",
         "title": "TokenUsageSummary",
         "description": "token 用量汇总：近 N 天分组明细 + 总计。"
+      },
+      "UpdateAsset": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "size": {
+            "type": "integer",
+            "title": "Size",
+            "default": 0
+          },
+          "browser_download_url": {
+            "type": "string",
+            "title": "Browser Download Url",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "UpdateAsset",
+        "description": "Release 附件（安装包）信息。"
+      },
+      "UpdateCheckResult": {
+        "properties": {
+          "update_available": {
+            "type": "boolean",
+            "title": "Update Available",
+            "default": false
+          },
+          "current_version": {
+            "type": "string",
+            "title": "Current Version",
+            "default": "0.0.0"
+          },
+          "latest_version": {
+            "type": "string",
+            "title": "Latest Version",
+            "default": ""
+          },
+          "notes": {
+            "type": "string",
+            "title": "Notes",
+            "default": ""
+          },
+          "html_url": {
+            "type": "string",
+            "title": "Html Url",
+            "default": ""
+          },
+          "assets": {
+            "items": {
+              "$ref": "#/components/schemas/UpdateAsset"
+            },
+            "type": "array",
+            "title": "Assets"
+          },
+          "checked_at": {
+            "type": "string",
+            "title": "Checked At",
+            "default": ""
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "title": "UpdateCheckResult",
+        "description": "检查更新响应。\n\n静默失败契约：任何异常都以 200 返回（update_available=false + error 说明），\n不影响主功能使用。"
       },
       "ValidationError": {
         "properties": {

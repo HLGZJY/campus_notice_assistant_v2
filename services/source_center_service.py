@@ -23,10 +23,11 @@ import yaml
 from config.schema import SchoolConfig, SourceConfig
 from config.store import ConfigStore
 from crawler.base import ListPageParser
+from utils.app_paths import get_config_dir
 
 logger = logging.getLogger(__name__)
 
-CATALOG_PATH = Path(__file__).resolve().parent.parent / "config" / "source_catalog.yaml"
+CATALOG_PATH = get_config_dir() / "source_catalog.yaml"
 
 # 预览抓取：UA 与 config_service.test_source_url 保持一致
 _PREVIEW_HEADERS = {

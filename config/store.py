@@ -53,7 +53,10 @@ class ConfigStore:
             with cls._lock:
                 if cls._instance is None:
                     if config_dir is None:
-                        config_dir = Path(__file__).parent
+                        # 冻结模式下配置必须落在 exe 同级的可写目录（utils/app_paths）
+                        from utils.app_paths import get_config_dir
+
+                        config_dir = get_config_dir()
                     cls._instance = cls(config_dir)
         return cls._instance
 

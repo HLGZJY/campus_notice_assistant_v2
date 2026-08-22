@@ -32,10 +32,11 @@ from storage.db import (
     get_scheduler_failed_runs,
     get_token_usage_stats,
 )
+from utils.app_paths import get_data_dir
 
 logger = logging.getLogger(__name__)
 
-HEALTH_DIR = Path(__file__).parent.parent / "data" / "health"
+HEALTH_DIR = get_data_dir() / "health"
 DAILY_DIR = HEALTH_DIR / "daily"
 SUMMARY_DIR = HEALTH_DIR / "summary"
 SPOTCHECK_DIR = HEALTH_DIR / "spotcheck"

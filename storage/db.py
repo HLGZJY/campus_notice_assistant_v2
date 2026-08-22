@@ -8,9 +8,11 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
+from utils.app_paths import get_data_dir
+
 from .models import NoticeRecord
 
-DB_PATH = Path(__file__).parent.parent / "data" / "notices.db"
+DB_PATH = get_data_dir() / "notices.db"
 
 # update_subscription 的"未提供"哨兵：区分"不修改"与"清空为 NULL"
 _UNSET = object()

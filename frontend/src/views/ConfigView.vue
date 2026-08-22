@@ -20,6 +20,8 @@ import {
   SettingsOutline,
 } from '@vicons/ionicons5'
 import { useConfigStore } from '../stores/useConfigStore'
+import { endpoints } from '../api/endpoints'
+import { get as httpGet } from '../api/http'
 import StatCard from '../components/StatCard.vue'
 import type {
   ConfigMutationResult,
@@ -31,6 +33,7 @@ import type {
   ReloadResult,
   TokenUsageRow,
   TokenUsageSummary,
+  UpdateCheckResult,
 } from '../api/schema'
 
 const message = useMessage()
@@ -91,6 +94,32 @@ watch(usageDays, () => loadUsage())
 watch(activeTab, (tab) => {
   if (tab === 'usage') loadUsage()
 })
+
+// ---- 检查更新 Tab（GET /update/check，打包发布方案 Step 5） ----
+const updateChecking = ref(false)
+const updateResult = ref<UpdateCheckResult | null>(null)
+
+async function checkUpdate() {
+  updateChecking.value = true
+  try {
+    updateResult.value = await httpGet<UpdateCheckResult>(endpoints.update.check)
+  } catch {
+    message.error('检查更新请求失败（后端不可达）')
+  } finally {
+    updateChecking.value = false
+  }
+}
+
+function formatSize(bytes: number): string {
+  if (!bytes) return '—'
+  if (bytes >= 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`
+  if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+  return `${Math.round(bytes / 1024)} KB`
+}
+
+function openExternal(url: string) {
+  window.open(url, '_blank', 'noopener')
+}
 
 function isInteractiveTarget(e: MouseEvent): boolean {
   const el = e.target as HTMLElement | null
@@ -903,7 +932,7 @@ function goSources() {
                   磁盘信息
                 </div>
               </template>
-              <n-descriptions :column="1" size="small">
+                <n-descriptions :column="1" size="small">
                 <n-descriptions-item label="路径">{{ cfg.disk.path }}</n-descriptions-item>
                 <n-descriptions-item label="存在">{{ cfg.disk.exists ? '是' : '否' }}</n-descriptions-item>
                 <n-descriptions-item label="最后修改">
@@ -913,12 +942,80 @@ function goSources() {
             </n-card>
           </n-space>
         </n-tab-pane>
+
+        <n-tab-pane name="update" tab="检查更新">
+          <n-space vertical size="large">
+            <n-space>
+              <n-button type="primary" :loading="updateChecking" @click="checkUpdate">
+                <template #icon><n-icon><CloudDownloadOutline /></n-icon></template>
+                检查更新
+              </n-button>
+              <n-tag v-if="!updateChecking && updateResult?.current_version" :bordered="false">
+                当前版本 v{{ updateResult.current_version }}
+              </n-tag>
+            </n-space>
+
+            <n-card size="small" v-if="updateResult">
+              <template #header>
+                <div class="section-title">
+                  <n-icon size="16" color="var(--text-3)"><CloudDownloadOutline /></n-icon>
+                  {{ updateResult.update_available ? `发现新版本 ${updateResult.latest_version}` : '已是最新版本' }}
+                </div>
+              </template>
+              <n-space vertical size="medium">
+                <n-alert v-if="updateResult.error" type="warning" :bordered="false">
+                  {{ updateResult.error }}
+                </n-alert>
+                <template v-if="updateResult.update_available">
+                  <n-descriptions :column="1" size="small">
+                    <n-descriptions-item label="最新版本">{{ updateResult.latest_version }}</n-descriptions-item>
+                    <n-descriptions-item label="当前版本">v{{ updateResult.current_version }}</n-descriptions-item>
+                  </n-descriptions>
+                  <n-card size="small" embedded v-if="updateResult.notes" title="更新日志">
+                    <div class="changelog">{{ updateResult.notes }}</div>
+                  </n-card>
+                  <n-space vertical v-if="updateResult.assets?.length">
+                    <div v-for="a in updateResult.assets ?? []" :key="a.name" class="asset-row">
+                      <n-button size="small" @click="openExternal(a.browser_download_url)">
+                        下载 {{ a.name }}
+                      </n-button>
+                      <span class="asset-size">{{ formatSize(a.size) }}</span>
+                    </div>
+                  </n-space>
+                  <n-button v-if="updateResult.html_url" text type="primary" @click="openExternal(updateResult.html_url)">
+                    查看发布页 →
+                  </n-button>
+                  <n-text depth="3" style="font-size: 12px">
+                    下载完成后直接运行新版本安装包覆盖安装，数据（通知/待办/配置）不会丢失。
+                  </n-text>
+                </template>
+                <n-text v-else-if="!updateResult.error" depth="3">检查时间：{{ updateResult.checked_at }}</n-text>
+              </n-space>
+            </n-card>
+          </n-space>
+        </n-tab-pane>
       </n-tabs>
     </n-spin>
   </n-card>
 </template>
 
 <style scoped>
+.changelog {
+  white-space: pre-wrap;
+  font-size: 13px;
+  line-height: 1.6;
+  max-height: 260px;
+  overflow-y: auto;
+}
+.asset-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.asset-size {
+  color: var(--text-3);
+  font-size: 12px;
+}
 .usage-stats {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));

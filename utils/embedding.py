@@ -182,13 +182,13 @@ def create_embeddings(provider_name: Optional[str] = None, model_name: Optional[
         if local_model and "/" not in local_model and "\\" not in local_model:
             local_model = f"sentence-transformers/{local_model}"
         logger.info(f"使用本地 embedding 模型: {local_model}")
-        # 相对路径（如 models/bge-small-zh-v1.5）按项目根目录解析为绝对路径，
+        # 相对路径（如 models/bge-small-zh-v1.5）按应用根目录解析为绝对路径，
         # 避免依赖进程 cwd（scheduler/api/CLI 各自启动目录不同）
         resolved_model = local_model
         if ("/" in local_model or "\\" in local_model) and not os.path.isabs(local_model):
-            resolved_model = str(
-                Path(__file__).resolve().parent.parent / local_model
-            )
+            from utils.app_paths import get_app_root
+
+            resolved_model = str(get_app_root() / local_model)
             logger.info(f"本地模型解析为绝对路径: {resolved_model}")
         return _CountingEmbeddings(
             HuggingFaceEmbeddings(

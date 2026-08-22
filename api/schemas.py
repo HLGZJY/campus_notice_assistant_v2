@@ -781,3 +781,28 @@ class SourceCenterPreviewByUrlResult(BaseModel):
     items: list[SourceCenterPreviewItem] = Field(default_factory=list)
     error: Optional[str] = None
     latency_ms: int = 0
+
+
+class UpdateAsset(BaseModel):
+    """Release 附件（安装包）信息。"""
+
+    name: str
+    size: int = 0
+    browser_download_url: str = ""
+
+
+class UpdateCheckResult(BaseModel):
+    """检查更新响应。
+
+    静默失败契约：任何异常都以 200 返回（update_available=false + error 说明），
+    不影响主功能使用。
+    """
+
+    update_available: bool = False
+    current_version: str = "0.0.0"
+    latest_version: str = ""
+    notes: str = ""  # changelog（release body）
+    html_url: str = ""  # release 页面链接
+    assets: list[UpdateAsset] = Field(default_factory=list)
+    checked_at: str = ""
+    error: Optional[str] = None

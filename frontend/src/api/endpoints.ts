@@ -78,4 +78,7 @@ export const endpoints = {
     adopt: (sourceId: string) => `${API_BASE}/source-center/${sourceId}/adopt`,
     remove: (sourceId: string) => `${API_BASE}/source-center/${sourceId}/remove`,
   },
+  update: {
+    check: `${API_BASE}/update/check`,
+  },
 }

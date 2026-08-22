@@ -305,6 +305,31 @@ class SchedulerConfig(BaseModel):
     log_file: str = "data/logs/scheduler.log"
 
 
+class UpdateConfig(BaseModel):
+    """检查更新配置（打包发布方案：GitHub Releases 分发）。
+
+    - repo: "owner/name" 形式的 GitHub 仓库；空 = 禁用检查更新
+    - download_prefix: 下载 URL 前缀镜像切换位（国内加速），空 = 直连 GitHub
+      例：https://ghproxy.example.com/https://github.com
+    """
+
+    repo: str = ""
+    download_prefix: str = ""
+
+    @field_validator("repo")
+    @classmethod
+    def _repo_format(cls, v: str) -> str:
+        v = (v or "").strip()
+        if v and ("/" not in v or v.startswith("/") or v.endswith("/")):
+            raise ValueError("update.repo 必须是 owner/name 形式")
+        return v
+
+    @field_validator("download_prefix")
+    @classmethod
+    def _prefix_strip(cls, v: str) -> str:
+        return (v or "").strip().rstrip("/")
+
+
 class AppConfig(BaseModel):
     """应用主配置。"""
 
@@ -315,6 +340,7 @@ class AppConfig(BaseModel):
     extract: ExtractConfig = Field(default_factory=ExtractConfig)
     qa: QAConfig = Field(default_factory=QAConfig)
     scheduler: SchedulerConfig = Field(default_factory=SchedulerConfig)
+    update: UpdateConfig = Field(default_factory=UpdateConfig)
 
     @field_validator("active_school")
     @classmethod

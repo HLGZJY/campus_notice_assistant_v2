@@ -22,11 +22,12 @@ from langchain_chroma import Chroma
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
+from utils.app_paths import get_data_dir
 from utils.embedding import get_embeddings
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_PERSIST_DIR = Path(__file__).parent.parent / "data" / "chroma"
+DEFAULT_PERSIST_DIR = get_data_dir() / "chroma"
 COLLECTION_NAME = "notices"
 
 # 全局共享的 PersistentClient（按持久化目录缓存）：HNSW 索引进程内只加载一次，

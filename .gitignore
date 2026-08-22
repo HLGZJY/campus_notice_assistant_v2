@@ -54,3 +54,16 @@ _bwc_tztg.html
 _test_adopt.py
 _verify_history_log.py
 data/scan_source_catalog_*
+
+# ---------- 打包产物（packaging/build.py 生成，不入库） ----------
+packaging/dist-*/
+packaging/build-*/
+packaging/out/
+packaging/version.ini
+packaging/__pycache__/
+# 专用构建 venv（云端版打包）
+packaging/venv-build/
+# 构建排障残留（沙箱 DLL 删除拦截导致 rm 失败，整体改名隔离，勿入库）
+packaging/.dist-cloud-trash/
+# 构建过程日志
+packaging/*.log

@@ -64,10 +64,11 @@ from storage.db import (
     get_recent_scheduler_log,
     log_scheduler_run,
 )
+from utils.app_paths import get_app_root
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_LOG_FILE = Path(__file__).parent / "data" / "logs" / "scheduler.log"
+DEFAULT_LOG_FILE = get_app_root() / "data" / "logs" / "scheduler.log"
 
 # 提取 job 晚于抓取 job 的秒数（同一周期内"抓取完成后触发提取"）
 EXTRACT_DELAY_SECONDS = 20
@@ -79,9 +80,21 @@ CONFIG_WATCH_SECONDS = 60
 DAILY_CRON = {"hour": 3, "minute": 0}
 
 
+def _resolve_log_path(log_file: Optional[str]) -> Path:
+    """日志路径解析：相对路径按应用根目录（而非 cwd）定位。
+
+    打包后用户可能从任意工作目录启动（快捷方式 cwd 不定），相对路径
+    data/logs/scheduler.log 必须锚定到 exe 同级目录。
+    """
+    path = Path(log_file) if log_file else DEFAULT_LOG_FILE
+    if not path.is_absolute():
+        path = get_app_root() / path
+    return path
+
+
 def setup_logging(log_file: Optional[str]) -> Path:
     """控制台 + 滚动日志文件双输出。"""
-    log_path = Path(log_file) if log_file else DEFAULT_LOG_FILE
+    log_path = _resolve_log_path(log_file)
     log_path.parent.mkdir(parents=True, exist_ok=True)
     handlers = [
         logging.StreamHandler(),
@@ -102,7 +115,7 @@ def setup_api_logging(log_file: Optional[str]) -> Path:
     阶段 6：调度器并入后端进程后，不能再像 CLI 那样 basicConfig 接管 root，
     否则 uvicorn / FastAPI 日志会混入 scheduler.log 且根 logger 行为被改变。
     """
-    log_path = Path(log_file) if log_file else DEFAULT_LOG_FILE
+    log_path = _resolve_log_path(log_file)
     log_path.parent.mkdir(parents=True, exist_ok=True)
     file_handler = RotatingFileHandler(
         str(log_path), maxBytes=5_000_000, backupCount=3, encoding="utf-8"
