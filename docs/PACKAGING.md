@@ -54,12 +54,24 @@
 改版本号 → 跑构建脚本 → gh release create v0.x.0 --notes "更新日志" → 完成
 ```
 
-`gh release create` 示例：
+**⚠️ GitHub Release 附件名必须用 ASCII**：Inno 产出的安装包名含中文
+（如 `校园通知助手-云端版-setup.exe`），直接 `gh release create` 上传会被编码破坏成
+`-.-setup.exe`。发布时先复制成 ASCII 名再传：
+
+```bash
+cp "packaging/out/校园通知助手-云端版-setup.exe" \
+   "packaging/out/campus-notice-assistant-cloud-setup-v0.1.0.exe"
+gh release create v0.1.0 \
+  packaging/out/campus-notice-assistant-cloud-setup-v0.1.0.exe \
+  --title "v0.1.0 云端版" --notes "更新日志写这里"
+```
+
+`gh release create` 示例（双版本）：
 
 ```
 gh release create v0.2.0 ^
-  ./out/校园通知助手-云端版-setup.exe ^
-  ./out/校园通知助手-完整版-setup.exe ^
+  ./out/campus-notice-assistant-cloud-setup-v0.2.0.exe ^
+  ./out/campus-notice-assistant-full-setup-v0.2.0.exe ^
   --title "v0.2.0 新功能" ^
   --notes "更新日志写这里"
 ```
