@@ -20,6 +20,10 @@
 
 系统自动抓取各数据源通知，用 LLM 提取**类型、截止时间、地点、报名方式、面向对象**等结构化字段，构建向量知识库，提供自然语言问答、关键词订阅与截止提醒，把「读通知」变成「按清单做事」。
 
+下图为系统运行时的实际界面（首页 Dashboard + 左侧任务列表抽屉，实时展示抓取/批量提取/重匹配的进度与状态）：
+
+![校园通知智能助手运行效果：首页 Dashboard + 任务列表抽屉](docs/assets/readme/ui-home-with-task-drawer.png)
+
 ### 1.3 核心链路
 
 ```
@@ -116,6 +120,34 @@
 | **Token 用量计量** | 所有 LLM 调用成功/失败统一记账，按任务×供应商×模型聚合              | LLM **统一调用点**（`run_agent` / `run_agent_stream`），三条链路共用一处埋点                                                  |
 | **数据源中心**      | 公共数据源目录（**112 个**高校来源），组织树三级筛选、链接预览、一键选用     | 目录与个人数据源按 `list_url` 判重联动，双向同步                                                                              |
 | **埋点与体检**      | 页面浏览 / 行为埋点 + 每日健康检查 + 向量一致性自动修复             | 埋点写库失败不阻塞主流程；RAG 污染三层防线兜底                                                                                   |
+
+### 3.1 功能界面预览
+
+下面是各核心模块的实际运行界面：
+
+| 通知浏览：列表 + 状态统计 | 异步任务：左侧抽屉实时进度 |
+| :---: | :---: |
+| ![通知浏览：列表 + 状态统计](docs/assets/readme/ui-home.png) | ![异步任务：左侧抽屉实时进度](docs/assets/readme/ui-task-drawer.png) |
+
+| 智能问答：RAG 流式 + 引用来源 | 待办中心：按截止升序 + 逾期高亮 |
+| :---: | :---: |
+| ![智能问答：RAG 流式 + 引用来源](docs/assets/readme/ui-qa-stream.png) | ![待办中心：按截止升序 + 逾期高亮](docs/assets/readme/ui-todos.png) |
+
+| 订阅管理：命中明细 + 全库回填 | 数据源中心：112 高校三级组织树 |
+| :---: | :---: |
+| ![订阅管理：命中明细 + 全库回填](docs/assets/readme/ui-subs.png) | ![数据源中心：112 高校三级组织树](docs/assets/readme/ui-datasource-catalog.png) |
+
+| 数据源中心：个人数据源 + 抓取策略 | 系统配置：模型按任务分配 + 失败切换 |
+| :---: | :---: |
+| ![数据源中心：个人数据源 + 抓取策略](docs/assets/readme/ui-datasource-mine.png) | ![系统配置：模型按任务分配 + 失败切换](docs/assets/readme/ui-config-models.png) |
+
+| 系统配置：供应商管理 | 系统配置：抓取与提取参数 |
+| :---: | :---: |
+| ![系统配置：供应商管理](docs/assets/readme/ui-config-providers.png) | ![系统配置：抓取与提取参数](docs/assets/readme/ui-config-crawl.png) |
+
+| Token 用量计量：按任务×供应商×模型聚合（近 30 天 2,793 次调用） |
+| :---: |
+| ![Token 用量计量](docs/assets/readme/ui-config-token.png) |
 
 ---
 
@@ -256,6 +288,16 @@ python scheduler.py --once                # 调度器单轮闭环（验证用）
 python check_vector_consistency.py        # 向量一致性检查（RAG 污染防护）
 python evaluate_extraction.py             # 黄金集提取准确率评估
 ```
+
+### 6.1 运行效果
+
+后端启动日志（Uvicorn + APScheduler 自动拉起，调度器开始首次抓取）：
+
+![后端启动日志](docs/assets/readme/run-backend-uvicorn.png)
+
+前端启动日志（Vite dev server 启动到 5173 端口）：
+
+![前端启动日志](docs/assets/readme/run-frontend-vite.png)
 
 ---
 
