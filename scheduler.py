@@ -227,6 +227,16 @@ class NoticeScheduler:
             coalesce=True,
             misfire_grace_time=120,
         )
+        # 每日检查一次自动备份（B17：内部按 ≥7 天判频，实际每周执行，保留 3 份）
+        self._scheduler.add_job(
+            lambda: self._record_run("backup", self._backup_job),
+            CronTrigger(**DAILY_CRON),
+            id="backup",
+            name="每周自动备份（每日检查，判频触发）",
+            max_instances=1,
+            coalesce=True,
+            misfire_grace_time=3600,
+        )
 
         self._scheduler.start()
         extract_note = "提取紧随抓取" if self._enable_extract else "提取已禁用(--no-extract)"
@@ -563,6 +573,19 @@ class NoticeScheduler:
         """内部 job：周期性检查配置，间隔变更时热更新抓取/提取 job。"""
         self._reschedule_interval()
         return {"interval_minutes": self._current_interval}
+
+    def _backup_job(self) -> dict:
+        """内部 job（B17）：每周自动备份，保留 3 份，含 WAL 一致性处理。
+
+        实际频控由 desktop.backup.weekly_backup 按最近备份时间戳判频（≥7 天才触发），
+        本 job 只是「每日检查一次」的调度载体；无备份历史时首次即触发。
+        """
+        from desktop.backup import weekly_backup
+
+        created = weekly_backup()
+        if created:
+            return {"status": "backed_up"}
+        return {"status": "skipped", "reason": "未到每周备份时间"}
 
     # ---------- 内部：辅助 ----------
 
