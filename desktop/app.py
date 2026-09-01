@@ -172,15 +172,23 @@ class DesktopApp:
         B06 起：挂 closing 事件（K5：托盘可用时点 X → hide，进程常驻；
         无托盘时放行关闭，关闭即退出），随后创建托盘。
 
+        B10.T2：注入 js_api 桥（ExternalLinkBridge）并在 loaded 后注入外链
+        兜底脚本（R14 双保险）。B10.T5：private_mode=False + 固定 storage_path，
+        保证 localStorage 跨重启保持（依赖 B04 端口粘性）。
+
         窗口销毁后 webview.start() 返回 → finally 收尾退出。
         """
         import webview  # 延迟导入：无 webview 环境（回归/CI）不阻塞模块加载
+        from desktop.webview_hooks import inject_new_window_guard, install_js_api
 
         url = self.server.url
         # B06.T3：从 settings 恢复窗口几何（首次启动用默认）
         geom = self.settings.get_window_geometry()
         width, height = geom["width"], geom["height"]
         x, y = geom.get("x"), geom.get("y")
+        # B10.T5：固定 WebView2 user-data 目录到应用数据目录，避免 storage 分区
+        # 漂移导致 localStorage（主题 / QA 会话）跨重启丢失；配合 private_mode=False。
+        storage_path = self._webview_storage_path()
         self._window = webview.create_window(
             self.title,
             url,
@@ -189,9 +197,10 @@ class DesktopApp:
             x=x,
             y=y,
             maximized=bool(geom.get("maximized")),
-            # B04/B10 处理 localStorage 持久化：此处保持默认 private_mode，
-            # 避免在未定案前引入行为变更。
+            js_api=install_js_api(),  # B10.T2：外链系统浏览器桥
         )
+        # B10.T2：页面加载后注入外链兜底脚本（覆写 window.open + 拦截点击）
+        self._window.events.loaded += lambda: inject_new_window_guard(self._window)
         # K5：点 X 是否最小化到托盘，由 closing handler 决定（见 _on_closing）
         self._window.events.closing += self._on_closing
         # B08.T2：注册 Windows 关机/注销信号（WM_QUERYENDSESSION 走同一退出路径）。
@@ -200,11 +209,27 @@ class DesktopApp:
         # 创建托盘（失败则 _tray_available=False，退回「关闭即退出」）
         self._setup_tray()
         try:
-            webview.start()
+            webview.start(private_mode=False, storage_path=storage_path)
         except Exception:  # noqa: BLE001
             logger.exception("窗口事件循环异常")
         finally:
             self._shutdown()
+
+    def _webview_storage_path(self) -> str:
+        """返回 WebView2 持久化 user-data 目录（B10.T5）。
+
+        放在应用数据目录下（而非系统临时目录），保证跨重启、跨版本保持同一
+        存储分区，localStorage（主题 / QA 会话 / 历史缓存）不漂移丢失。
+        """
+        try:
+            from utils.app_paths import get_data_dir
+
+            path = get_data_dir() / "webview"
+            path.mkdir(parents=True, exist_ok=True)
+            return str(path)
+        except Exception:  # noqa: BLE001 - 失败则退回默认（可能临时，仅影响持久化）
+            logger.debug("webview storage_path 解析失败（退回默认）", exc_info=True)
+            return ""
 
     def _on_closing(self, *_: Any) -> bool:
         """pywebview closing 事件（K5）。
