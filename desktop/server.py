@@ -139,6 +139,7 @@ class ServerManager:
         self._watchdog_thread: threading.Thread | None = None
         self._stop_watchdog = threading.Event()
         self._health_failures = 0
+        self._ever_ready = False  # 是否首次 health 就绪过（冷启动期间不累计故障）
 
     # ---------- 只读属性 ----------
     @property
@@ -213,26 +214,33 @@ class ServerManager:
                     self.WATCHDOG_INTERVAL, self.WATCHDOG_MAX_FAILURES)
 
     def _watchdog_loop(self) -> None:
-        """每 5s 探 /api/v1/health；连续 3 次失败 → 停调度 → 重建 server 实例。"""
+        """每 5s 探 /api/v1/health；连续 3 次失败 → 停调度 → 重建 server 实例。
+
+        冷启动（首次 health 就绪前）不累计故障，避免后端 import 链耗时导致误重启；
+        首次就绪后，若 health 连续失败或后端线程意外退出（崩溃），即触发重建。
+        """
         while not self._stop_watchdog.is_set():
             if self._stop_watchdog.wait(self.WATCHDOG_INTERVAL):
                 break  # 收到停止信号
-            if not self.is_alive:
-                # 后端线程已停止（主动 stop），无需重启
+            if self.is_alive and self._health_ok():
+                self._ever_ready = True
                 self._health_failures = 0
                 continue
-            if self._health_ok():
+            # 不健康（或后端线程已退出）：
+            if not self._ever_ready:
+                continue  # 冷启动中，等待首次就绪
+            self._health_failures += 1
+            logger.warning(
+                "后端不可用（%s），第 %d/%d 次",
+                "线程已退出" if not self.is_alive else "health 非 200",
+                self._health_failures, self.WATCHDOG_MAX_FAILURES,
+            )
+            if self._health_failures >= self.WATCHDOG_MAX_FAILURES:
+                logger.warning("连续 %d 次后端不可用，重建后端线程",
+                               self.WATCHDOG_MAX_FAILURES)
+                self._stop_scheduler_if_any()
+                self._restart()
                 self._health_failures = 0
-            else:
-                self._health_failures += 1
-                logger.warning("后端健康检查失败（第 %d/%d 次）",
-                               self._health_failures, self.WATCHDOG_MAX_FAILURES)
-                if self._health_failures >= self.WATCHDOG_MAX_FAILURES:
-                    logger.warning("连续 %d 次健康检查失败，重建后端线程",
-                                   self.WATCHDOG_MAX_FAILURES)
-                    self._stop_scheduler_if_any()
-                    self._restart()
-                    self._health_failures = 0
 
     def _health_ok(self) -> bool:
         """GET /api/v1/health 是否 200。"""
