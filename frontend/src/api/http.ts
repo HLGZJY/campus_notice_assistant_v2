@@ -34,6 +34,38 @@ export function desktopTokenHeaders(): Record<string, string> {
   return token ? { 'X-Desktop-Token': token } : {}
 }
 
+/**
+ * 等待桌面启动令牌注入（K7，B22 修复）。
+ * 桌面壳在 webview 页面 loaded 事件后注入 window.__CNA_TOKEN__；Vue 首屏
+ * 请求（onMounted 的静默检查/轮询）可能早于注入，触发 401「无效的桌面令牌」。
+ * 此处短等令牌就绪（最多 ~2.5s）再重试一次，彻底消除注入时序竞争。
+ * 浏览器 dev / --browser 降级（无 __CNA_TOKEN__）不等待，直接返回。
+ */
+async function ensureTokenReady(timeoutMs = 2500): Promise<boolean> {
+  if (desktopToken()) return true // 已有令牌，无需等
+  // 判定当前是否桌面壳环境：pywebview 桥存在（非纯浏览器）
+  const w = window as unknown as { pywebview?: unknown }
+  if (!w.pywebview) return false // 浏览器 dev / 非桌面：无令牌可等，直接放行
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 80))
+    if (desktopToken()) return true
+  }
+  return !!desktopToken()
+}
+
+/** 统一请求：先确保令牌就绪，再 fetch；401 且令牌尚未注入时等待重试一次。 */
+async function request(input: string, init: RequestInit): Promise<Response> {
+  await ensureTokenReady()
+  let res = await fetch(input, withDesktopToken(init))
+  if (res.status === 401 && !desktopToken()) {
+    // 令牌仍未注入：再等一次并重试（桌面壳 loaded 注入晚于首屏请求的兜底）
+    await ensureTokenReady(3000)
+    if (desktopToken()) res = await fetch(input, withDesktopToken(init))
+  }
+  return res
+}
+
 async function handle(res: Response) {
   const text = await res.text().catch(() => '请求失败')
   let message = text
@@ -57,7 +89,7 @@ export function qs(params: Record<string, unknown>) {
 
 export async function get<T = unknown>(url: string, params?: Record<string, unknown>, options?: RequestInit): Promise<T> {
   const target = params ? `${url}?${qs(params)}` : url
-  const res = await fetch(target, withDesktopToken(options || {}))
+  const res = await request(target, options || {})
   if (!res.ok) await handle(res)
   return (await res.json()) as T
 }
@@ -68,7 +100,7 @@ export async function post<T = unknown>(url: string, body?: unknown, options?: R
     headers: { 'Content-Type': 'application/json' },
     body: body ? JSON.stringify(body) : undefined,
   }, options || {})
-  const res = await fetch(url, withDesktopToken(init))
+  const res = await request(url, init)
   if (!res.ok) await handle(res)
   return (await res.json()) as T
 }
@@ -79,7 +111,7 @@ export async function put<T = unknown>(url: string, body?: unknown, options?: Re
     headers: { 'Content-Type': 'application/json' },
     body: body ? JSON.stringify(body) : undefined,
   }, options || {})
-  const res = await fetch(url, withDesktopToken(init))
+  const res = await request(url, init)
   if (!res.ok) await handle(res)
   return (await res.json()) as T
 }
@@ -90,7 +122,7 @@ export async function patch<T = unknown>(url: string, body?: unknown, options?: 
     headers: { 'Content-Type': 'application/json' },
     body: body ? JSON.stringify(body) : undefined,
   }, options || {})
-  const res = await fetch(url, withDesktopToken(init))
+  const res = await request(url, init)
   if (!res.ok) await handle(res)
   return (await res.json()) as T
 }
@@ -98,7 +130,7 @@ export async function patch<T = unknown>(url: string, body?: unknown, options?: 
 export async function del<T = unknown>(url: string, params?: Record<string, unknown>, options?: RequestInit): Promise<T> {
   const target = params ? `${url}?${qs(params)}` : url
   const init: RequestInit = Object.assign({ method: 'DELETE' }, options || {})
-  const res = await fetch(target, withDesktopToken(init))
+  const res = await request(target, init)
   if (!res.ok) await handle(res)
   return (await res.json()) as T
 }

@@ -324,12 +324,14 @@ class DesktopApp:
         )
         if hidden:
             logger.info("--minimized/--autostart：窗口已静默到托盘，托盘「打开主界面」可显示")
-        # B10.T2：页面加载后注入外链兜底脚本（覆写 window.open + 拦截点击）
+        # B10.T2 / B11.T3（K7）：页面 **加载完成** 后再注入脚本。
+        # 必须在 webview.start() 之后、loaded 事件触发时才 evaluate_js——
+        # start() 前 GUI 未启动、document 未就绪，直接 evaluate_js 会失败，
+        # 导致 window.__CNA_TOKEN__ 从未生效 → 前端请求不带令牌 → 后端 401
+        # 「无效的桌面令牌」（B22 修复）。
+        # 令牌先于外链兜底脚本注入，保证前端首个请求前 window.__CNA_TOKEN__ 就绪。
+        self._window.events.loaded += lambda: self._inject_token_script()
         self._window.events.loaded += lambda: inject_new_window_guard(self._window)
-        # B11.T3（K7）：页面加载后注入启动令牌到 window.__CNA_TOKEN__，
-        # 供前端 http client 统一加 X-Desktop-Token 头。先于任何 API 调用
-        # 生效（loaded 后前端才会发请求）。
-        self._inject_token_script()
         # K5：点 X 是否最小化到托盘，由 closing handler 决定（见 _on_closing）
         self._window.events.closing += self._on_closing
         # B08.T2：注册 Windows 关机/注销信号（WM_QUERYENDSESSION 走同一退出路径）。
@@ -349,6 +351,12 @@ class DesktopApp:
 
         令牌为 secrets.token_urlsafe(32) 的安全串，JSON 编码后可安全嵌入 JS。
         前端 http client 在发请求时读 window.__CNA_TOKEN__ 加到 X-Desktop-Token。
+
+        **必须在 loaded 事件触发后调用**（_create_window 里挂 events.loaded）：
+        evaluate_js 被 pywebview 的 _loaded_call 包裹，会等 loaded 事件最多
+        20s——若在 webview.start() 前调用，loaded 永不触发则超时抛异常，
+        window.__CNA_TOKEN__ 从未生效，前端请求不带令牌 → 后端 401
+        「无效的桌面令牌」（B22 修复）。
         注入失败（无令牌 / 环境不支持）仅记日志，不影响启动——此时后端中间件
         校验默认关闭（见 api/desktop_token.token_check_enabled）。
         """
