@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import logging
 import logging.handlers
+import os
 import shutil
 import sys
 import threading
@@ -40,6 +41,8 @@ from utils.app_paths import get_data_dir
 # 日志目录与文件
 LOG_DIR = get_data_dir() / "logs"
 LOG_PATH = LOG_DIR / "app.log"
+# B21.T3：独立崩溃转储目录（不随 app.log 轮转被覆盖）
+CRASH_DIR = LOG_DIR / "crash"
 
 # 复用 scheduler.py:101 已验证的滚动参数
 _MAX_BYTES = 5_000_000  # 5 MB
@@ -313,10 +316,94 @@ def _install_hook(name: str, notify: bool = True) -> Callable[..., Any]:
         logging.getLogger("desktop.excepthook").error(
             "未捕获异常（%s）：\n%s", name, lines
         )
+        # B21.T3：写独立崩溃转储（含系统信息/版本/环境），不随日志轮转丢失
+        try:
+            write_crash_report(
+                title=f"{name} 未捕获异常",
+                traceback_text=lines,
+                exc=exc,
+            )
+        except Exception:  # noqa: BLE001 - 崩溃转储失败不阻断
+            logging.getLogger(_LOGGER_NAME).debug("崩溃转储写入失败", exc_info=True)
         if notify:
             _notify_user(f"{name} 未捕获异常：{exc}", LOG_PATH)
 
     return _handle
+
+
+def write_crash_report(
+    title: str,
+    traceback_text: str,
+    exc: BaseException | None = None,
+) -> Path:
+    """写入独立崩溃转储文件（B21.T3）。
+
+    崩溃 traceback 只写 app.log 会被 RotatingFileHandler（5MB×3）轮转覆盖，
+    多崩溃/事后排查场景信息丢失。本函数把完整上下文（时间 / 版本 / 平台 /
+    关键环境变量 / traceback / 异常摘要）落盘到 ``data/logs/crash/crash_<ts>.txt``，
+    独立于日志轮转，供离线排查与崩溃上报。
+
+    Args:
+        title: 崩溃来源标题（如「主线程未捕获异常」）。
+        traceback_text: 完整 traceback 文本。
+        exc: 可选异常对象，用于提取摘要。
+
+    Returns:
+        实际写入的崩溃转储文件路径。
+    """
+    import datetime as _dt
+    import platform
+    import socket
+
+    CRASH_DIR.mkdir(parents=True, exist_ok=True)
+    stamp = _dt.datetime.now().strftime("%Y%m%d_%H%M%S")
+    crash_path = CRASH_DIR / f"crash_{stamp}.txt"
+
+    try:
+        from utils.app_paths import get_version
+    except Exception:  # noqa: BLE001 - 版本取不到不阻断
+        get_version = lambda: "unknown"  # noqa: E731
+
+    env_snapshot = {
+        k: v
+        for k, v in os.environ.items()
+        if k
+        in {
+            "CNA_FLAVOR",
+            "CNA_DESKTOP_TOKEN_SET",
+            "APP_ENV",
+            "HF_ENDPOINT",
+            "PYTHONPATH",
+        }
+    }
+    # 令牌值脱敏：只记录「是否已注入」，不记录明文
+    if "CNA_DESKTOP_TOKEN_SET" in env_snapshot:
+        env_snapshot["CNA_DESKTOP_TOKEN_SET"] = "yes"
+
+    sections = [
+        "=" * 60,
+        f"校园通知智能助手 · 崩溃转储",
+        f"时间: {_dt.datetime.now().isoformat()}",
+        f"标题: {title}",
+        "-" * 60,
+        f"版本: {get_version()}",
+        f"平台: {platform.platform()}",
+        f"Python: {platform.python_version()}",
+        f"主机: {socket.gethostname()}",
+        f"工作目录: {Path.cwd()}",
+        "-" * 60,
+        "关键环境变量:",
+        *[f"  {k} = {v}" for k, v in env_snapshot.items()],
+        "-" * 60,
+        f"异常摘要: {exc!r}" if exc is not None else "异常摘要: (无)",
+        "-" * 60,
+        "Traceback:",
+        traceback_text,
+        "=" * 60,
+    ]
+    crash_path.write_text("\n".join(sections), encoding="utf-8")
+    logger.info("崩溃转储已写入：%s", crash_path)
+    return crash_path
 
 
 def install_excepthooks(notify: bool = True) -> None:
@@ -331,13 +418,17 @@ def install_excepthooks(notify: bool = True) -> None:
 
 
 def export_logs(dest_dir: Path | None = None) -> Path:
-    """一键导出日志：把 data/logs/app.log* 复制到目标目录。
+    """一键导出日志：把 data/logs/ 下的关键日志复制到目标目录。
+
+    B21.T3 增强：除 ``app.log*`` 外，同时导出：
+      - ``crash/`` 崩溃转储目录（独立于日志轮转）
+      - ``scheduler*.log*`` 调度日志（若存在）
 
     Args:
         dest_dir: 目标目录；None 时用 data/logs/export_<时间戳>。
 
     Returns:
-        实际写入的导出目录（含 app.log* 文件）。
+        实际写入的导出目录（含 app.log* / crash / 调度日志）。
     """
     import datetime as _dt
 
@@ -348,9 +439,24 @@ def export_logs(dest_dir: Path | None = None) -> Path:
     dest_dir.mkdir(parents=True, exist_ok=True)
 
     count = 0
+    # 1. 应用日志（app.log + 轮转备份）
     for f in sorted(source.glob("app.log*")):
         if f.is_file():
             shutil.copy2(f, dest_dir / f.name)
             count += 1
+    # 2. 调度日志（scheduler*.log*，若存在）
+    for f in sorted(source.glob("scheduler*.log*")):
+        if f.is_file():
+            shutil.copy2(f, dest_dir / f.name)
+            count += 1
+    # 3. 崩溃转储目录（B21.T3）
+    crash_src = source / "crash"
+    if crash_src.is_dir():
+        crash_dst = dest_dir / "crash"
+        crash_dst.mkdir(parents=True, exist_ok=True)
+        for f in sorted(crash_src.glob("*.txt")):
+            if f.is_file():
+                shutil.copy2(f, crash_dst / f.name)
+                count += 1
     logger.info("日志导出完成：%s（%d 个文件）", dest_dir, count)
     return dest_dir

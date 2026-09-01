@@ -147,5 +147,70 @@ def _(ls):
     assert "B05 制造的未捕获异常" in content, "应含异常消息"
 
 
+@suite.case("6. 未捕获异常写独立崩溃转储（B21.T3）")
+def _(ls):
+    write_crash_report = suite.require(ls, "write_crash_report")
+    import desktop.logging_setup as ls_mod
+
+    # 用临时日志目录隔离，避免写生产 data/logs/crash
+    import tempfile
+
+    tmp = Path(tempfile.mkdtemp(prefix="b21_crash_"))
+    old_crash_dir = ls_mod.CRASH_DIR
+    ls_mod.CRASH_DIR = tmp / "crash"
+    try:
+        path = write_crash_report(
+            title="主线程未捕获异常",
+            traceback_text="Traceback (most recent call last):\n  ValueError: test",
+            exc=ValueError("test"),
+        )
+        assert path.exists(), "崩溃转储文件应创建"
+        content = path.read_text(encoding="utf-8")
+        assert "崩溃转储" in content, "应含标题头"
+        assert "Traceback" in content, "应含 traceback"
+        assert "版本" in content, "应含版本信息"
+        assert "ValueError('test')" in content, "应含异常摘要"
+        assert path.suffix == ".txt", "应为 .txt"
+    finally:
+        ls_mod.CRASH_DIR = old_crash_dir
+        import shutil
+
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+@suite.case("7. export_logs 导出 crash 与调度日志（B21.T3）")
+def _(ls):
+    export_logs = suite.require(ls, "export_logs")
+    import desktop.logging_setup as ls_mod
+
+    import tempfile
+
+    tmp = Path(tempfile.mkdtemp(prefix="b21_export_"))
+    source_dir = tmp / "logs"
+    source_dir.mkdir(parents=True)
+    # 模拟 app.log、轮转备份、调度日志、崩溃转储
+    (source_dir / "app.log").write_text("app", encoding="utf-8")
+    (source_dir / "app.log.1").write_text("app1", encoding="utf-8")
+    (source_dir / "scheduler.log").write_text("sched", encoding="utf-8")
+    crash_dir = source_dir / "crash"
+    crash_dir.mkdir()
+    (crash_dir / "crash_20260901.txt").write_text("crash", encoding="utf-8")
+
+    old_log_dir = ls_mod.LOG_DIR
+    ls_mod.LOG_DIR = source_dir
+    dest_dir = tmp / "exported"
+    try:
+        out = export_logs(dest_dir)
+        assert (out / "app.log").exists(), "应导出 app.log"
+        assert (out / "app.log.1").exists(), "应导出轮转备份"
+        assert (out / "scheduler.log").exists(), "应导出调度日志"
+        assert (out / "crash" / "crash_20260901.txt").exists(), "应导出崩溃转储"
+    finally:
+        ls_mod.LOG_DIR = old_log_dir
+        import shutil
+
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 if __name__ == "__main__":
     sys.exit(suite.run())
