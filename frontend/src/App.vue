@@ -23,6 +23,7 @@ import type { UpdateCheckResult } from './api/schema'
 import router from './router'
 import { useTaskStore } from './stores/useTaskStore'
 import { useThemeStore, type ThemeMode } from './stores/useThemeStore'
+import { initExternalLinkInterceptor, openExternal } from './utils/openExternal'
 import { lightThemeOverrides, darkThemeOverrides } from './theme'
 import TaskListDrawer from './components/TaskListDrawer.vue'
 
@@ -49,7 +50,7 @@ async function silentCheckUpdate() {
 }
 
 function openDownload(url: string) {
-  window.open(url, '_blank', 'noopener')
+  openExternal(url)
 }
 
 function renderIcon(icon: unknown) {
@@ -117,6 +118,7 @@ function updateCollapsed() {
 }
 
 let timer: ReturnType<typeof setInterval> | undefined
+let stopExternalInterceptor: (() => void) | undefined
 
 onMounted(() => {
   updateCollapsed()
@@ -126,6 +128,8 @@ onMounted(() => {
   timer = setInterval(fetchPendingCount, 30000)
   taskStore.fetchList()
   taskStore.startGlobalPolling()
+  // B10.T1：全局拦截外链点击，统一走系统浏览器（双保险之「主动」层）
+  stopExternalInterceptor = initExternalLinkInterceptor()
   // 启动静默检查更新：延迟 3s，避开首屏加载高峰
   setTimeout(silentCheckUpdate, 3000)
 })
@@ -134,6 +138,7 @@ onUnmounted(() => {
   window.removeEventListener('resize', updateCollapsed)
   if (timer) clearInterval(timer)
   taskStore.stopGlobalPolling()
+  stopExternalInterceptor?.()
 })
 </script>
 

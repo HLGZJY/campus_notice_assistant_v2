@@ -22,6 +22,7 @@ import {
 import { useConfigStore } from '../stores/useConfigStore'
 import { endpoints } from '../api/endpoints'
 import { get as httpGet } from '../api/http'
+import { openExternal } from '../utils/openExternal'
 import StatCard from '../components/StatCard.vue'
 import type {
   ConfigMutationResult,
@@ -115,10 +116,6 @@ function formatSize(bytes: number): string {
   if (bytes >= 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`
   if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`
   return `${Math.round(bytes / 1024)} KB`
-}
-
-function openExternal(url: string) {
-  window.open(url, '_blank', 'noopener')
 }
 
 function isInteractiveTarget(e: MouseEvent): boolean {
