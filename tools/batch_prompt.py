@@ -405,7 +405,12 @@ def cmd_archive(bid: str, base: str | None, end: str | None) -> int:
         print(f"[跳过] 已存在验收记录，未覆盖：{existing[0].name}")
         return 0
 
-    out = ACC_DIR / f"{bid}-{name}-验收记录.md".replace(" ", "")
+    # 批次名可能含路径非法字符（如 B14「调度 pause/resume 与空闲触发」的 `/`），
+    # 直接拼进文件名会抛 FileNotFoundError。统一替换为安全字符 `-`。
+    safe_name = "".join(
+        ch if ch not in '<>:"/\\|?*' else "-" for ch in name
+    ).replace(" ", "")
+    out = ACC_DIR / f"{bid}-{safe_name}-验收记录.md"
     text = TEMPLATE.read_text(encoding="utf-8")
     text = text.replace("{批次名}", name).replace("{xx}", bid[1:]).replace("B{xx}", bid)
     text = text.replace("- 日期：YYYY-MM-DD", f"- 日期：{datetime.now().strftime('%Y-%m-%d')}")
