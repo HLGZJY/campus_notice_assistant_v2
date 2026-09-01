@@ -24,6 +24,7 @@ from typing import Any, Callable
 
 import uvicorn
 
+from desktop.logging_setup import build_uvicorn_log_config
 from utils.app_paths import get_data_dir
 
 logger = logging.getLogger(__name__)
@@ -189,6 +190,10 @@ class ServerManager:
             log_level="info",
             reload=False,
             workers=1,
+            # B05.T2（K3）：显式传 log_config，把 uvicorn* logger 指向与 root
+            # 共享的同一文件 handler 且 propagate=False，避免默认 dictConfig
+            # 覆盖 root、以及 uvicorn 日志与 app 日志重复。
+            log_config=build_uvicorn_log_config(),
         )
         server = uvicorn.Server(config)
         self._server = server
