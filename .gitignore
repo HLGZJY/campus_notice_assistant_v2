@@ -50,6 +50,9 @@ config/schools/scuec.yaml
 # ---------- benchmark 临时输出 ----------
 data/benchmark_*.json
 
+# ---------- 单测临时库（test_vectorstore_singleton.py 等） ----------
+data/test_vs_singleton_*
+
 # ---------- 运行/调试产物（不入库） ----------
 p.out
 probe_sse.*
