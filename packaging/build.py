@@ -107,7 +107,8 @@ def layout_app_root(dist_app: Path, flavor: str, cloud_provider: str, cloud_mode
         copied.append(f"schools/{yml.name}")
     log(f"config 已复制：{copied}")
 
-    if flavor == "cloud":
+    # 云端版与桌面版默认走云端 embedding（B01 决策「默认云端」省内存/启动快）
+    if flavor in ("cloud", "desktop"):
         patch_cloud_embedding(config_dst / "app.yaml", cloud_provider, cloud_model)
 
     # 前端产物
@@ -149,14 +150,14 @@ def compile_innosetup(flavor: str, version: str, iscc_path: str | None = None) -
     iscc = next((c for c in candidates if c and Path(c).exists()), None)
     if not iscc:
         log("未找到 Inno Setup（ISCC.exe）。安装后重跑，或手动在 Inno Setup 编译器打开 "
-            f"{iss} 编译（定义 Flavor={'cloud' if flavor == 'cloud' else 'full'}）")
+            f"{iss} 编译（定义 Flavor={flavor}）")
         return None
 
     out_dir = PACKAGING_DIR / "out"
     out_dir.mkdir(exist_ok=True)
     run([iscc, f"/DFlavor={flavor}", f"/DVersion={version}", str(iss)])
 
-    suffix = "云端版" if flavor == "cloud" else "完整版"
+    suffix = {"cloud": "云端版", "full": "完整版", "desktop": "桌面版"}[flavor]
     setup = out_dir / f"校园通知助手-{suffix}-setup.exe"
     if not setup.exists():
         # OutputBaseFilename 含中文时部分环境生成的名字可能不同，做个兜底查找
@@ -173,8 +174,9 @@ def compile_innosetup(flavor: str, version: str, iscc_path: str | None = None) -
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="校园通知智能助手一键构建")
-    parser.add_argument("--flavor", choices=["cloud", "full"], default="cloud",
-                        help="cloud=云端瘦身版（默认）| full=完整版（含 torch + 本地模型）")
+    parser.add_argument("--flavor", choices=["cloud", "full", "desktop"], default="cloud",
+                        help="cloud=云端瘦身版（默认）| full=完整版（含 torch + 本地模型）| "
+                             "desktop=桌面版（pywebview 壳，console=False）")
     parser.add_argument("--skip-frontend", action="store_true", help="跳过前端构建（复用现有 dist）")
     parser.add_argument("--force-frontend", action="store_true", help="强制重新构建前端")
     parser.add_argument("--innosetup", action="store_true", help="构建后调用 Inno Setup 编译安装包")
