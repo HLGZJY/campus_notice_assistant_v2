@@ -45,10 +45,16 @@ class FakeExtractor:
     """假提取器：按通知计数调用、每次成功调用写一条计费记录，并可模拟中途被 kill。"""
 
     def __init__(self, kill_after=None):
-        self.kill_after = kill_after  # 已完成多少次调用后，下一次调用模拟被杀
+        self.kill_after = kill_after  # 已完成多少次调用后模拟进程被杀
         self.completed = 0
-        self._kill_fired = False
+        self._kill_trigger_pending = kill_after is not None  # kill 只触发一次
+        self._kill_active = False  # kill 生效中：同「进程」内后续调用全部中断
         self.calls_by_notice: dict[int, int] = defaultdict(int)
+
+    def kill_reset(self) -> None:
+        """模拟「重启后的新进程」：解除 kill 状态，且不再重新触发（进程只死一次）。"""
+        self._kill_active = False
+        self._kill_trigger_pending = False
 
     async def extract_one(
         self,
@@ -62,16 +68,22 @@ class FakeExtractor:
         self.calls_by_notice[nid] += 1
 
         # 模拟 LLM 延迟：给并发调度一个可取消点（真实调用有网络 IO，
-        # kill 时 gather 才能整体中断未完成任务，而非任务瞬间跑完）
-        await asyncio.sleep(0.01)
+        # kill 时 gather 才能整体中断未完成任务，而非任务瞬间跑完）。
+        # 按 notice_id 阶梯化延迟：Windows 计时器粒度 ~15.6ms，等长 sleep
+        # 的并发唤醒顺序不保证（kill 点会随机漂移到不同通知上）；阶梯化后
+        # 唤醒顺序=id 创建顺序，kill_after 语义才确定。
+        await asyncio.sleep(0.01 * (nid if nid else 1))
 
-        # 模拟崩溃：完成 kill_after 次后，下一次调用直接被"杀掉"（不计费、不写库）
-        if (
-            self.kill_after is not None
-            and not self._kill_fired
-            and self.completed >= self.kill_after
-        ):
-            self._kill_fired = True
+        # 模拟进程死亡：kill 点之后，同一「进程」内的所有后续调用一律中断
+        # （不计费、不写库）。真实场景进程被杀不会有任何同批兄弟调用继续成功；
+        # 早期「一次性 kill」在 extract_batch 并发 >1 时会让同批兄弟协程继续
+        # 跑完，导致测试结论随 config 的 extract.concurrency 漂移（并发数来自
+        # config/app.yaml，本测试不隔离 ConfigStore，必须对并发 1~8 都成立）。
+        if self.kill_after is not None and self._kill_active:
+            raise SimulatedKill(f"模拟进程在提取 notice_id={nid} 时被杀")
+        if self._kill_trigger_pending and self.completed >= self.kill_after:
+            self._kill_trigger_pending = False
+            self._kill_active = True
             raise SimulatedKill(f"模拟进程在提取 notice_id={nid} 时被杀")
 
         self.completed += 1
