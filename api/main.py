@@ -92,6 +92,7 @@ def create_app() -> FastAPI:
     try:
         from api.routes import (
             config,
+            desktop,
             events,
             notices,
             qa,
@@ -119,6 +120,7 @@ def create_app() -> FastAPI:
         app.include_router(usage.router, prefix="/api/v1")
         app.include_router(source_center.router, prefix="/api/v1")
         app.include_router(update.router, prefix="/api/v1")
+        app.include_router(desktop.router, prefix="/api/v1")
     except Exception as e:
         logger.warning("Skipping registering routers due to import error: %s", e)
 
