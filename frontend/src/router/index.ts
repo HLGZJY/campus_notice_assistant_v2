@@ -7,6 +7,7 @@ import ConfigView from '../views/ConfigView.vue'
 import SubscriptionsView from '../views/SubscriptionsView.vue'
 import MarketView from '../views/MarketView.vue'
 import DataSourceCenterView from '../views/DataSourceCenterView.vue'
+import NotificationsView from '../views/NotificationsView.vue'
 import { trackEvent } from '../api/events'
 
 const routes = [
@@ -18,6 +19,7 @@ const routes = [
   { path: '/subscriptions', component: SubscriptionsView, meta: { title: '订阅管理', subtitle: '关键词订阅与命中跟踪' } },
   { path: '/market', component: MarketView, meta: { title: '服务市场', subtitle: '可扩展服务' } },
   { path: '/sources', component: DataSourceCenterView, meta: { title: '数据源', subtitle: '公共数据源库 · 我的数据源 · 改完即存' } },
+  { path: '/notifications', component: NotificationsView, meta: { title: '通知中心', subtitle: '提醒与系统消息' } },
 ]
 
 const router = createRouter({

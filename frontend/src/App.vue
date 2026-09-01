@@ -22,6 +22,7 @@ import { get } from './api/http'
 import type { UpdateCheckResult } from './api/schema'
 import router from './router'
 import { useTaskStore } from './stores/useTaskStore'
+import { useNotificationsStore } from './stores/useNotificationsStore'
 import { useThemeStore, type ThemeMode } from './stores/useThemeStore'
 import { initExternalLinkInterceptor, openExternal } from './utils/openExternal'
 import { lightThemeOverrides, darkThemeOverrides } from './theme'
@@ -30,6 +31,7 @@ import TaskListDrawer from './components/TaskListDrawer.vue'
 const route = useRoute()
 const theme = useThemeStore()
 const taskStore = useTaskStore()
+const notificationsStore = useNotificationsStore()
 const pendingCount = ref(0)
 const collapsed = ref(false)
 
@@ -60,6 +62,7 @@ function renderIcon(icon: unknown) {
 const menuItems = [
   { key: '/', label: '首页', icon: HomeOutline },
   { key: '/notices', label: '通知浏览', icon: NewspaperOutline },
+  { key: '/notifications', label: '通知中心', icon: NotificationsOutline },
   { key: '/todos', label: '待办清单', icon: CheckmarkDoneCircleOutline },
   { key: '/qa', label: '智能问答', icon: ChatbubbleEllipsesOutline },
   { key: '/subscriptions', label: '订阅管理', icon: NotificationsOutline },
@@ -73,17 +76,33 @@ const menuOptions = computed(() =>
     key: item.key,
     icon: renderIcon(item.icon),
     label: () => {
-      if (item.key !== '/' || pendingCount.value <= 0) return item.label
-      return h(
-        NSpace,
-        { align: 'center', size: 8 },
-        {
-          default: () => [
-            h('span', null, item.label),
-            h(NBadge, { value: pendingCount.value, max: 99, type: 'error' }),
-          ],
-        }
-      )
+      // 待办红点（首页菜单项）
+      if (item.key === '/' && pendingCount.value > 0) {
+        return h(
+          NSpace,
+          { align: 'center', size: 8 },
+          {
+            default: () => [
+              h('span', null, item.label),
+              h(NBadge, { value: pendingCount.value, max: 99, type: 'error' }),
+            ],
+          }
+        )
+      }
+      // 通知中心未读徽标（A6，B21.T1）
+      if (item.key === '/notifications' && notificationsStore.pendingCount > 0) {
+        return h(
+          NSpace,
+          { align: 'center', size: 8 },
+          {
+            default: () => [
+              h('span', null, item.label),
+              h(NBadge, { value: notificationsStore.pendingCount, max: 99, type: 'error' }),
+            ],
+          }
+        )
+      }
+      return item.label
     },
   }))
 )
@@ -125,7 +144,12 @@ onMounted(() => {
   window.addEventListener('resize', updateCollapsed)
   theme.listen()
   fetchPendingCount()
-  timer = setInterval(fetchPendingCount, 30000)
+  // A6：通知中心未读徽标随全局轮询刷新
+  notificationsStore.fetchPendingCount().catch(() => {})
+  timer = setInterval(() => {
+    fetchPendingCount()
+    notificationsStore.fetchPendingCount().catch(() => {})
+  }, 30000)
   taskStore.fetchList()
   taskStore.startGlobalPolling()
   // B10.T1：全局拦截外链点击，统一走系统浏览器（双保险之「主动」层）
