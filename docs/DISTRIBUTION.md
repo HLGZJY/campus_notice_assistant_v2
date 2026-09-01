@@ -8,8 +8,8 @@
 
 | 版本 | 安装包 | 说明 |
 |---|---|---|
-| 桌面版（推荐） | **`campus-notice-assistant-desktop-setup-<版本>.exe`** | 原生窗口，无需浏览器；自动检测并安装 WebView2 运行时 |
-| 云端版（在线） | `campus-notice-assistant-cloud-setup-<版本>.exe` | 传统浏览器模式，兼容无 WebView2 的老环境 |
+| 桌面版（推荐） | **`campus-notice-assistant-desktop-setup-v<版本>.exe`** | 原生窗口，无需浏览器；自动检测并安装 WebView2 运行时 |
+| 云端版（在线） | `campus-notice-assistant-cloud-setup-v<版本>.exe` | 传统浏览器模式，兼容无 WebView2 的老环境 |
 
 > 所有安装包均来自 GitHub Releases（本仓库公开页），**仅通过官方 Release 页面下载**。
 > 安装到当前用户目录（`%LOCALAPPDATA%\CampusNoticeAssistant`），**无需管理员权限**。
