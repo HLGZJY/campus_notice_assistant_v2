@@ -38,7 +38,7 @@ sha256sum campus-notice-assistant-desktop-setup-v0.2.0.exe
 ### 当前版本（v0.2.0 桌面版）
 
 ```
-9d87fc22faf23c6ee6febf864530cfd8ef8a8eb63732d18cf5993c6f2af3b346  校园通知助手-桌面版-setup.exe
+96283a70e85663d2fc0c86ea1f1774d11c884fb8fdacb3eb81842316e07b4837  校园通知助手-桌面版-setup.exe
 ```
 
 > 以本机 `packaging/out/校园通知助手-桌面版-setup.exe.sha256` 为准；正式发布前如重新构建，覆盖本页值。
