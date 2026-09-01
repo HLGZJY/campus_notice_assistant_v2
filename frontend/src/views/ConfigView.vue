@@ -643,9 +643,10 @@ async function openLogDir() {
   }
 }
 
-/** 检查更新入口：跳转到「检查更新」tab。 */
+/** 检查更新入口：跳转到「检查更新」tab 并触发一次检查。 */
 function goUpdateTab() {
   activeTab.value = 'update'
+  checkUpdate()
 }
 </script>
 
@@ -1478,7 +1479,6 @@ function goUpdateTab() {
                 <n-button
                   secondary
                   :loading="openingLogDir"
-                  :disabled="!desktopAvailable"
                   @click="openLogDir"
                 >
                   <template #icon>
