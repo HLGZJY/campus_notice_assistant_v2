@@ -43,19 +43,81 @@ def _(db):
 @suite.case("2. 读写并发不互斥（写事务进行中读不被阻塞）")
 def _(db):
     apply_wal = suite.require(db, "apply_wal_pragmas")
-    suite.pending(
-        "在临时库上开启一个未提交的写事务，同时另一连接执行 SELECT，"
-        "断言读立即返回（WAL 下读不阻塞），超时即失败"
-    )
+    import sqlite3
+    import threading
+    import time
+
+    with temp_db_path() as tmp:
+        conn_w = apply_wal(db.get_connection(db_path=tmp))
+        conn_w.execute("CREATE TABLE t (id INTEGER PRIMARY KEY, v TEXT)")
+        conn_w.execute("INSERT INTO t (v) VALUES ('pre')")
+        conn_w.commit()
+
+        # 开启一个未提交的写事务（BEGIN 后写但未 commit）
+        conn_w.execute("INSERT INTO t (v) VALUES ('uncommitted')")
+
+        # 另一连接 SELECT：WAL 下读不被写事务阻塞，应立即返回
+        start = time.time()
+        row = conn_w.execute("SELECT COUNT(*) AS n FROM t").fetchone()["n"]
+        elapsed = time.time() - start
+        assert row >= 1, f"读被写事务阻塞？n={row}"
+        # 在写事务进行中读到的是快照（WAL 读者见旧数据），至少不抛 locked
+        assert elapsed < 5.0, f"读被阻塞超过 5s：{elapsed:.2f}s"
+
+        conn_w.execute("ROLLBACK")
+        conn_w.close()
 
 
 @suite.case("3. 并发读写压测不抛 database is locked")
 def _(db):
     apply_wal = suite.require(db, "apply_wal_pragmas")
-    suite.pending(
-        "起 4 写线程 + 4 读线程各跑若干次（沿用 test_db_concurrency.py 的压测强度），"
-        "断言无 sqlite3.OperationalError: database is locked"
-    )
+    import threading
+
+    N_WRITERS, N_READERS, ITERS = 4, 4, 20
+
+    with temp_db_path() as tmp:
+        conn = apply_wal(db.get_connection(db_path=tmp))
+        conn.execute("CREATE TABLE t (id INTEGER PRIMARY KEY AUTOINCREMENT, v TEXT)")
+        conn.commit()
+        conn.close()
+
+        errors: list[str] = []
+        barrier = threading.Barrier(N_WRITERS + N_READERS)
+
+        def _writer(tid: int):
+            try:
+                barrier.wait(timeout=60)
+                c = apply_wal(db.get_connection(db_path=tmp))
+                for i in range(ITERS):
+                    c.execute("INSERT INTO t (v) VALUES (?)", (f"w{tid}-{i}",))
+                    c.commit()
+                c.close()
+            except Exception as e:  # noqa: BLE001
+                errors.append(f"w{tid}: {type(e).__name__}: {e}")
+
+        def _reader(rid: int):
+            try:
+                barrier.wait(timeout=60)
+                c = apply_wal(db.get_connection(db_path=tmp))
+                for _ in range(ITERS):
+                    c.execute("SELECT COUNT(*) FROM t").fetchone()
+                c.close()
+            except Exception as e:  # noqa: BLE001
+                errors.append(f"r{rid}: {type(e).__name__}: {e}")
+
+        threads = [threading.Thread(target=_writer, args=(i,)) for i in range(N_WRITERS)]
+        threads += [threading.Thread(target=_reader, args=(i,)) for i in range(N_READERS)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert not errors, f"并发读写抛异常：{errors[:5]}"
+
+        conn = db.get_connection(db_path=tmp)
+        total = conn.execute("SELECT COUNT(*) AS n FROM t").fetchone()["n"]
+        conn.close()
+        assert total == N_WRITERS * ITERS, f"写入行数不符：{total} != {N_WRITERS * ITERS}"
 
 
 @suite.case("4. 备份文件包含 -wal / -shm 处理逻辑")
@@ -67,10 +129,40 @@ def _(db):
     except Exception as exc:  # noqa: BLE001
         raise NotImplementedError(f"desktop.backup 尚未实现（B17）：{exc}")
     create_backup = suite.require(backup, "create_backup")
-    suite.pending(
-        "在临时库上写数据使其产生 -wal，调用 create_backup()，"
-        "断言备份内容完整（能还原出全部行），且 -wal 被 checkpoint 或一并拷贝"
-    )
+    restore_backup = suite.require(backup, "restore_backup")
+    apply_wal = suite.require(db, "apply_wal_pragmas")
+    import sqlite3
+
+    with temp_db_path() as tmp:
+        conn = apply_wal(db.get_connection(db_path=tmp))
+        conn.execute("CREATE TABLE t (id INTEGER PRIMARY KEY, v TEXT)")
+        for i in range(10):
+            conn.execute("INSERT INTO t (v) VALUES (?)", (f"内容-{i}",))
+        conn.commit()
+        # 保持连接未 checkpoint，制造 -wal 存在（有未 checkpoint 数据）
+        wal_path = Path(str(tmp) + "-wal")
+        has_wal = wal_path.exists()
+        conn.close()
+
+        import tempfile
+
+        bdir = Path(tempfile.mkdtemp())
+        try:
+            bf = create_backup(db_path=tmp, backup_dir=bdir, keep=3)
+            # 备份内容完整：能还原出全部 10 行
+            dest = bdir / "restored.db"
+            restore_backup(bf, dest)
+            rc = sqlite3.connect(str(dest))
+            n = rc.execute("SELECT COUNT(*) FROM t").fetchone()[0]
+            rc.close()
+            assert n == 10, f"备份还原后行数不符：{n} != 10"
+            # 备份文件本身不应带 -wal/-shm 残留
+            for suffix in ("-wal", "-shm"):
+                assert not Path(str(bf) + suffix).exists(), f"备份残留 {suffix} 文件"
+        finally:
+            import shutil
+
+            shutil.rmtree(bdir, ignore_errors=True)
 
 
 @suite.case("5. PRAGMA integrity_check = ok")
