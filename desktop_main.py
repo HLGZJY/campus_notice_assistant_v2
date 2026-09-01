@@ -36,8 +36,13 @@ else:
 
 
 def main() -> None:
-    from desktop.app import DesktopApp
+    from desktop.app import DesktopApp, parse_cli_args
     from desktop.logging_setup import install_excepthooks, setup_logging
+
+    # B13.T3：解析启动参数 --minimized/--autostart/--browser（及 --no-tray）。
+    # 开机自启（HKCU Run，autostart.py）写入的命令带 --autostart，Windows 拉起
+    # 本 exe 时经此标记静默到托盘。
+    args = parse_cli_args()
 
     # B05：最早配置日志落盘（含 stdout 为 None 时的重定向），并装崩溃钩子。
     # 必须放在任何业务逻辑之前，否则 console=False 下 stdout 为 None 时
@@ -51,7 +56,13 @@ def main() -> None:
     from utils.app_paths import get_version
 
     logger.info("校园通知智能助手 桌面版 v%s 启动中……", get_version())
-    app = DesktopApp()
+    app = DesktopApp(
+        enable_tray=not args.no_tray,
+        enable_single_instance=args.single_instance,
+        start_minimized=args.minimized,
+        autostart=args.autostart,
+        browser_mode=args.browser,
+    )
     try:
         app.run()
     except KeyboardInterrupt:

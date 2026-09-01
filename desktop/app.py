@@ -12,6 +12,7 @@ B03 阶段实现「起后端 → 等 health → 建窗口 → 关闭即退出」
 """
 from __future__ import annotations
 
+import argparse
 import logging
 import sys
 import time
@@ -26,6 +27,48 @@ logger = logging.getLogger(__name__)
 
 HEALTH_TIMEOUT = 30.0  # 等待后端就绪的秒数
 HEALTH_PATH = "/api/v1/health"
+
+
+def parse_cli_args(argv: list[str] | None = None) -> argparse.Namespace:
+    """解析桌面壳命令行参数（B13.T3）。
+
+    Args:
+        argv: 命令行参数；None 用 sys.argv[1:]。
+
+    Returns:
+        Namespace，含：minimized / autostart / browser / no_tray / single_instance。
+    """
+    parser = argparse.ArgumentParser(
+        prog="desktop",
+        description="校园通知智能助手 桌面版（Windows x64）",
+    )
+    parser.add_argument(
+        "--minimized",
+        action="store_true",
+        help="静默启动到托盘（不显示主窗口）",
+    )
+    parser.add_argument(
+        "--autostart",
+        action="store_true",
+        help="自启场景标记：开机拉起时静默到托盘（隐含 --minimized）",
+    )
+    parser.add_argument(
+        "--browser",
+        action="store_true",
+        help="降级模式：跳过 webview，起后端后用系统浏览器访问（排障兜底）",
+    )
+    parser.add_argument(
+        "--no-tray",
+        action="store_true",
+        help="禁用托盘（回滚点：关闭窗口即退出）",
+    )
+    parser.add_argument(
+        "--single-instance",
+        action="store_true",
+        default=True,
+        help="启用单实例锁（默认开启）",
+    )
+    return parser.parse_args(argv)
 
 
 def has_running_tasks() -> bool:
@@ -90,6 +133,9 @@ class DesktopApp:
         title: str = "校园通知智能助手",
         enable_tray: bool = True,
         enable_single_instance: bool = True,
+        start_minimized: bool = False,
+        autostart: bool = False,
+        browser_mode: bool = False,
     ) -> None:
         self.host = host
         self.port = port
@@ -97,6 +143,10 @@ class DesktopApp:
         self.enable_tray = enable_tray  # --no-tray 可整体禁用托盘（回滚点）
         # B07：单实例锁开关。False 则跳过加锁（可双开，R7 风险回归，仅排障用）
         self.enable_single_instance = enable_single_instance
+        # B13.T3：启动参数。--autostart 隐含 --minimized（自启场景静默到托盘）
+        self.start_minimized = start_minimized or autostart
+        self.autostart = autostart
+        self.browser_mode = browser_mode  # --browser 降级：跳过 webview
         self.settings = ShellSettings().load()
         self.server = ServerManager(host=host, port=port)
         self._window: Any | None = None
@@ -119,6 +169,12 @@ class DesktopApp:
 
         setup_logging()
         install_excepthooks()
+
+        # B13.T4：--browser 降级模式——跳过 webview，起后端后用系统浏览器访问。
+        # 不参与单实例锁/托盘/窗口，直接走浏览器通道（排障兜底）。
+        if self.browser_mode:
+            self._run_browser_mode()
+            return
 
         # B07：单实例锁。已有实例 → 已尝试唤起它 → 本实例退出（不双开，R7）
         if self.enable_single_instance and not self._acquire_single_instance():
@@ -181,6 +237,45 @@ class DesktopApp:
             logger.info("后端就绪（/api/v1/health 200）")
         return ready
 
+    # ---------- --browser 降级模式（B13.T4） ----------
+    def _run_browser_mode(self) -> None:
+        """--browser 降级：跳过 webview，起后端后拉系统浏览器（run_app.py:49-60）。
+
+        仅做「起后端 → 等 health → 打开浏览器 → 保持服务」，不创建窗口/托盘、
+        不参与单实例锁。设 CNA_BROWSER_MODE=1 关闭令牌校验（desktop_token），
+        浏览器访问后端不被打断。主线程阻塞保持 daemon 线程存活，Ctrl+C 退出。
+        """
+        import os
+        import webbrowser
+
+        # 降级模式：关闭令牌校验（K7：--browser 不受令牌影响，对齐 B11.T4）
+        os.environ["CNA_BROWSER_MODE"] = "1"
+        logger.info("--browser 降级模式：跳过 webview，起后端后用浏览器访问")
+
+        self.start_backend()
+        if not self._await_ready():
+            logger.error("后端在 %.0fs 内未就绪，退出", HEALTH_TIMEOUT)
+            sys.exit(1)
+
+        # 沿用 run_app.py:60 的浏览器拉起：服务就绪后打开默认浏览器
+        try:
+            from run_app import open_browser_when_ready
+
+            open_browser_when_ready(self.server.url)
+        except Exception:  # noqa: BLE001 - 打开浏览器失败不阻断服务
+            logger.exception("自动打开浏览器失败，请手动访问 %s", self.server.url)
+            webbrowser.open(self.server.url)
+
+        logger.info("浏览器模式运行中（Ctrl+C 退出）：%s", self.server.url)
+        try:
+            # 主线程阻塞，保持后端 daemon 线程存活（否则进程随主线程退出）
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            logger.info("收到 Ctrl+C，浏览器模式退出")
+        finally:
+            self._do_exit()
+
     # ---------- 窗口 ----------
     def _create_window(self) -> None:
         """创建 pywebview 窗口并加载后端地址（webview 延迟导入）。
@@ -205,6 +300,11 @@ class DesktopApp:
         # B10.T5：固定 WebView2 user-data 目录到应用数据目录，避免 storage 分区
         # 漂移导致 localStorage（主题 / QA 会话）跨重启丢失；配合 private_mode=False。
         storage_path = self._webview_storage_path()
+        # B13.T3：--minimized/--autostart 静默到托盘。仅当托盘会启用时隐藏窗口，
+        # 否则用户会失去找回窗口的入口（无托盘时照常显示）。
+        hidden = bool(
+            self.start_minimized and self.enable_tray
+        )
         self._window = webview.create_window(
             self.title,
             url,
@@ -213,8 +313,11 @@ class DesktopApp:
             x=x,
             y=y,
             maximized=bool(geom.get("maximized")),
+            hidden=hidden,
             js_api=install_js_api(),  # B10.T2：外链系统浏览器桥
         )
+        if hidden:
+            logger.info("--minimized/--autostart：窗口已静默到托盘，托盘「打开主界面」可显示")
         # B10.T2：页面加载后注入外链兜底脚本（覆写 window.open + 拦截点击）
         self._window.events.loaded += lambda: inject_new_window_guard(self._window)
         # B11.T3（K7）：页面加载后注入启动令牌到 window.__CNA_TOKEN__，

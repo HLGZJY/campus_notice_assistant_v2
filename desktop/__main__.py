@@ -24,8 +24,11 @@ if str(Path(__file__).resolve().parents[1]) not in sys.path:
 
 
 def main() -> None:
-    from desktop.app import DesktopApp
+    from desktop.app import DesktopApp, parse_cli_args
     from desktop.logging_setup import install_excepthooks, setup_logging
+
+    # B13.T3：解析启动参数 --minimized/--autostart/--browser（及 --no-tray）
+    args = parse_cli_args()
 
     # B05：最早配置日志落盘（含 stdout 为 None 时的重定向），并装崩溃钩子
     # console=False：日志统一落盘 data/logs/app.log，不挂 stdout（避免中文
@@ -34,7 +37,13 @@ def main() -> None:
     install_excepthooks()
 
     logger.info("校园通知智能助手 桌面版 v%s 启动中……", get_version())
-    app = DesktopApp()
+    app = DesktopApp(
+        enable_tray=not args.no_tray,
+        enable_single_instance=args.single_instance,
+        start_minimized=args.minimized,
+        autostart=args.autostart,
+        browser_mode=args.browser,
+    )
     try:
         app.run()
     except KeyboardInterrupt:
