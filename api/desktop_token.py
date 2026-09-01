@@ -42,6 +42,10 @@ _ENV_BROWSER = "CNA_BROWSER_MODE"
 # 命中才做令牌校验（防御远程访问）。
 _LOCAL_HOSTS = {"127.0.0.1", "::1", "localhost", "testclient"}
 
+# 豁免令牌校验的路径前缀：/api/v1/health 是壳看门狗与前端轮询的存活探针，
+# 同进程内嵌后端启动早期即需无令牌可达（否则看门狗会误判后端不健康而循环重启）。
+_TOKEN_EXEMPT_PREFIXES = ("/api/v1/health",)
+
 # 模块级当前令牌（壳注入 / 测试注入用）
 _current_token: str = ""
 
@@ -109,6 +113,8 @@ def install_token_middleware(
     @app.middleware("http")
     async def _desktop_token_check(request: Request, call_next):  # type: ignore[misc]
         if enabled and request.url.path.startswith("/api/v1/"):
+            if request.url.path.startswith(_TOKEN_EXEMPT_PREFIXES):
+                return await call_next(request)  # health 探针豁免
             host = (request.client.host if request.client else "") or ""
             if host in _LOCAL_HOSTS:
                 if request.headers.get(TOKEN_HEADER) != token_:
