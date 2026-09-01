@@ -42,7 +42,10 @@ def main() -> None:
     # B05：最早配置日志落盘（含 stdout 为 None 时的重定向），并装崩溃钩子。
     # 必须放在任何业务逻辑之前，否则 console=False 下 stdout 为 None 时
     # 早期 print / logging 可能直接崩溃（R1）。
-    setup_logging()
+    # console=False：桌面版日志统一落盘 data/logs/app.log，不依赖 stdout
+    # 编码（中文 Windows 控制台 cp1252 写中文会 UnicodeEncodeError），
+    # 即使 console=True 调试形态也只落盘、不挂 stdout。
+    setup_logging(console=False)
     install_excepthooks()
 
     from utils.app_paths import get_version

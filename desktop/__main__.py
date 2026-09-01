@@ -28,7 +28,9 @@ def main() -> None:
     from desktop.logging_setup import install_excepthooks, setup_logging
 
     # B05：最早配置日志落盘（含 stdout 为 None 时的重定向），并装崩溃钩子
-    setup_logging()
+    # console=False：日志统一落盘 data/logs/app.log，不挂 stdout（避免中文
+    # 控制台 cp1252 编码写中文日志报错），与 desktop_main.py 打包入口一致。
+    setup_logging(console=False)
     install_excepthooks()
 
     logger.info("校园通知智能助手 桌面版 v%s 启动中……", get_version())
