@@ -49,6 +49,25 @@ def _load_kernel32() -> Any:
     return ctypes.windll.kernel32
 
 
+# WNDCLASSW 结构（ctypes.wintypes 未内置，需自定义；与 WinUser.h 字段顺序一致）
+_HCURSOR = getattr(wintypes, "HCURSOR", wintypes.HANDLE)  # 缺失时等价 HANDLE
+
+
+class _WNDCLASSW(ctypes.Structure):
+    _fields_ = [
+        ("style", ctypes.c_uint),
+        ("lpfnWndProc", ctypes.c_void_p),
+        ("cbClsExtra", ctypes.c_int),
+        ("cbWndExtra", ctypes.c_int),
+        ("hInstance", wintypes.HINSTANCE),
+        ("hIcon", wintypes.HICON),
+        ("hCursor", _HCURSOR),
+        ("hbrBackground", wintypes.HBRUSH),
+        ("lpszMenuName", wintypes.LPCWSTR),
+        ("lpszClassName", wintypes.LPCWSTR),
+    ]
+
+
 def handle_message(
     hwnd: int,
     msg: int,
@@ -187,15 +206,31 @@ class ShutdownHook:
             )
             self._wndproc_ref = WNDPROC(self._wnd_proc)
 
-            WNDCLASSW = wintypes.WNDCLASSW
-            wc = WNDCLASSW()
-            wc.lpfnWndProc = self._wndproc_ref
-            wc.hInstance = hinst
-            wc.lpszClassName = _HIDDEN_CLASS
+            wc = _WNDCLASSW()
             wc.style = 0
+            wc.lpfnWndProc = ctypes.cast(self._wndproc_ref, ctypes.c_void_p)
+            wc.cbClsExtra = 0
+            wc.cbWndExtra = 0
+            wc.hInstance = hinst
+            wc.hIcon = None
             wc.hCursor = None
             wc.hbrBackground = None
-            wc.cbWndExtra = 0
+            wc.lpszMenuName = None
+            wc.lpszClassName = _HIDDEN_CLASS
+
+            # 设置 user32 函数签名（GetLastError / 指针参数需要）
+            user32.RegisterClassW.argtypes = [ctypes.POINTER(_WNDCLASSW)]
+            user32.RegisterClassW.restype = wintypes.ATOM
+            user32.GetClassInfoW.argtypes = [
+                wintypes.HINSTANCE, wintypes.LPCWSTR, ctypes.POINTER(_WNDCLASSW),
+            ]
+            user32.GetClassInfoW.restype = wintypes.BOOL
+            user32.CreateWindowExW.argtypes = [
+                ctypes.c_uint, wintypes.LPCWSTR, wintypes.LPCWSTR, ctypes.c_uint,
+                ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int,
+                wintypes.HWND, wintypes.HMENU, wintypes.HINSTANCE, wintypes.LPVOID,
+            ]
+            user32.CreateWindowExW.restype = wintypes.HWND
 
             atom = user32.RegisterClassW(ctypes.byref(wc))
             if atom == 0:
@@ -236,6 +271,11 @@ class ShutdownHook:
         """隐藏窗口的 WndProc：把系统消息交给 handle_message 分派。"""
         user32 = _load_user32()
         try:
+            user32.DefWindowProcW.argtypes = [
+                wintypes.HWND, ctypes.c_uint,
+                wintypes.WPARAM, wintypes.LPARAM,
+            ]
+            user32.DefWindowProcW.restype = ctypes.c_long
             def_proc = user32.DefWindowProcW
         except Exception:  # noqa: BLE001
             def_proc = None
