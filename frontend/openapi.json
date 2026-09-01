@@ -4196,6 +4196,190 @@
         }
       }
     },
+    "/api/v1/desktop/status": {
+      "get": {
+        "tags": [
+          "desktop"
+        ],
+        "summary": "Status",
+        "description": "壳状态：版本/端口/后端健康/调度状态/窗口可见性（P0）。\n\n壳未注册（纯后端 / --browser 降级）时返回 available=false，其余字段\n尽力填充（版本 / 后端健康始终可得）。",
+        "operationId": "status_api_v1_desktop_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Status Api V1 Desktop Status Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/desktop/scheduler": {
+      "post": {
+        "tags": [
+          "desktop"
+        ],
+        "summary": "Scheduler Action",
+        "description": "暂停/恢复调度（P1）。\n\n实际 pause()/resume() 由 B14 落地；本批在调度器尚未实现 pause/resume\n时返回 ``supported=false``，但契约（请求/响应结构）先固定。",
+        "operationId": "scheduler_action_api_v1_desktop_scheduler_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SchedulerAction"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Scheduler Action Api V1 Desktop Scheduler Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/desktop/autostart": {
+      "post": {
+        "tags": [
+          "desktop"
+        ],
+        "summary": "Autostart",
+        "description": "开关开机自启（P0）。\n\n实际写入 HKCU Run 由 B13 落地；本批先把开关持久化到壳 settings.json，\n并把期望值返回，供前端展示与 B13 对接。",
+        "operationId": "autostart_api_v1_desktop_autostart_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AutostartRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Autostart Api V1 Desktop Autostart Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/desktop/open-log-dir": {
+      "post": {
+        "tags": [
+          "desktop"
+        ],
+        "summary": "Open Log Dir",
+        "description": "打开日志目录（P0，系统文件管理器）。",
+        "operationId": "open_log_dir_api_v1_desktop_open_log_dir_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Open Log Dir Api V1 Desktop Open Log Dir Post"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/desktop/restart-backend": {
+      "post": {
+        "tags": [
+          "desktop"
+        ],
+        "summary": "Restart Backend",
+        "description": "手动重启后端线程（P1，排障用）。\n\n复用壳 server 的看门狗重启能力：停旧线程后重建。",
+        "operationId": "restart_backend_api_v1_desktop_restart_backend_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Restart Backend Api V1 Desktop Restart Backend Post"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/desktop/quit": {
+      "post": {
+        "tags": [
+          "desktop"
+        ],
+        "summary": "Quit App",
+        "description": "请求应用退出（P1，前端\"退出应用\"按钮）。\n\n触发壳的退出序列（K5）；退出过程中本响应尽力返回 ok，随后进程结束。",
+        "operationId": "quit_app_api_v1_desktop_quit_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Quit App Api V1 Desktop Quit Post"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/health": {
       "get": {
         "tags": [
@@ -4321,6 +4505,19 @@
         ],
         "title": "ApiKeyResult",
         "description": "API Key 写入结果。"
+      },
+      "AutostartRequest": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          }
+        },
+        "type": "object",
+        "required": [
+          "enabled"
+        ],
+        "title": "AutostartRequest"
       },
       "ConfigMutationResult": {
         "properties": {
@@ -5937,6 +6134,19 @@
         ],
         "title": "ReminderStatusUpdate",
         "description": "提醒状态变更请求体（pending / read / ignored）。"
+      },
+      "SchedulerAction": {
+        "properties": {
+          "action": {
+            "type": "string",
+            "title": "Action"
+          }
+        },
+        "type": "object",
+        "required": [
+          "action"
+        ],
+        "title": "SchedulerAction"
       },
       "SchedulerJobView": {
         "properties": {

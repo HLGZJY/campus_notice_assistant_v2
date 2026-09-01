@@ -1193,6 +1193,139 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/desktop/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Status
+         * @description 壳状态：版本/端口/后端健康/调度状态/窗口可见性（P0）。
+         *
+         *     壳未注册（纯后端 / --browser 降级）时返回 available=false，其余字段
+         *     尽力填充（版本 / 后端健康始终可得）。
+         */
+        get: operations["status_api_v1_desktop_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/desktop/scheduler": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Scheduler Action
+         * @description 暂停/恢复调度（P1）。
+         *
+         *     实际 pause()/resume() 由 B14 落地；本批在调度器尚未实现 pause/resume
+         *     时返回 ``supported=false``，但契约（请求/响应结构）先固定。
+         */
+        post: operations["scheduler_action_api_v1_desktop_scheduler_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/desktop/autostart": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Autostart
+         * @description 开关开机自启（P0）。
+         *
+         *     实际写入 HKCU Run 由 B13 落地；本批先把开关持久化到壳 settings.json，
+         *     并把期望值返回，供前端展示与 B13 对接。
+         */
+        post: operations["autostart_api_v1_desktop_autostart_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/desktop/open-log-dir": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Open Log Dir
+         * @description 打开日志目录（P0，系统文件管理器）。
+         */
+        post: operations["open_log_dir_api_v1_desktop_open_log_dir_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/desktop/restart-backend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restart Backend
+         * @description 手动重启后端线程（P1，排障用）。
+         *
+         *     复用壳 server 的看门狗重启能力：停旧线程后重建。
+         */
+        post: operations["restart_backend_api_v1_desktop_restart_backend_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/desktop/quit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Quit App
+         * @description 请求应用退出（P1，前端"退出应用"按钮）。
+         *
+         *     触发壳的退出序列（K5）；退出过程中本响应尽力返回 ok，随后进程结束。
+         */
+        post: operations["quit_app_api_v1_desktop_quit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/health": {
         parameters: {
             query?: never;
@@ -1259,6 +1392,11 @@ export interface components {
             error?: string | null;
         } & {
             [key: string]: unknown;
+        };
+        /** AutostartRequest */
+        AutostartRequest: {
+            /** Enabled */
+            enabled: boolean;
         };
         /**
          * ConfigMutationResult
@@ -2047,6 +2185,11 @@ export interface components {
         ReminderStatusUpdate: {
             /** Status */
             status: string;
+        };
+        /** SchedulerAction */
+        SchedulerAction: {
+            /** Action */
+            action: string;
         };
         /**
          * SchedulerJobView
@@ -5176,6 +5319,164 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    status_api_v1_desktop_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    scheduler_action_api_v1_desktop_scheduler_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SchedulerAction"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    autostart_api_v1_desktop_autostart_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AutostartRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    open_log_dir_api_v1_desktop_open_log_dir_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    restart_backend_api_v1_desktop_restart_backend_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    quit_app_api_v1_desktop_quit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
         };
