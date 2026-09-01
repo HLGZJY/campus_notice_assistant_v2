@@ -105,27 +105,40 @@ def resolve_port(preferred: int | None = None) -> int:
 
 
 class ServerManager:
-    """把后端 app 托管到 daemon 线程的 uvicorn 服务器。
+    """把后端 app 托管到 daemon 线程的 uvicorn 服务器，并带看门狗自动重启（B04）。
 
     用法：
         mgr = ServerManager(port=8000)
-        mgr.start()                 # 起 daemon 线程，线程内 import app + run()
+        mgr.start()                 # 起 daemon 线程 + 看门狗，线程内 import app + run()
         # ... 轮询 mgr.url + /api/v1/health 直到 200 ...
         mgr.stop()                  # should_exit=True -> join(timeout=10)
     """
+
+    # 看门狗参数：探活间隔 5s，连续 3 次失败（约 15s）触发重建
+    WATCHDOG_INTERVAL = 5.0
+    WATCHDOG_MAX_FAILURES = 3
 
     def __init__(
         self,
         host: str = "127.0.0.1",
         port: int | None = None,
         app_import: str = "api.main:app",
+        watchdog_enabled: bool = True,
+        stop_scheduler: Callable[[], None] | None = None,
     ) -> None:
         self.host = host
         # K1：端口粘性——优先复用上次端口，失败才顺序探测并写回
         self.port = port if port is not None else resolve_port()
         self.app_import = app_import
+        self.watchdog_enabled = watchdog_enabled
+        # 看门狗重启前停调度的回调（默认从 api.main.app.state.scheduler 取实例 stop，
+        # 也可由壳注入显式引用；None 则跳过显式 stop——B04.T3 幂等保护兜底）
+        self._stop_scheduler = stop_scheduler
         self._server: uvicorn.Server | None = None
         self._thread: threading.Thread | None = None
+        self._watchdog_thread: threading.Thread | None = None
+        self._stop_watchdog = threading.Event()
+        self._health_failures = 0
 
     # ---------- 只读属性 ----------
     @property
@@ -140,7 +153,7 @@ class ServerManager:
 
     # ---------- 启动 ----------
     def start(self) -> None:
-        """在 daemon 线程启动 uvicorn（不阻塞调用方）。
+        """在 daemon 线程启动 uvicorn + 看门狗（不阻塞调用方）。
 
         app 通过 import 字符串交给 uvicorn 延迟加载（对齐 run_app.py），
         lifespan（TaskManager + scheduler）由 uvicorn 照常拉起。
@@ -148,6 +161,12 @@ class ServerManager:
         if self.is_alive:
             logger.warning("后端已在运行，忽略重复 start()")
             return
+        self._start_server_thread()
+        if self.watchdog_enabled:
+            self._start_watchdog()
+
+    def _start_server_thread(self) -> None:
+        """仅启动 server daemon 线程（看门狗重建时复用，不重复启动看门狗）。"""
         self._thread = threading.Thread(
             target=self._run_server,
             name="uvicorn-server",
@@ -160,7 +179,7 @@ class ServerManager:
         """线程目标：创建 Config + Server 并 run()。
 
         注意：``server.run()`` 内部自建 asyncio event loop，子线程安全；
-        ``run()`` 返回后该实例不可复用（K2），重启需重建实例（B04）。
+        ``run()`` 返回后该实例不可复用（K2），重启需重建实例。
         """
         config = uvicorn.Config(
             self.app_import,
@@ -179,12 +198,95 @@ class ServerManager:
         finally:
             logger.info("后端托管线程已退出")
 
+    # ---------- 看门狗 ----------
+    def _start_watchdog(self) -> None:
+        """启动看门狗 daemon 线程（探活 + 崩溃自恢复）。"""
+        self._stop_watchdog.clear()
+        self._health_failures = 0
+        self._watchdog_thread = threading.Thread(
+            target=self._watchdog_loop,
+            name="desktop-watchdog",
+            daemon=True,
+        )
+        self._watchdog_thread.start()
+        logger.info("看门狗已启动（每 %.0fs 探活，连续 %d 次失败重建）",
+                    self.WATCHDOG_INTERVAL, self.WATCHDOG_MAX_FAILURES)
+
+    def _watchdog_loop(self) -> None:
+        """每 5s 探 /api/v1/health；连续 3 次失败 → 停调度 → 重建 server 实例。"""
+        while not self._stop_watchdog.is_set():
+            if self._stop_watchdog.wait(self.WATCHDOG_INTERVAL):
+                break  # 收到停止信号
+            if not self.is_alive:
+                # 后端线程已停止（主动 stop），无需重启
+                self._health_failures = 0
+                continue
+            if self._health_ok():
+                self._health_failures = 0
+            else:
+                self._health_failures += 1
+                logger.warning("后端健康检查失败（第 %d/%d 次）",
+                               self._health_failures, self.WATCHDOG_MAX_FAILURES)
+                if self._health_failures >= self.WATCHDOG_MAX_FAILURES:
+                    logger.warning("连续 %d 次健康检查失败，重建后端线程",
+                                   self.WATCHDOG_MAX_FAILURES)
+                    self._stop_scheduler_if_any()
+                    self._restart()
+                    self._health_failures = 0
+
+    def _health_ok(self) -> bool:
+        """GET /api/v1/health 是否 200。"""
+        import urllib.request
+
+        try:
+            with urllib.request.urlopen(f"{self.url}/api/v1/health", timeout=2) as resp:
+                return resp.status == 200
+        except Exception:  # noqa: BLE001 - 探活失败即视为不健康
+            return False
+
+    def _stop_scheduler_if_any(self) -> None:
+        """看门狗重启前停掉当前调度器（避免 lifespan 重跑时的可重入冲突）。
+
+        优先用壳注入的回调；否则尝试从 api.main.app.state.scheduler 取实例 stop；
+        都没有则跳过（B04.T3 的 start_scheduler 幂等保护会在 lifespan 重跑时兜底停旧实例）。
+        """
+        if self._stop_scheduler is not None:
+            try:
+                self._stop_scheduler()
+                logger.info("看门狗已停止调度器（显式回调）")
+            except Exception:  # noqa: BLE001
+                logger.exception("看门狗停止调度器回调失败")
+            return
+        try:
+            from api.main import app
+            sch = app.state.scheduler
+            if sch is not None:
+                sch.stop()
+                logger.info("看门狗已停止调度器（api.main.app.state.scheduler）")
+        except Exception:  # noqa: BLE001 - 拿不到调度器不阻塞重启
+            logger.debug("看门狗未能显式停止调度器（由幂等保护兜底）")
+
+    def _restart(self) -> None:
+        """停掉旧 server 线程后重建（K2：不可复用已返回的 Server 实例）。"""
+        if self._server is not None:
+            self._server.should_exit = True
+        if self._thread is not None and self._thread.is_alive():
+            self._thread.join(timeout=10)
+        self._thread = None
+        self._server = None
+        self._start_server_thread()
+
     # ---------- 停止 ----------
     def stop(self, timeout: float = 10.0) -> None:
-        """优雅退出：should_exit=True -> join(timeout)。
+        """优雅退出：停看门狗 → should_exit=True → join(timeout)。
 
         should_exit 会让 uvicorn 在完成当前请求后关闭并执行 lifespan shutdown。
         """
+        self._stop_watchdog.set()
+        if self._watchdog_thread is not None and self._watchdog_thread.is_alive():
+            self._watchdog_thread.join(timeout=5)
+        self._watchdog_thread = None
+
         if self._server is not None:
             self._server.should_exit = True
             logger.info("已请求后端退出（should_exit=True）")
