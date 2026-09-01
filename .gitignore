@@ -6,6 +6,7 @@ data/health/
 data/eval/
 data/*.db
 data/*.db-*
+data/runtime.json
 storage/*.db
 storage/*.db-*
 *.tmp
