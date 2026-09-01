@@ -68,6 +68,9 @@ from utils.app_paths import get_app_root
 
 logger = logging.getLogger(__name__)
 
+# 当前活跃的调度器实例（R4 幂等保护用）：start_scheduler 重建前先 stop 旧实例
+_active_scheduler: Optional[NoticeScheduler] = None
+
 DEFAULT_LOG_FILE = get_app_root() / "data" / "logs" / "scheduler.log"
 
 # 提取 job 晚于抓取 job 的秒数（同一周期内"抓取完成后触发提取"）
@@ -234,6 +237,15 @@ class NoticeScheduler:
         )
 
     def stop(self) -> None:
+        """停止调度器（幂等：未在运行则直接返回）。
+
+        幂等保护（R4）：后端看门狗重建 server 会重跑 lifespan，从而可能对同一
+        实例重复调用 stop()；APScheduler shutdown() 后实例不可复用，重复 shutdown
+        可能抛错，这里用 running 标记兜底。
+        """
+        if not self._scheduler.running:
+            logger.info("调度器未在运行，跳过停止")
+            return
         self._scheduler.shutdown(wait=False)
         logger.info("调度器已停止")
 
@@ -576,14 +588,33 @@ def start_scheduler(config: Optional[SchedulerConfig] = None) -> Optional[Notice
       - 日志用专用 logger（setup_api_logging），不接管 root，避免污染 uvicorn / API 日志；
       - config.enabled=false 时记日志并返回 None（不启动）。
 
+    **幂等保护（R4，B04.T3）**：后端看门狗重建 server 会重跑 lifespan，从而再次调用
+    本函数。若已有活跃调度器实例，先 stop 旧实例再重建，避免同一进程内出现两个
+    APScheduler 同时跑相同 job（max_instances=1 的调度语义被破坏）。
+
     Args:
         config: SchedulerConfig；未传时从 ConfigStore 单例读取（app.yaml scheduler 段）。
     """
+    global _active_scheduler
+
     if config is None:
         config = ConfigStore.get_instance().get_scheduler()
     if not config.enabled:
         logger.info("调度器已禁用（scheduler.enabled=false），跳过启动")
+        if _active_scheduler is not None:
+            logger.info("检测到已有调度器实例，停止并清空（enabled=false）")
+            _active_scheduler.stop()
+            _active_scheduler = None
         return None
+
+    # 幂等：已有活跃实例先 stop 再重建（APScheduler shutdown 后实例不可复用）
+    if _active_scheduler is not None:
+        if _active_scheduler._scheduler.running:
+            logger.info("检测到已有调度器在运行，先停止旧实例再重建（R4 幂等保护）")
+            _active_scheduler.stop()
+        else:
+            logger.info("检测到已停止的旧调度器实例，直接重建（R4 幂等保护）")
+        _active_scheduler = None
 
     log_path = setup_api_logging(config.log_file)
     logger.info("=" * 60)
@@ -598,6 +629,7 @@ def start_scheduler(config: Optional[SchedulerConfig] = None) -> Optional[Notice
     )
     scheduler.print_recovery_info()
     scheduler.start()
+    _active_scheduler = scheduler
     logger.info("调度器已并入后端进程（stop 由 API lifespan 统一处理）")
     return scheduler
 
