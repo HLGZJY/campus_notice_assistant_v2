@@ -77,6 +77,10 @@ export type TokenUsageSummary = components['schemas']['TokenUsageSummary']
 export type UpdateAsset = components['schemas']['UpdateAsset']
 export type UpdateCheckResult = components['schemas']['UpdateCheckResult']
 
+export type KeyDateItem = components['schemas']['KeyDateItem']
+export type SourceCenterAdoptRequest = components['schemas']['SourceCenterAdoptRequest']
+export type TaskTokenUsage = components['schemas']['TaskTokenUsage']
+
 /**
  * SSE done 事件负载里的来源引用（QAResult 的 as_source 转换后契约形态）。
  * 非响应模型，未出现在 openapi.json（sequelize 例外，路由层手动序列化），此处按 api/routes/qa.py 约定声明。
