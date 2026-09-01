@@ -15,32 +15,93 @@ K1 端口粘性（data/runtime.json）由 B04 在此之上替换为 ``resolve_po
 """
 from __future__ import annotations
 
+import json
 import logging
 import socket
 import threading
-from typing import Any
+from pathlib import Path
+from typing import Any, Callable
 
 import uvicorn
+
+from utils.app_paths import get_data_dir
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_PORT = 8000
 MAX_PORT_PROBE = 20  # 8000 ~ 8019
 
+# 上次成功端口落点。模块级可被测试替换（临时 runtime 文件），避免污染真实 data。
+RUNTIME_PATH: Path = get_data_dir() / "runtime.json"
+
+
+# ---------------------------------------------------------------------------
+# K1 端口粘性
+#
+# localStorage 按 origin 分区且 origin 含端口（DESKTOP-UPGRADE.md §2.4 R2），
+# 端口漂移会导致 QA session_id、问答历史缓存、主题设置静默丢失。
+# 方案：上次成功端口写入 data/runtime.json；启动时优先复用，失败才顺序探测并写回；
+#       runtime.json 写失败视为可容忍（降级为随机端口，不影响启动）。
+# ---------------------------------------------------------------------------
+def read_runtime_port() -> int | None:
+    """读上次成功端口（data/runtime.json）。缺失/损坏返回 None。"""
+    try:
+        data = json.loads(RUNTIME_PATH.read_text(encoding="utf-8"))
+        port = int(data.get("port"))
+        return port if 0 < port < 65536 else None
+    except Exception:  # noqa: BLE001 - 缺失/损坏/非法一律视为无粘性
+        return None
+
+
+def write_runtime_port(port: int) -> bool:
+    """把成功端口写回 data/runtime.json。失败返回 False（调用方容忍降级）。"""
+    try:
+        RUNTIME_PATH.parent.mkdir(parents=True, exist_ok=True)
+        RUNTIME_PATH.write_text(json.dumps({"port": port}), encoding="utf-8")
+        return True
+    except Exception:  # noqa: BLE001 - 写失败降级为随机端口，不阻塞启动
+        logger.warning("写入 runtime.json 失败（端口 %d），降级为无粘性", port)
+        return False
+
+
+def _port_free(port: int) -> bool:
+    """端口当前是否可绑定（127.0.0.1）。绑定后立即释放。"""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        try:
+            s.bind(("127.0.0.1", port))
+            return True
+        except OSError:
+            return False
+
 
 def find_free_port(start: int = DEFAULT_PORT) -> int:
-    """从 start 开始探测空闲端口（绑定后立即释放，存在轻微竞态，可接受）。
-
-    与 run_app.py 行为一致；B04 将升级为「优先复用上次端口」的粘性探测。
-    """
+    """从 start 开始探测空闲端口（绑定后立即释放，存在轻微竞态，可接受）。"""
     for port in range(start, start + MAX_PORT_PROBE):
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            try:
-                s.bind(("127.0.0.1", port))
-                return port
-            except OSError:
-                continue
+        if _port_free(port):
+            return port
     raise RuntimeError(f"端口 {start}~{start + MAX_PORT_PROBE - 1} 均被占用，请检查后重试")
+
+
+def resolve_port(preferred: int | None = None) -> int:
+    """解析本次启动端口（K1 粘性）。
+
+    规则：
+      1. 优先复用上次端口（preferred 未显式给出时从 runtime.json 读）；
+      2. 上次端口空闲 → 直接复用（不写回，保持原值）；
+      3. 上次端口被占 / 无记录 → 顺序探测并写回新端口；
+      4. 写回失败 → 降级（不抛异常），本次用探测到的端口即可。
+
+    Args:
+        preferred: 显式指定的首选端口；None 表示读 runtime.json 记录。
+    """
+    if preferred is None:
+        preferred = read_runtime_port()
+    if preferred is not None and _port_free(preferred):
+        return preferred
+    start = preferred if preferred is not None else DEFAULT_PORT
+    port = find_free_port(start=start)
+    write_runtime_port(port)  # 写失败可容忍，忽略返回值
+    return port
 
 
 class ServerManager:
@@ -60,7 +121,8 @@ class ServerManager:
         app_import: str = "api.main:app",
     ) -> None:
         self.host = host
-        self.port = port if port is not None else find_free_port()
+        # K1：端口粘性——优先复用上次端口，失败才顺序探测并写回
+        self.port = port if port is not None else resolve_port()
         self.app_import = app_import
         self._server: uvicorn.Server | None = None
         self._thread: threading.Thread | None = None
