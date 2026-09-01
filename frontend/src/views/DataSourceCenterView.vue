@@ -693,6 +693,7 @@ import {
 } from '@vicons/ionicons5'
 import { useSourceCenterStore } from '../stores/useSourceCenterStore'
 import { useConfigStore } from '../stores/useConfigStore'
+import { copyToClipboard } from '../utils/clipboard'
 import type { SourceCenterItem, SourceCenterPreviewItem, SourceConfig } from '../api/schema'
 
 const message = useMessage()
@@ -873,11 +874,11 @@ function onRemove(it: SourceCenterItem) {
 async function copyUrl() {
   const u = previewUrl.value
   if (!u) return
-  try {
-    await navigator.clipboard.writeText(u)
+  const ok = await copyToClipboard(u) // B10.T3：降级链（clipboard → execCommand）
+  if (ok) {
     message.success('链接已复制')
-  } catch {
-    message.info(u)
+  } else {
+    message.info(u) // 最后兜底：直接展示文本供手动复制
   }
 }
 
