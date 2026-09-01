@@ -328,7 +328,11 @@ class DesktopApp:
         """
         if self._exiting:
             return  # 已在退出流程中（幂等）
-        # (B08.T3 二次确认将在此插入)
+        # B08.T3：有进行中任务 → 二次确认（用户取消则中止退出）
+        if has_running_tasks():
+            if not self._confirm_exit():
+                logger.info("有任务进行中，用户取消退出，进程继续运行")
+                return
         self._exiting = True
         logger.info("开始退出……")
         if self.tray is not None:
@@ -343,7 +347,27 @@ class DesktopApp:
             except Exception:  # noqa: BLE001
                 logger.exception("销毁窗口异常")
 
-    # (B08.T3 二次确认方法 _confirm_exit 将在下一原子提交加入)
+    def _confirm_exit(self) -> bool:
+        """「有任务进行中，确认退出？」二次确认（B08.T3）。
+
+        Returns:
+            True：用户确认退出；False：用户取消，中止退出。
+        有 GUI 窗口时用 pywebview 确认对话框；无窗口（异常/测试桩）回退为
+        记日志 + 返回 True（不阻塞退出）。测试可注入桩覆盖本方法。
+        """
+        message = "有任务正在进行中，退出将中断这些任务。确认退出吗？"
+        try:
+            import webview
+
+            if webview.windows:
+                return bool(
+                    webview.windows[0].create_confirmation_dialog(message)
+                )
+        except Exception:  # noqa: BLE001 - 对话框失败不阻塞退出
+            logger.debug("退出二次确认对话框失败（默认放行）", exc_info=True)
+        logger.info("退出二次确认：未弹出对话框（回退放行）")
+        return True
+
     def _save_window_geometry(self) -> None:
         """退出前把当前窗口位置/大小写入 settings.json（B06.T3）。
 
