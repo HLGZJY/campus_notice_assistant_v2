@@ -64,6 +64,13 @@ class AutostartRequest(BaseModel):
     enabled: bool
 
 
+class SettingsRequest(BaseModel):
+    """B15：壳设置更新（桌面设置页）。仅覆盖传入的非 None 字段。"""
+
+    close_action: Optional[str] = None  # "minimize_to_tray" | "exit"
+    start_minimized: Optional[bool] = None  # 启动时最小化到托盘
+
+
 # ---------------------------------------------------------------------------
 # 端点
 # ---------------------------------------------------------------------------
@@ -96,6 +103,17 @@ def status(request: Request) -> dict:
             logger.debug("desktop/status 取调度器状态失败", exc_info=True)
             scheduler_state = {"running": False, "jobs": []}
 
+    # B15：暴露壳设置子集（供桌面设置页初始化回填）。壳未注册时尽力从
+    # ShellSettings 读磁盘；全不可得则返回空 dict（前端按默认值回填）。
+    settings_view: dict = {}
+    if app is not None:
+        settings_obj = getattr(app, "settings", None)
+        if settings_obj is not None:
+            settings_view = {
+                "close_action": settings_obj.get("close_action", "minimize_to_tray"),
+                "start_minimized": bool(settings_obj.get("start_minimized", False)),
+            }
+
     return {
         "available": app is not None,
         "version": get_version(),
@@ -103,6 +121,48 @@ def status(request: Request) -> dict:
         "backend_health": "ok",  # 能进到本端点即后端健康
         "scheduler": scheduler_state,
         "window_visible": bool(window is not None),
+        "settings": settings_view,
+    }
+
+
+@router.post("/settings")
+def update_settings(payload: SettingsRequest) -> dict:
+    """更新壳设置（B15：桌面设置页的「启动方式 / 关闭行为」）。
+
+    仅覆盖传入的非 None 字段并落盘 settings.json；即时生效的项（close_action）
+    由壳在下一次窗口事件（如点 X）读取最新值，无需重启。
+    ``start_minimized`` 属启动时行为，改动后下一次启动生效（D-39「重启后保持」）。
+    """
+    app = get_desktop_app()
+    settings = getattr(app, "settings", None) if app is not None else None
+
+    allowed_close_actions = {"minimize_to_tray", "exit"}
+    if payload.close_action is not None and payload.close_action not in allowed_close_actions:
+        raise HTTPException(status_code=422, detail="close_action 须为 minimize_to_tray 或 exit")
+
+    # 壳已注册 → 写活壳的 settings 实例；未注册 → 用独立实例读/写磁盘，保留用户意图。
+    if settings is None:
+        from desktop.config import ShellSettings
+
+        settings = ShellSettings().load()
+
+    if payload.close_action is not None:
+        settings.set("close_action", payload.close_action)
+    if payload.start_minimized is not None:
+        settings.set("start_minimized", bool(payload.start_minimized))
+    saved = settings.save()
+
+    logger.info(
+        "桌面控制面：更新壳设置 close_action=%s start_minimized=%s（saved=%s）",
+        payload.close_action,
+        payload.start_minimized,
+        saved,
+    )
+    return {
+        "ok": True,
+        "saved": saved,
+        "close_action": settings.get("close_action"),
+        "start_minimized": bool(settings.get("start_minimized", False)),
     }
 
 

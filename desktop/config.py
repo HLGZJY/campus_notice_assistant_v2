@@ -57,9 +57,9 @@ class ShellSettings:
         """壳设置的默认值（B06 起叠加窗口几何等字段）。"""
         return {
             "window": {},          # 窗口几何（B06 填充：x/y/width/height/maximized）
-            "close_action": "exit",  # B06 起可为 "minimize_to_tray"
+            "close_action": "minimize_to_tray",  # B06 实际行为即最小化到托盘；B15 起可配置 "exit"
             "autostart": False,    # B13 填充：开机自启
-            "start_minimized": False,  # B13 填充
+            "start_minimized": False,  # B13 填充；B15 起作为「启动方式」用户偏好
         }
 
     # ---------- 读写 ----------

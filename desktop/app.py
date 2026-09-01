@@ -297,10 +297,15 @@ class DesktopApp:
         # B10.T5：固定 WebView2 user-data 目录到应用数据目录，避免 storage 分区
         # 漂移导致 localStorage（主题 / QA 会话）跨重启丢失；配合 private_mode=False。
         storage_path = self._webview_storage_path()
-        # B13.T3：--minimized/--autostart 静默到托盘。仅当托盘会启用时隐藏窗口，
-        # 否则用户会失去找回窗口的入口（无托盘时照常显示）。
+        # B13.T3：--minimized/--autostart 静默到托盘。
+        # B15：合并「启动方式」用户偏好（settings.start_minimized）——CLI 参数
+        # 优先（自启场景），用户偏好作为兜底，二者任一开启即最小化到托盘。
+        # 仅当托盘会启用时隐藏窗口，否则用户会失去找回窗口的入口（无托盘时照常显示）。
+        settings_start_minimized = bool(
+            self.settings.get("start_minimized") if self.settings is not None else False
+        )
         hidden = bool(
-            self.start_minimized and self.enable_tray
+            (self.start_minimized or settings_start_minimized) and self.enable_tray
         )
         self._window = webview.create_window(
             self.title,
@@ -381,12 +386,22 @@ class DesktopApp:
         返回 True → 放行关闭；返回 False → 取消关闭（最小化到托盘）。
         - 托盘「退出」触发后（self._exiting）→ 返回 True 放行，让 webview.start()
           返回、走退出收尾；
-        - 托盘可用（self._tray_available）→ window.hide() + 返回 False，进程常驻；
-        - 无托盘 → 返回 True（关闭即退出，回滚点语义）。
+        - 托盘可用（self._tray_available）→ 依 B15 配置的关闭行为：
+            close_action == "exit" → 放行关闭（True）；
+            否则（默认 minimize_to_tray / settings 缺失）→ window.hide() + False，进程常驻；
+        - 无托盘 → 返回 True（关闭即退出，回滚点语义，close_action 不覆盖此场景）。
         """
         if self._exiting:
             return True  # 已进入退出流程，放行关闭
         if self._tray_available:
+            # B15：读取用户配置的「关闭行为」（默认最小化到托盘，维持 B06 语义）。
+            # settings 为 None（离线测试/极端场景）时回退到最小化到托盘。
+            close_action = None
+            if self.settings is not None:
+                close_action = self.settings.get("close_action")
+            if close_action == "exit":
+                logger.info("关闭行为为「直接退出」，放行关闭")
+                return True
             try:
                 self._window.hide()
             except Exception:  # noqa: BLE001
