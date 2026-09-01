@@ -7,6 +7,8 @@ data/eval/
 data/*.db
 data/*.db-*
 data/runtime.json
+# B10.T5：WebView2 user-data（localStorage/缓存），固定 storage_path 目录，不得入库
+data/webview/
 storage/*.db
 storage/*.db-*
 *.tmp
