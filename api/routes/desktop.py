@@ -88,6 +88,8 @@ def status(request: Request) -> dict:
             scheduler_state = {
                 "running": info.get("running", False),
                 "interval_minutes": info.get("interval_minutes"),
+                "paused": info.get("paused", False),
+                "heavy_paused": info.get("heavy_paused", False),
                 "jobs": info.get("jobs", []),
             }
         except Exception:  # noqa: BLE001 - 调度器状态取不到不阻塞 status

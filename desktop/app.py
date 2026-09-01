@@ -411,7 +411,9 @@ class DesktopApp:
                     "on_open": self._tray_open,
                     "on_quit": self.quit,
                     "on_open_log_dir": self._open_log_dir,
-                    # on_toggle_pause / on_check_update：B06 不注入，走 tray 内置占位通知
+                    # B14：托盘「暂停调度」接入真实 pause/resume（K9）。
+                    # on_check_update 仍走 tray 内置占位（B18 落地）。
+                    "on_toggle_pause": self._toggle_pause_scheduler,
                 },
             )
             if self.tray.start():
@@ -445,6 +447,34 @@ class DesktopApp:
             logger.info("托盘「打开日志目录」：%s", log_dir)
         except Exception:  # noqa: BLE001
             logger.exception("打开日志目录失败")
+
+    def _toggle_pause_scheduler(self) -> None:
+        """托盘「暂停调度」：在全局 pause/resume 间切换（B14，K9）。
+
+        取后端进程内挂载的调度器实例（app.state.scheduler，与 /desktop/scheduler
+        端点同一数据源），执行 pause()/resume() 并通过托盘通知反馈当前状态。
+        调度器未启用（scheduler.enabled=false / test 模式）时给出提示并跳过。
+        """
+        try:
+            from api.main import app
+
+            sched = getattr(app.state, "scheduler", None)
+            if sched is None:
+                logger.info("托盘「暂停调度」：调度器未启用，跳过")
+                if self.tray is not None:
+                    self.tray.notify("调度器未启用", "调度")
+                return
+            if sched.paused:
+                ok = sched.resume()
+                state = "已恢复" if ok else "恢复失败"
+            else:
+                ok = sched.pause()
+                state = "已暂停" if ok else "暂停失败"
+            logger.info("托盘「暂停调度」：%s", state)
+            if self.tray is not None:
+                self.tray.notify(f"调度{state}", "调度")
+        except Exception:  # noqa: BLE001 - 托盘切换调度失败不崩溃
+            logger.exception("托盘「暂停调度」异常")
 
     # ---------- 关机信号（B08.T2） ----------
     def _setup_shutdown_hook(self) -> None:

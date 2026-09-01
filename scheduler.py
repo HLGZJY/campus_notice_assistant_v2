@@ -162,6 +162,11 @@ class NoticeScheduler:
         # 抓取轮次计数（阶段 7：deep_check_interval_cycles 定期深度变更检测）
         self._crawl_cycles = 0
         self._scheduler = BackgroundScheduler()
+        # B14：全局暂停标记（K9：scheduler.pause()/resume() 原生支持）。
+        # 初始 None 表示「未显式调用过」；首次 pause 后转 bool，供幂等判断。
+        self._paused: bool | None = None
+        # B14：重活（crawl/extract）单独挂起标记（空闲 gate 用，只影响 interval job）
+        self._heavy_paused: bool = False
 
     # ---------- 对外生命周期 ----------
 
@@ -247,7 +252,118 @@ class NoticeScheduler:
             logger.info("调度器未在运行，跳过停止")
             return
         self._scheduler.shutdown(wait=False)
+        self._paused = None
+        self._heavy_paused = False
         logger.info("调度器已停止")
+
+    # ---------- B14：pause/resume（K9） ----------
+
+    def pause(self) -> bool:
+        """暂停整个调度器（K9，APScheduler scheduler.pause() 原生支持）。
+
+        供 /api/v1/desktop/scheduler 与托盘「暂停调度」调用，替代「停线程」的
+        粗暴做法——不销毁实例、不重跑 lifespan，恢复后 job 从暂停点继续。
+
+        Returns:
+            bool：本次确实执行了暂停；已暂停/未运行返回 False（幂等）。
+        """
+        if not self._scheduler.running:
+            logger.info("调度器未运行，跳过暂停")
+            return False
+        if self._paused:
+            logger.info("调度器已处于暂停状态，跳过")
+            return False
+        try:
+            self._scheduler.pause()
+            self._paused = True
+            logger.info("调度器已暂停（K9）")
+            return True
+        except Exception:  # noqa: BLE001 - 暂停失败记录，不崩溃
+            logger.exception("暂停调度器失败")
+            return False
+
+    def resume(self) -> bool:
+        """恢复整个调度器（K9）。
+
+        Returns:
+            bool：本次确实恢复了调度；未在暂停/未运行返回 False（幂等）。
+        """
+        if not self._scheduler.running:
+            logger.info("调度器未运行，跳过恢复")
+            return False
+        if not self._paused:
+            logger.info("调度器未处于暂停状态，跳过恢复")
+            return False
+        try:
+            self._scheduler.resume()
+            self._paused = False
+            logger.info("调度器已恢复（K9）")
+            return True
+        except Exception:  # noqa: BLE001 - 恢复失败记录，不崩溃
+            logger.exception("恢复调度器失败")
+            return False
+
+    def pause_heavy(self) -> bool:
+        """仅挂起重活 job（crawl/extract），保留 daily/reminder/config-watch。
+
+        B14 空闲 gate 用：用户活跃时不跑抓取/批量提取这类重活，但凌晨的
+        daily 体检、每日提醒扫描、配置监听不受影响（它们不打断用户、也不是
+        高资源消耗）。APScheduler 支持按 job pause()/resume()。
+
+        Returns:
+            bool：本次确实执行了挂起；已挂起/未运行返回 False（幂等）。
+        """
+        if not self._scheduler.running:
+            return False
+        if self._heavy_paused:
+            return False
+        changed = False
+        for job_id in ("crawl", "extract"):
+            job = self._scheduler.get_job(job_id)
+            if job is not None:
+                try:
+                    job.pause()
+                    changed = True
+                except Exception:  # noqa: BLE001 - 单个 job 挂起失败不中断
+                    logger.exception("挂起重活 job %s 失败", job_id)
+        if changed:
+            self._heavy_paused = True
+            logger.info("重活（crawl/extract）已挂起（空闲 gate）")
+        return changed
+
+    def resume_heavy(self) -> bool:
+        """恢复重活 job（crawl/extract）。
+
+        Returns:
+            bool：本次确实执行了恢复；未挂起/未运行返回 False（幂等）。
+        """
+        if not self._scheduler.running:
+            return False
+        if not self._heavy_paused:
+            return False
+        changed = False
+        for job_id in ("crawl", "extract"):
+            job = self._scheduler.get_job(job_id)
+            if job is not None:
+                try:
+                    job.resume()
+                    changed = True
+                except Exception:  # noqa: BLE001 - 单个 job 恢复失败不中断
+                    logger.exception("恢复重活 job %s 失败", job_id)
+        if changed:
+            self._heavy_paused = False
+            logger.info("重活（crawl/extract）已恢复（空闲 gate）")
+        return changed
+
+    @property
+    def paused(self) -> bool:
+        """当前是否处于全局暂停（供 get_status / 控制面展示）。"""
+        return bool(self._paused)
+
+    @property
+    def heavy_paused(self) -> bool:
+        """当前重活是否被挂起（空闲 gate 状态）。"""
+        return self._heavy_paused
 
     def run_once(self) -> None:
         """--once：按顺序跑一轮完整闭环，结果全部落库后退出。"""
@@ -304,6 +420,8 @@ class NoticeScheduler:
         return {
             "running": self._scheduler.running,
             "interval_minutes": self._current_interval,
+            "paused": bool(self._paused),
+            "heavy_paused": self._heavy_paused,
             "jobs": jobs,
         }
 
