@@ -172,6 +172,21 @@ def compile_innosetup(flavor: str, version: str, iscc_path: str | None = None) -
     return setup
 
 
+def desktop_ascii_setup_name(version: str) -> str:
+    """桌面版安装包在 GitHub Release 上的 ASCII 发布名（与 CI workflow 一致）。
+
+    CI release 段把中文产物名复制为 ASCII 名再上传（避免中文 asset 名在
+    GitHub Releases 被编码破坏成 ``-.-setup.exe``，见 B19/PACKAGING.md）：
+        campus-notice-assistant-desktop-setup-<tag>.exe
+    其中 <tag> 用 Git tag（如 v0.2.0，含 v 前缀，与 CI 的 github.ref_name 一致，
+    也与 docs/DISTRIBUTION.md 的发布名示例一致）。更新清单 latest.json 的
+    asset name/url 必须与它一致，否则 ``releases/latest/download/<名>`` 404，
+    更新闭环失效。
+    """
+    tag = version if version.startswith("v") else f"v{version}"
+    return f"campus-notice-assistant-desktop-setup-{tag}.exe"
+
+
 def write_latest_json(setup: Path, version: str) -> Path | None:
     """生成桌面版更新清单 latest.json（B18 更新闭环的清单侧）。
 
@@ -180,7 +195,7 @@ def write_latest_json(setup: Path, version: str) -> Path | None:
         out/latest.json：
         {"version": "<VERSION>",
          "notes": "",
-         "assets": [{"name": "<桌面版安装包名>",
+         "assets": [{"name": "<ASCII 发布名>",
                      "url": "https://github.com/<repo>/releases/latest/download/<名>",
                      "sha256": "<hex>"}]}
 
@@ -188,14 +203,19 @@ def write_latest_json(setup: Path, version: str) -> Path | None:
     desktop.updater.manifest_url 拼法一致；repo 从 config/app.yaml 的 update.repo
     读取，未配置则 url 留空（发布前需人工回填或先配置 repo）。
 
+    **asset 名用 ASCII 发布名**（desktop_ascii_setup_name），而非本地中文产物名：
+    正式发布时 CI 以 ASCII 名上传安装包，latest.json 必须与之对齐，否则更新器
+    拉不到安装包（P1，B22 发布正确性修复）。
+
     Args:
-        setup: 桌面版安装包完整路径。
+        setup: 桌面版安装包完整路径（用于计算 sha256）。
         version: 应用版本号（取自 VERSION）。
     Returns:
         latest.json 路径；写入失败返回 None。
     """
     out_dir = setup.parent
-    name = setup.name
+    # 发布物用 ASCII 名（与 CI release 上传名一致）；本地中文名仅用于定位 sha256 源
+    name = desktop_ascii_setup_name(version)
     sha = hashlib.sha256(setup.read_bytes()).hexdigest()
 
     # 尝试从 config/app.yaml 读 update.repo，拼 release 下载 URL

@@ -144,6 +144,7 @@ jobs:
           Copy-Item $exe $ascii
           $sha = Get-Content 'packaging/out/校园通知助手-桌面版-setup.exe.sha256' -Raw
           $shaNote = $sha.Trim()
-          gh release create $env:VERSION $ascii `
+          # latest.json 一并上传（B18 更新闭环拉取清单的入口；build.py 已用 ASCII 发布名）
+          gh release create $env:VERSION $ascii 'packaging/out/latest.json' `
             --title "校园通知智能助手 $env:VERSION（桌面版）" `
             --notes "## 桌面版 $env:VERSION`n`n**安装包 sha256**`n``````text`n$shaNote`n```````n`n> 下载说明与误报申诉见仓库分发页（docs/DISTRIBUTION.md）。"
