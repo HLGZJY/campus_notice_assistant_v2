@@ -31,10 +31,27 @@ HEALTH_PATH = "/api/v1/health"
 def has_running_tasks() -> bool:
     """是否有进行中的异步任务（B08 用于退出二次确认）。
 
-    骨架阶段占位：直接返回 False（B08 接入 TaskManager 后改为真实判断）。
+    判断标准：tasks 表中存在 ``queued`` 或 ``running`` 状态的任务
+    （status ∈ {queued, running}，见 storage/db.py tasks 表）。
+    队列里仍有排队任务同样视为「进行中」——退出会中断它们，需提示用户。
+
+    DB 不可用 / 未初始化时返回 False（宁可放行退出，也不因查询异常阻塞，
+    与 B05「退出不被打断」原则一致）。
     """
-    # TODO(B08): 从 api.tasks.manager 查询 running 任务数
-    return False
+    try:
+        from storage.db import get_connection
+
+        conn = get_connection()
+        try:
+            cur = conn.execute(
+                "SELECT COUNT(*) FROM tasks WHERE status IN ('queued', 'running')"
+            )
+            return int(cur.fetchone()[0]) > 0
+        finally:
+            conn.close()
+    except Exception:  # noqa: BLE001 - DB 不可用视为无进行中任务
+        logger.debug("has_running_tasks 查询异常（视为无任务）", exc_info=True)
+        return False
 
 
 def wait_for_health(
@@ -86,6 +103,8 @@ class DesktopApp:
         self.tray: Any = None
         self._exiting = False  # 托盘「退出」触发后置位，closing 放行
         self._tray_available = False  # 托盘是否成功启动（影响关闭语义）
+        self._shutdown_done = False  # B08：退出序列是否已执行（幂等）
+        self.shutdown_hook: Any = None  # B08：WM_QUERYENDSESSION 关机钩子
         self.single_instance: Any = None  # B07：单实例锁（见 run()）
 
     # ---------- 主入口 ----------
@@ -175,6 +194,9 @@ class DesktopApp:
         )
         # K5：点 X 是否最小化到托盘，由 closing handler 决定（见 _on_closing）
         self._window.events.closing += self._on_closing
+        # B08.T2：注册 Windows 关机/注销信号（WM_QUERYENDSESSION 走同一退出路径）。
+        # 在 webview.start() 前后皆可调用；非 Windows/无 GUI 环境静默降级。
+        self._setup_shutdown_hook()
         # 创建托盘（失败则 _tray_available=False，退回「关闭即退出」）
         self._setup_tray()
         try:
@@ -258,16 +280,55 @@ class DesktopApp:
         except Exception:  # noqa: BLE001
             logger.exception("打开日志目录失败")
 
+    # ---------- 关机信号（B08.T2） ----------
+    def _setup_shutdown_hook(self) -> None:
+        """注册 Windows WM_QUERYENDSESSION 关机/注销钩子（K5）。
+
+        非 Windows / 无 GUI / 创建失败 → 静默降级（self.shutdown_hook=None），
+        不阻断启动。回调 ``_on_system_shutdown`` 在钩子消息泵线程被调用，
+        需线程安全。
+        """
+        try:
+            from desktop.shutdown_hook import ShutdownHook
+
+            hook = ShutdownHook(
+                on_shutdown=self._on_system_shutdown,
+                on_endsession=self._on_system_shutdown,
+            )
+            if hook.start():
+                self.shutdown_hook = hook
+            else:
+                self.shutdown_hook = None
+        except Exception:  # noqa: BLE001 - 关机钩子失败不影响启动
+            logger.debug("关机钩子创建失败（降级，无关机拦截）", exc_info=True)
+            self.shutdown_hook = None
+
+    def _on_system_shutdown(self) -> None:
+        """系统关机/注销触发：走统一退出路径（不弹确认对话框）。
+
+        系统关机不应被用户对话框阻塞（用户多半看不到也来不及点），
+        这里直接进入完整退出序列：写几何 → 停后端 → 停调度 → 停托盘 →
+        释放锁，并调用 sys.exit。若系统随后强制结束进程，SQLite 数据已在
+        优雅停止中 flush（无 -journal 残留），满足 Gate B08 完整性要求。
+        """
+        logger.info("收到系统关机/注销信号（WM_QUERYENDSESSION），进入退出序列")
+        try:
+            self._exiting = True  # closing 放行
+            self._do_exit()
+        except Exception:  # noqa: BLE001 - 关机路径异常不得阻塞系统关机
+            logger.exception("关机退出序列异常（放行系统关机）")
+
     # ---------- 退出 ----------
     def quit(self) -> None:
-        """触发退出（B06 托盘「退出」入口；幂等，可多线程调用）。
+        """触发退出（托盘「退出」入口；幂等，可多线程调用）。
 
-        B06 阶段：置退出标志 → 停托盘 → 销毁窗口（closing 放行，
-        webview.start() 返回）→ 由主线程 finally 的 _shutdown() 收尾停后端。
-        完整退出编排（写几何 → server → scheduler → tray → 锁）在 B08 补全。
+        B08 完整编排：先做「有进行中任务」的二次确认（B08.T3），通过后才
+        置退出标志 → 停托盘 → 写几何 → 销毁窗口（closing 放行，
+        webview.start() 返回）→ 由主线程 finally 的 _shutdown() 执行完整序列。
         """
         if self._exiting:
             return  # 已在退出流程中（幂等）
+        # (B08.T3 二次确认将在此插入)
         self._exiting = True
         logger.info("开始退出……")
         if self.tray is not None:
@@ -282,6 +343,7 @@ class DesktopApp:
             except Exception:  # noqa: BLE001
                 logger.exception("销毁窗口异常")
 
+    # (B08.T3 二次确认方法 _confirm_exit 将在下一原子提交加入)
     def _save_window_geometry(self) -> None:
         """退出前把当前窗口位置/大小写入 settings.json（B06.T3）。
 
@@ -301,13 +363,46 @@ class DesktopApp:
         except Exception:  # noqa: BLE001 - 几何保存失败不打断退出
             logger.debug("窗口几何保存失败（忽略）", exc_info=True)
 
-    def _shutdown(self) -> None:
-        """主线程收尾（webview.start() 返回后执行）：停后端并退出进程。
+    def _stop_scheduler(self) -> None:
+        """显式停止调度器（K5 退出序列第 3 步，幂等）。
 
-        B07：退出前释放单实例锁（B08 完整退出序列中 slot 亦会调用 release，
-        此处幂等兜底，确保任意路径退出都不残留锁）。
-        预留：scheduler.stop() 在 B08 补齐。
+        uvicorn 优雅关闭时 lifespan 会停调度器（api.main.py），此处为壳层
+        显式兜底（在 server 线程 join 后调用，确保任一退出路径都不残留调度线程）。
+        无调度器（test 模式 / 未启用）时静默跳过。
         """
+        try:
+            from api.main import app
+
+            sch = getattr(app.state, "scheduler", None)
+            if sch is not None:
+                sch.stop()
+                logger.info("调度器已停止（壳层显式）")
+        except Exception:  # noqa: BLE001 - 停调度失败不阻塞退出
+            logger.debug("壳层显式停调度器失败（由 uvicorn lifespan 兜底）", exc_info=True)
+
+    def _do_exit(self) -> None:
+        """K5 完整退出序列（幂等；主线程/关机钩子线程均可调用）。
+
+        顺序（DESKTOP-UPGRADE.md §6 K5）：
+          写窗口几何 → server.should_exit=True+join → scheduler.stop()
+          → pystray.stop() → 释放单实例锁 → sys.exit(0)
+        """
+        if self._shutdown_done:
+            return
+        self._shutdown_done = True
+        # 1. 写窗口几何
+        self._save_window_geometry()
+        # 2. 停后端（should_exit=True → join(timeout)，uvicorn lifespan 顺带停调度+任务管理）
+        self.server.stop(timeout=10)
+        # 3. 显式停调度器（兜底幂等）
+        self._stop_scheduler()
+        # 4. 停托盘
+        if self.tray is not None:
+            try:
+                self.tray.stop()
+            except Exception:  # noqa: BLE001 - 托盘停止失败不阻塞退出
+                logger.debug("托盘停止异常（忽略）", exc_info=True)
+        # 5. 释放单实例锁
         if self.single_instance is not None:
             try:
                 self.single_instance.release()
@@ -315,6 +410,19 @@ class DesktopApp:
             except Exception:  # noqa: BLE001 - 释放失败不阻塞退出
                 logger.debug("单实例锁释放异常（忽略）", exc_info=True)
             self.single_instance = None
-        self.server.stop(timeout=10)
+        # 6. 收尾
+        if self.shutdown_hook is not None:
+            try:
+                self.shutdown_hook.stop()
+            except Exception:  # noqa: BLE001
+                logger.debug("关机钩子停止异常（忽略）", exc_info=True)
         logger.info("退出完成")
         sys.exit(0)
+
+    def _shutdown(self) -> None:
+        """主线程收尾（webview.start() 返回后执行）：执行完整退出序列。
+
+        B08：把退出编排收拢到 _do_exit()（幂等），保证托盘退出、窗口关闭、
+        关机信号、watchdog 任一触发都走同一 K5 序列。
+        """
+        self._do_exit()
