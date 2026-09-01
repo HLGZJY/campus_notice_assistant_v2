@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
+import threading
 import time
 import urllib.request
 from pathlib import Path
@@ -430,8 +431,9 @@ class DesktopApp:
                     "on_quit": self.quit,
                     "on_open_log_dir": self._open_log_dir,
                     # B14：托盘「暂停调度」接入真实 pause/resume（K9）。
-                    # on_check_update 仍走 tray 内置占位（B18 落地）。
                     "on_toggle_pause": self._toggle_pause_scheduler,
+                    # B18：托盘「检查更新」接入真实更新闭环（下载→校验→确认→安装）。
+                    "on_check_update": self._check_update,
                 },
             )
             if self.tray.start():
@@ -525,6 +527,43 @@ class DesktopApp:
                 self.tray.notify(f"调度{state}", "调度")
         except Exception:  # noqa: BLE001 - 托盘切换调度失败不崩溃
             logger.exception("托盘「暂停调度」异常")
+
+    # ---------- 检查更新（B18） ----------
+    def _check_update(self) -> None:
+        """托盘「检查更新」：触发一次完整更新闭环（B18）。
+
+        复用 desktop.updater.perform_update（下载 → sha256 校验 → 弹窗确认 →
+        调用安装包 → 退出当前实例）。结果通过托盘通知反馈：
+          - 有更新并完成确认 → 启动安装包并退出本实例（安装器会接管）；
+          - 校验失败 / 下载失败 / 未配置 → 通知原因，不中断主功能（R12 降级）。
+        后台线程执行，避免阻塞托盘事件循环。
+        """
+        def _run() -> None:
+            try:
+                from desktop.updater import perform_update
+
+                result = perform_update(quit_fn=self.quit)
+                status = result.get("status", "error")
+                message = result.get("message", "")
+                if status == "ok":
+                    logger.info("检查更新：已进入安装流程 -> %s", message)
+                    if self.tray is not None:
+                        self.tray.notify(message, "检查更新")
+                elif status == "disabled":
+                    logger.info("检查更新：未配置 update.repo，更新已禁用")
+                    if self.tray is not None:
+                        self.tray.notify("未配置更新仓库，检查更新已禁用", "检查更新")
+                else:
+                    # error / cancelled：中止并提示原因，不影响主功能
+                    logger.info("检查更新：%s -> %s", status, message)
+                    if self.tray is not None:
+                        self.tray.notify(message or "检查更新未完成", "检查更新")
+            except Exception as e:  # noqa: BLE001 - 更新器异常不得带崩壳
+                logger.exception("检查更新异常")
+                if self.tray is not None:
+                    self.tray.notify(f"检查更新异常：{e}", "检查更新")
+
+        threading.Thread(target=_run, daemon=True).start()
 
     # ---------- 关机信号（B08.T2） ----------
     def _setup_shutdown_hook(self) -> None:
