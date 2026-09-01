@@ -25,7 +25,7 @@ export function useAsync<T>(fn: (signal?: AbortSignal) => Promise<T>) {
       data.value = res
       return res
     } catch (e) {
-      if ((e as any)?.name === 'AbortError') {
+      if ((e as Error)?.name === 'AbortError') {
         error.value = new Error('aborted')
       } else {
         error.value = e instanceof Error ? e : new Error(String(e))
