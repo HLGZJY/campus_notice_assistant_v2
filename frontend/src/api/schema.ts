@@ -115,3 +115,72 @@ export type SourceCenterPreviewItem = components['schemas']['SourceCenterPreview
 export type SourceCenterPreview = components['schemas']['SourceCenterPreview']
 export type SourceCenterPreviewByUrlRequest = components['schemas']['SourceCenterPreviewByUrlRequest']
 export type SourceCenterPreviewByUrlResult = components['schemas']['SourceCenterPreviewByUrlResult']
+
+// ---------- 桌面控制面（B15 桌面设置页） ----------
+// 桌面端点的响应多为裸 dict（路由层手动序列化，未用 response_model），openapi
+// 无法生成具体类型，故按 B02「openapi 单一事实源」规则在此声明前端契约形态。
+// 字段与 api/routes/desktop.py 逐端点的返回结构保持一致。
+
+/** 壳「启动方式 / 关闭行为」设置子集（/desktop/status 的 settings 字段 + /desktop/settings 读写）。 */
+export interface DesktopSettings {
+  close_action: 'minimize_to_tray' | 'exit'
+  start_minimized: boolean
+  /** 开机自启（仅 /desktop/status 回填时提供；由 /desktop/autostart 读写）。 */
+  autostart?: boolean
+}
+
+/** /desktop/status 响应（P0 壳状态）。 */
+export interface DesktopStatus {
+  available: boolean
+  version: string
+  port: number | null
+  backend_health: string
+  scheduler: {
+    running: boolean
+    interval_minutes?: number | null
+    paused?: boolean
+    heavy_paused?: boolean
+    jobs?: unknown[]
+  }
+  window_visible: boolean
+  settings: DesktopSettings
+}
+
+/** /desktop/settings POST 请求体（仅覆盖传入的非 null 字段）。 */
+export interface DesktopSettingsRequest {
+  close_action?: 'minimize_to_tray' | 'exit'
+  start_minimized?: boolean
+}
+
+/** /desktop/settings POST 响应。 */
+export interface DesktopSettingsResult {
+  ok: boolean
+  saved: boolean
+  close_action: DesktopSettings['close_action']
+  start_minimized: boolean
+}
+
+/** /desktop/autostart POST 请求体。 */
+export interface DesktopAutostartRequest {
+  enabled: boolean
+}
+
+/** /desktop/autostart POST 响应。 */
+export interface DesktopAutostartResult {
+  supported: boolean
+  enabled: boolean
+  applied: boolean
+  message: string
+}
+
+/** /desktop/open-log-dir POST 响应。 */
+export interface DesktopOpenLogDirResult {
+  ok: boolean
+  path: string
+}
+
+/** /desktop/quit POST 响应。 */
+export interface DesktopQuitResult {
+  ok: boolean
+  message: string
+}

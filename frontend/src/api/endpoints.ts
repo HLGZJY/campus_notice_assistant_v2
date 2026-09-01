@@ -85,6 +85,7 @@ export const endpoints = {
     status: `${API_BASE}/desktop/status`,
     scheduler: `${API_BASE}/desktop/scheduler`,
     autostart: `${API_BASE}/desktop/autostart`,
+    settings: `${API_BASE}/desktop/settings`,
     openLogDir: `${API_BASE}/desktop/open-log-dir`,
     restartBackend: `${API_BASE}/desktop/restart-backend`,
     quit: `${API_BASE}/desktop/quit`,

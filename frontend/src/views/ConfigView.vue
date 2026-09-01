@@ -10,6 +10,7 @@ import {
   CloudDownloadOutline,
   DiscOutline,
   FilterOutline,
+  FolderOpenOutline,
   InformationCircleOutline,
   KeyOutline,
   PaperPlaneOutline,
@@ -21,12 +22,18 @@ import {
 } from '@vicons/ionicons5'
 import { useConfigStore } from '../stores/useConfigStore'
 import { endpoints } from '../api/endpoints'
-import { get as httpGet } from '../api/http'
+import { get as httpGet, post as httpPost } from '../api/http'
 import { openExternal } from '../utils/openExternal'
 import StatCard from '../components/StatCard.vue'
 import type {
   ConfigMutationResult,
   CrawlConfig,
+  DesktopAutostartRequest,
+  DesktopAutostartResult,
+  DesktopOpenLogDirResult,
+  DesktopSettingsRequest,
+  DesktopSettingsResult,
+  DesktopStatus,
   ExtractConfig,
   ModelProfileView,
   ModelsConfig,
@@ -182,6 +189,8 @@ const TYPE_LABELS: Record<string, string> = {
 
 onMounted(async () => {
   await load()
+  // B15：初始化桌面设置（壳状态回填）；失败不阻断其余配置加载
+  await loadDesktop().catch(() => {})
 })
 
 async function load() {
@@ -523,6 +532,120 @@ async function reloadConfig() {
 
 function goSources() {
   router.push('/sources')
+}
+
+// ---------- 桌面设置（B15：设置页「桌面」分组） ----------
+const desktopLoading = ref(false)
+const desktopAvailable = ref(false) // 壳是否注册（纯后端 / --browser 降级为 false）
+const desktopSettings = ref<{ close_action: DesktopSettingsRequest['close_action']; start_minimized: boolean }>({
+  close_action: 'minimize_to_tray',
+  start_minimized: false,
+})
+const autostart = ref(false)
+const autostartBusy = ref(false)
+const settingsBusy = ref(false)
+const openingLogDir = ref(false)
+
+/** 初始化：读取壳状态回填桌面设置。壳未注册（available=false）时禁用所有开关。 */
+async function loadDesktop() {
+  desktopLoading.value = true
+  try {
+    const res = await httpGet<DesktopStatus>(endpoints.desktop.status)
+    desktopAvailable.value = !!res.available
+    if (res.settings) {
+      desktopSettings.value = {
+        close_action: res.settings.close_action === 'exit' ? 'exit' : 'minimize_to_tray',
+        start_minimized: !!res.settings.start_minimized,
+      }
+      // 开机自启状态由壳 settings 提供（/desktop/autostart 写盘 + 注册表）
+      if (typeof res.settings.autostart === 'boolean') {
+        autostart.value = res.settings.autostart
+      }
+    }
+  } catch {
+    desktopAvailable.value = false
+    message.error('桌面状态读取失败（后端不可达）')
+  } finally {
+    desktopLoading.value = false
+  }
+}
+
+/** 开机自启开关：即时写 HKCU Run（B13）并持久化。 */
+async function toggleAutostart(v: boolean) {
+  autostartBusy.value = true
+  try {
+    const payload: DesktopAutostartRequest = { enabled: v }
+    const res = await httpPost<DesktopAutostartResult>(endpoints.desktop.autostart, payload)
+    if (res.supported && res.applied) {
+      autostart.value = res.enabled
+      message.success(res.enabled ? '已开启开机自启' : '已关闭开机自启')
+    } else {
+      autostart.value = !v // 未落地注册表 → 回滚开关显示
+      message.warning(res.message || '开机自启注册表操作未生效，仅保存了设置')
+    }
+  } catch (e) {
+    autostart.value = !v
+    message.error(e instanceof Error ? e.message : String(e))
+  } finally {
+    autostartBusy.value = false
+  }
+}
+
+/** 启动方式（启动时最小化到托盘）：持久化 settings，重启生效。 */
+async function toggleStartMinimized(v: boolean) {
+  settingsBusy.value = true
+  try {
+    const payload: DesktopSettingsRequest = { start_minimized: v }
+    const res = await httpPost<DesktopSettingsResult>(endpoints.desktop.settings, payload)
+    desktopSettings.value.start_minimized = res.start_minimized
+    message.success(res.start_minimized ? '已开启「启动时最小化到托盘」，下次启动生效' : '已关闭「启动时最小化到托盘」，下次启动生效')
+  } catch (e) {
+    desktopSettings.value.start_minimized = !v
+    message.error(e instanceof Error ? e.message : String(e))
+  } finally {
+    settingsBusy.value = false
+  }
+}
+
+/** 关闭行为（最小化到托盘 / 直接退出）：持久化 settings，即时生效。 */
+async function changeCloseAction(v: 'minimize_to_tray' | 'exit') {
+  settingsBusy.value = true
+  try {
+    const payload: DesktopSettingsRequest = { close_action: v }
+    const res = await httpPost<DesktopSettingsResult>(endpoints.desktop.settings, payload)
+    desktopSettings.value.close_action = res.close_action
+    message.success(res.close_action === 'exit' ? '已切换为「直接退出」：点关闭按钮将退出应用' : '已切换为「最小化到托盘」：点关闭按钮将隐藏到托盘')
+  } catch (e) {
+    desktopSettings.value.close_action = v === 'exit' ? 'minimize_to_tray' : 'exit'
+    message.error(e instanceof Error ? e.message : String(e))
+  } finally {
+    settingsBusy.value = false
+  }
+}
+
+/** naive-ui n-radio-group 的 update:value 回调（值类型 string|number，转义为合法 close_action）。 */
+function onCloseActionChange(v: string | number) {
+  const next: 'minimize_to_tray' | 'exit' = String(v) === 'exit' ? 'exit' : 'minimize_to_tray'
+  changeCloseAction(next)
+}
+
+/** 日志导出：打开系统日志目录。 */
+async function openLogDir() {
+  openingLogDir.value = true
+  try {
+    const res = await httpPost<DesktopOpenLogDirResult>(endpoints.desktop.openLogDir)
+    if (res.ok) message.success(`已打开日志目录：${res.path}`)
+    else message.warning('日志目录打开失败')
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : String(e))
+  } finally {
+    openingLogDir.value = false
+  }
+}
+
+/** 检查更新入口：跳转到「检查更新」tab。 */
+function goUpdateTab() {
+  activeTab.value = 'update'
 }
 </script>
 
@@ -1278,6 +1401,108 @@ function goSources() {
                   {{ cfg.disk.last_modified || '—' }}
                 </n-descriptions-item>
               </n-descriptions>
+            </n-card>
+          </n-space>
+        </n-tab-pane>
+
+        <n-tab-pane
+          name="desktop"
+          tab="桌面"
+        >
+          <n-space
+            vertical
+            size="large"
+          >
+            <n-alert
+              v-if="!desktopAvailable"
+              type="warning"
+              :bordered="false"
+            >
+              当前以非桌面模式运行（浏览器访问 / 后端独立启动），桌面壳设置不可用。
+              请通过桌面版快捷方式启动后在此配置。
+            </n-alert>
+
+            <n-card
+              size="small"
+              :title="'启动与行为'"
+            >
+              <n-form
+                label-placement="left"
+                label-width="180"
+              >
+                <n-form-item label="开机自启">
+                  <n-space align="center">
+                    <n-switch
+                      :value="autostart"
+                      :disabled="!desktopAvailable || autostartBusy"
+                      :loading="autostartBusy"
+                      @update:value="toggleAutostart"
+                    />
+                    <span style="font-size: 12px; color: #999">登录 Windows 后自动在后台启动并驻留托盘</span>
+                  </n-space>
+                </n-form-item>
+                <n-form-item label="启动时最小化到托盘">
+                  <n-space align="center">
+                    <n-switch
+                      :value="desktopSettings.start_minimized"
+                      :disabled="!desktopAvailable || settingsBusy"
+                      @update:value="toggleStartMinimized"
+                    />
+                    <span style="font-size: 12px; color: #999">启动后不弹出主窗口，只在托盘运行（下次启动生效）</span>
+                  </n-space>
+                </n-form-item>
+                <n-form-item label="关闭行为">
+                  <n-radio-group
+                    :value="desktopSettings.close_action"
+                    :disabled="!desktopAvailable || settingsBusy"
+                    @update:value="onCloseActionChange"
+                  >
+                    <n-space vertical>
+                      <n-radio value="minimize_to_tray">
+                        最小化到托盘（点关闭按钮隐藏窗口，进程常驻）
+                      </n-radio>
+                      <n-radio value="exit">
+                        直接退出（点关闭按钮退出应用）
+                      </n-radio>
+                    </n-space>
+                  </n-radio-group>
+                </n-form-item>
+              </n-form>
+            </n-card>
+
+            <n-card
+              size="small"
+              title="维护"
+            >
+              <n-space>
+                <n-button
+                  secondary
+                  :loading="openingLogDir"
+                  :disabled="!desktopAvailable"
+                  @click="openLogDir"
+                >
+                  <template #icon>
+                    <n-icon><FolderOpenOutline /></n-icon>
+                  </template>
+                  打开日志目录
+                </n-button>
+                <n-button
+                  secondary
+                  @click="goUpdateTab"
+                >
+                  <template #icon>
+                    <n-icon><CloudDownloadOutline /></n-icon>
+                  </template>
+                  检查更新
+                </n-button>
+              </n-space>
+              <div
+                class="desktop-help"
+                style="margin-top: 10px; font-size: 12px; color: #999"
+              >
+                日志文件位于应用数据目录下 <code>logs/app.log</code>（自动轮转，保留 3 份）。
+                如需反馈问题，可将日志目录压缩后发给维护者。
+              </div>
             </n-card>
           </n-space>
         </n-tab-pane>
