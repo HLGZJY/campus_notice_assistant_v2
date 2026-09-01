@@ -53,6 +53,9 @@ data/benchmark_*.json
 # ---------- 单测临时库（test_vectorstore_singleton.py 等） ----------
 data/test_vs_singleton_*
 
+# ---------- 批次 demo / 实测脚本（计划文档约定不入库） ----------
+scratch/
+
 # ---------- 运行/调试产物（不入库） ----------
 p.out
 probe_sse.*
