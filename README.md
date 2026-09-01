@@ -336,6 +336,8 @@ python evaluate_extraction.py             # 黄金集提取准确率评估
 | [docs/RAG-POLLUTION.md](docs/RAG-POLLUTION.md) | RAG 污染防护专项          |
 | [docs/DEMO.md](docs/DEMO.md)                   | 订阅 + 提醒全链路演示        |
 | [docs/PACKAGING.md](docs/PACKAGING.md)         | 打包发布方案（PyInstaller + Inno Setup）实践记录 |
+| [docs/DESKTOP-UPGRADE.md](docs/DESKTOP-UPGRADE.md) | **桌面版升级方案 v0.2.0**：前端优化收尾 + 免后台命令的原生 PC 应用改造 |
+| [PLAN.md](PLAN.md)                             | 原生桌面版规划：选型对比、功能分解、里程碑 |
 | [docs/USAGE.md](docs/USAGE.md)                 | **打包版使用说明**：需要什么模型、怎么获取/配置 API Key |
 
 ## 九、开发路线图
@@ -344,6 +346,7 @@ python evaluate_extraction.py             # 黄金集提取准确率评估
 - [x] **短线开发**（W1–W4）：调度运维 / 检索质量 / 订阅提醒 / 埋点体检
 - [x] **前后端分离重构**（Phase 0–8）：FastAPI + Vue3 + 异步任务 + SSE + Docker
 - [x] **工程优化**（阶段 7）：增量抓取 / 提取预筛 / 模型失败切换 / Token 计量 / 问答缓存 / 数据源中心
+- [ ] **桌面化 v0.2.0**：pywebview 原生窗口 + 托盘 / 单实例 / 自启 / 更新闭环，免终端免浏览器独立启动（方案见 [DESKTOP-UPGRADE.md](docs/DESKTOP-UPGRADE.md)）
 - [ ] **规划中**：多学校适配、站外主动推送（邮件/微信/桌面）、多用户鉴权
 
 ## 十、关联项目
