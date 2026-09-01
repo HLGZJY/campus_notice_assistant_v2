@@ -54,12 +54,14 @@ async function ensureTokenReady(timeoutMs = 2500): Promise<boolean> {
   return !!desktopToken()
 }
 
-/** 统一请求：先确保令牌就绪，再 fetch；401 且令牌尚未注入时等待重试一次。 */
+/** 统一请求：先确保令牌就绪，再 fetch；遇 401（无效令牌）等待令牌后重试一次。 */
 async function request(input: string, init: RequestInit): Promise<Response> {
   await ensureTokenReady()
   let res = await fetch(input, withDesktopToken(init))
-  if (res.status === 401 && !desktopToken()) {
-    // 令牌仍未注入：再等一次并重试（桌面壳 loaded 注入晚于首屏请求的兜底）
+  if (res.status === 401) {
+    // 401 = 无效的桌面令牌：首屏 onMounted 请求可能早于壳的 loaded 令牌注入。
+    // 无论当前是否已取到令牌都等一次再重试——若令牌在请求发出后才就绪，
+    // 重试即成功；浏览器直连桌面后端（无令牌可等）保持 401（本场景不合理）。
     await ensureTokenReady(3000)
     if (desktopToken()) res = await fetch(input, withDesktopToken(init))
   }
