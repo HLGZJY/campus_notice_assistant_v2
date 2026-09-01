@@ -112,6 +112,7 @@ def status(request: Request) -> dict:
             settings_view = {
                 "close_action": settings_obj.get("close_action", "minimize_to_tray"),
                 "start_minimized": bool(settings_obj.get("start_minimized", False)),
+                "autostart": bool(settings_obj.get("autostart", False)),
             }
 
     return {
