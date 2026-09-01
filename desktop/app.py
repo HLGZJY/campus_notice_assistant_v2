@@ -27,9 +27,6 @@ logger = logging.getLogger(__name__)
 HEALTH_TIMEOUT = 30.0  # 等待后端就绪的秒数
 HEALTH_PATH = "/api/v1/health"
 
-# 默认窗口几何（首次启动 / 无历史记录时使用）
-DEFAULT_WINDOW = {"width": 1280, "height": 800}
-
 
 def has_running_tasks() -> bool:
     """是否有进行中的异步任务（B08 用于退出二次确认）。
@@ -129,13 +126,18 @@ class DesktopApp:
         import webview  # 延迟导入：无 webview 环境（回归/CI）不阻塞模块加载
 
         url = self.server.url
-        # B06.T3 会在此替换为 settings 恢复的几何；当前用默认几何
-        width, height = DEFAULT_WINDOW["width"], DEFAULT_WINDOW["height"]
+        # B06.T3：从 settings 恢复窗口几何（首次启动用默认）
+        geom = self.settings.get_window_geometry()
+        width, height = geom["width"], geom["height"]
+        x, y = geom.get("x"), geom.get("y")
         self._window = webview.create_window(
             self.title,
             url,
             width=width,
             height=height,
+            x=x,
+            y=y,
+            maximized=bool(geom.get("maximized")),
             # B04/B10 处理 localStorage 持久化：此处保持默认 private_mode，
             # 避免在未定案前引入行为变更。
         )
@@ -241,11 +243,31 @@ class DesktopApp:
                 self.tray.stop()
             except Exception:  # noqa: BLE001
                 logger.debug("托盘停止异常（忽略）", exc_info=True)
+        self._save_window_geometry()  # B06.T3：退出前记忆窗口几何
         if self._window is not None:
             try:
                 self._window.destroy()  # closing 放行 → webview.start() 返回
             except Exception:  # noqa: BLE001
                 logger.exception("销毁窗口异常")
+
+    def _save_window_geometry(self) -> None:
+        """退出前把当前窗口位置/大小写入 settings.json（B06.T3）。
+
+        读 window.x/y/width/height 属性；窗口不可用时（异常路径）跳过，
+        不打断退出。maximized 暂不判断（pywebview 无稳定窗口态 API），
+        保留 settings 字段默认 False，后续批次可完善。
+        """
+        w = self._window
+        if w is None:
+            return
+        try:
+            ok = self.settings.set_window_geometry(
+                x=w.x, y=w.y, width=w.width, height=w.height,
+            )
+            if ok:
+                logger.info("窗口几何已记忆：x=%s y=%s %sx%s", w.x, w.y, w.width, w.height)
+        except Exception:  # noqa: BLE001 - 几何保存失败不打断退出
+            logger.debug("窗口几何保存失败（忽略）", exc_info=True)
 
     def _shutdown(self) -> None:
         """主线程收尾（webview.start() 返回后执行）：停后端并退出进程。

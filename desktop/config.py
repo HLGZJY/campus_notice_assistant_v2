@@ -23,6 +23,15 @@ logger = logging.getLogger(__name__)
 
 SETTINGS_FILENAME = "settings.json"
 
+# 窗口几何默认值（首次启动 / 无历史记录时使用，B06.T3）
+DEFAULT_GEOMETRY = {
+    "x": None,         # 默认由系统定位
+    "y": None,
+    "width": 1280,
+    "height": 800,
+    "maximized": False,
+}
+
 
 def settings_path() -> Path:
     """壳设置文件完整路径。"""
@@ -91,6 +100,51 @@ class ShellSettings:
         """设单键值（仅内存，需自行调用 save 落盘）。"""
         with self._lock:
             self._data[key] = value
+
+    # ---------- 窗口几何（B06.T3） ----------
+    def get_window_geometry(self) -> dict[str, Any]:
+        """读取窗口几何（已与默认合并）。缺失字段回退默认值。
+
+        Returns:
+            dict：含 x / y / width / height / maximized。
+        """
+        with self._lock:
+            window = self._data.get("window") or {}
+            result = dict(DEFAULT_GEOMETRY)
+            for k, v in window.items():
+                if k in result and v is not None:
+                    result[k] = v
+            # 非法数值防御：宽高必须为正整数
+            for k in ("width", "height"):
+                try:
+                    result[k] = max(200, int(result[k]))
+                except (TypeError, ValueError):
+                    result[k] = DEFAULT_GEOMETRY[k]
+            return result
+
+    def set_window_geometry(
+        self,
+        *,
+        x: int | None = None,
+        y: int | None = None,
+        width: int | None = None,
+        height: int | None = None,
+        maximized: bool | None = None,
+    ) -> bool:
+        """保存窗口几何到 settings.json 并落盘。
+
+        仅覆盖传入的非 None 字段；write 失败返回 False（降级内存态，不打断退出）。
+        """
+        with self._lock:
+            window = dict(self._data.get("window") or {})
+            for key, val in (
+                ("x", x), ("y", y), ("width", width),
+                ("height", height), ("maximized", maximized),
+            ):
+                if val is not None:
+                    window[key] = val
+            self._data["window"] = window
+        return self.save()
 
     @staticmethod
     def _merge(base: dict, overlay: dict) -> dict:
