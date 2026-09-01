@@ -72,17 +72,21 @@ class DesktopApp:
         port: int | None = None,
         title: str = "校园通知智能助手",
         enable_tray: bool = True,
+        enable_single_instance: bool = True,
     ) -> None:
         self.host = host
         self.port = port
         self.title = title
         self.enable_tray = enable_tray  # --no-tray 可整体禁用托盘（回滚点）
+        # B07：单实例锁开关。False 则跳过加锁（可双开，R7 风险回归，仅排障用）
+        self.enable_single_instance = enable_single_instance
         self.settings = ShellSettings().load()
         self.server = ServerManager(host=host, port=port)
         self._window: Any | None = None
         self.tray: Any = None
         self._exiting = False  # 托盘「退出」触发后置位，closing 放行
         self._tray_available = False  # 托盘是否成功启动（影响关闭语义）
+        self.single_instance: Any = None  # B07：单实例锁（见 run()）
 
     # ---------- 主入口 ----------
     def run(self) -> None:
@@ -96,11 +100,39 @@ class DesktopApp:
         setup_logging()
         install_excepthooks()
 
+        # B07：单实例锁。已有实例 → 已尝试唤起它 → 本实例退出（不双开，R7）
+        if self.enable_single_instance and not self._acquire_single_instance():
+            logger.warning("检测到已有实例，已发送唤起指令，本实例退出")
+            sys.exit(0)
+
         self.start_backend()
         if not self._await_ready():
             logger.error("后端在 %.0fs 内未就绪，退出", HEALTH_TIMEOUT)
             sys.exit(1)
         self._create_window()
+
+    # ---------- 单实例（B07） ----------
+    def _acquire_single_instance(self) -> bool:
+        """取得单实例锁；已是主实例则注册唤起回调并返回 True，否则返回 False。
+
+        唤起回调复用托盘「打开主界面」的恢复逻辑（restore + show + focus）。
+        """
+        from desktop.single_instance import SingleInstanceLock
+
+        lock = SingleInstanceLock()
+        if not lock.acquire(on_activate=self._on_activate_request):
+            return False
+        self.single_instance = lock
+        logger.info("已取得单实例锁（socket 端口 %d）", lock.port)
+        return True
+
+    def _on_activate_request(self) -> None:
+        """第二实例发起唤起：恢复并显示主窗口（restore + show + focus）。
+
+        由单实例监听线程触发；与托盘「打开主界面」复用同一恢复逻辑。
+        窗口尚未创建时忽略（此时应用仍在启动早期，随后自会显示）。
+        """
+        self._tray_open()
 
     # ---------- 后端 ----------
     def start_backend(self) -> None:
@@ -272,8 +304,17 @@ class DesktopApp:
     def _shutdown(self) -> None:
         """主线程收尾（webview.start() 返回后执行）：停后端并退出进程。
 
-        预留：scheduler.stop() 与单实例锁释放（B08 在 quit() 完整序列中补齐）。
+        B07：退出前释放单实例锁（B08 完整退出序列中 slot 亦会调用 release，
+        此处幂等兜底，确保任意路径退出都不残留锁）。
+        预留：scheduler.stop() 在 B08 补齐。
         """
+        if self.single_instance is not None:
+            try:
+                self.single_instance.release()
+                logger.info("单实例锁已释放")
+            except Exception:  # noqa: BLE001 - 释放失败不阻塞退出
+                logger.debug("单实例锁释放异常（忽略）", exc_info=True)
+            self.single_instance = None
         self.server.stop(timeout=10)
         logger.info("退出完成")
         sys.exit(0)
