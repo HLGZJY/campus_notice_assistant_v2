@@ -85,6 +85,12 @@ class DesktopApp:
 
         窗口关闭后 webview.start() 返回，随后走退出路径。
         """
+        # B05：确保日志落盘 + 崩溃钩子已就绪（幂等，重复调用无害）
+        from desktop.logging_setup import install_excepthooks, setup_logging
+
+        setup_logging()
+        install_excepthooks()
+
         self.start_backend()
         if not self._await_ready():
             logger.error("后端在 %.0fs 内未就绪，退出", HEALTH_TIMEOUT)
