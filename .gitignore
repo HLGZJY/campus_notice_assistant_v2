@@ -35,6 +35,10 @@ Thumbs.db
 
 docs-local/assest
 
+# ---------- 批次开发过程产物（不入库） ----------
+# 验收记录、回归基线、下一轮会话启动 prompt 等均属本地过程文件
+docs-local/acceptance/
+
 # ---------- 其他 ----------
 config/app.yaml
 config/schools/scuec.yaml
