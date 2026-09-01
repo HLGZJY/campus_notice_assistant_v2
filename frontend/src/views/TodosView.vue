@@ -132,52 +132,115 @@ function barClass(type: 'success' | 'default' | 'error' | 'warning' | 'info'): s
 <template>
   <div class="todos">
     <div class="stats">
-      <StatCard :icon="ListOutline" label="待办" :value="todos.stats.pending" color="primary" hint="当前未完成（待开始/临期/逾期）的行动项" />
-      <StatCard :icon="AlarmOutline" label="临期提醒" color="error" hint="截止前 3/1 天自动生成的提醒">
+      <StatCard
+        :icon="ListOutline"
+        label="待办"
+        :value="todos.stats.pending"
+        color="primary"
+        hint="当前未完成（待开始/临期/逾期）的行动项"
+      />
+      <StatCard
+        :icon="AlarmOutline"
+        label="临期提醒"
+        color="error"
+        hint="截止前 3/1 天自动生成的提醒"
+      >
         <template #value>
           <span :style="{ color: reminders.pendingCount > 0 ? 'var(--error)' : undefined }">
             {{ reminders.pendingCount }}
           </span>
         </template>
       </StatCard>
-      <StatCard :icon="TimeOutline" label="逾期" :value="overdueCount" color="warning" hint="已超过截止日期的待办" />
-      <StatCard :icon="CheckmarkDoneOutline" label="已完成" :value="todos.stats.done" color="success" hint="累计完成的待办数量" />
+      <StatCard
+        :icon="TimeOutline"
+        label="逾期"
+        :value="overdueCount"
+        color="warning"
+        hint="已超过截止日期的待办"
+      />
+      <StatCard
+        :icon="CheckmarkDoneOutline"
+        label="已完成"
+        :value="todos.stats.done"
+        color="success"
+        hint="累计完成的待办数量"
+      />
     </div>
 
     <n-card :bordered="false">
       <template #header>
         <div class="section-title">
-          <n-icon size="18" color="var(--warning)"><AlarmOutline /></n-icon>
+          <n-icon
+            size="18"
+            color="var(--warning)"
+          >
+            <AlarmOutline />
+          </n-icon>
           临期提醒
           <span class="section-sub">截止前 3/1 天自动生成</span>
         </div>
       </template>
       <template #header-extra>
         <n-space>
-          <n-button size="small" secondary :loading="todos.loading" @click="refresh">
-            <template #icon><n-icon><RefreshOutline /></n-icon></template>
+          <n-button
+            size="small"
+            secondary
+            :loading="todos.loading"
+            @click="refresh"
+          >
+            <template #icon>
+              <n-icon><RefreshOutline /></n-icon>
+            </template>
             刷新
           </n-button>
-          <router-link to="/notices" class="inline-link">
-            <n-button size="small" type="primary" secondary>
-              <template #icon><n-icon><CheckmarkDoneCircleOutline /></n-icon></template>
+          <router-link
+            to="/notices"
+            class="inline-link"
+          >
+            <n-button
+              size="small"
+              type="primary"
+              secondary
+            >
+              <template #icon>
+                <n-icon><CheckmarkDoneCircleOutline /></n-icon>
+              </template>
               到通知页生成待办
             </n-button>
           </router-link>
         </n-space>
       </template>
 
-      <n-empty v-if="reminders.reminders.length === 0" description="暂无临期提醒" size="small">
+      <n-empty
+        v-if="reminders.reminders.length === 0"
+        description="暂无临期提醒"
+        size="small"
+      >
         <template #extra>
           <span class="muted">在「通知浏览」页对行动型通知点「生成待办」，临近截止时会自动提醒。</span>
         </template>
       </n-empty>
-      <div v-else class="reminder-list">
-        <div v-for="r in reminders.reminders" :key="r.id" class="reminder-row" :class="{ 'reminder-row--today': r.is_today }">
-          <div class="reminder-bar" :class="r.is_today ? 'bar--error' : 'bar--warning'" />
+      <div
+        v-else
+        class="reminder-list"
+      >
+        <div
+          v-for="r in reminders.reminders"
+          :key="r.id"
+          class="reminder-row"
+          :class="{ 'reminder-row--today': r.is_today }"
+        >
+          <div
+            class="reminder-bar"
+            :class="r.is_today ? 'bar--error' : 'bar--warning'"
+          />
           <div class="reminder-content">
             <div class="reminder-top">
-              <n-tag size="small" :bordered="false" :type="r.is_today ? 'error' : 'warning'">
+              <n-tag
+                size="small"
+                :bordered="false"
+                :type="r.is_today ? 'error' : 'warning'"
+              >
                 {{ r.is_today ? '今天截止' : r.tier_label || r.tier }}
               </n-tag>
               <span class="reminder-title">{{ r.notice_title || `通知 #${r.notice_id}` }}</span>
@@ -188,7 +251,14 @@ function barClass(type: 'success' | 'default' | 'error' | 'warning' | 'info'): s
             </div>
           </div>
           <div class="reminder-action">
-            <n-button size="small" quaternary type="error" @click="ignoreReminder(r.id)">忽略</n-button>
+            <n-button
+              size="small"
+              quaternary
+              type="error"
+              @click="ignoreReminder(r.id)"
+            >
+              忽略
+            </n-button>
           </div>
         </div>
       </div>
@@ -197,7 +267,12 @@ function barClass(type: 'success' | 'default' | 'error' | 'warning' | 'info'): s
     <n-card :bordered="false">
       <template #header>
         <div class="section-title">
-          <n-icon size="18" color="var(--primary)"><ListOutline /></n-icon>
+          <n-icon
+            size="18"
+            color="var(--primary)"
+          >
+            <ListOutline />
+          </n-icon>
           待办清单
         </div>
       </template>
@@ -211,15 +286,32 @@ function barClass(type: 'success' | 'default' | 'error' | 'warning' | 'info'): s
           <span class="muted">去「通知浏览」页为行动型通知生成待办。</span>
         </template>
       </n-empty>
-      <div v-else class="todo-list">
-        <div v-for="t in todos.list" :key="t.id" class="todo-row">
-          <div class="todo-bar" :class="barClass(todoStatusMeta(t.status, t.due_at).type)" />
+      <div
+        v-else
+        class="todo-list"
+      >
+        <div
+          v-for="t in todos.list"
+          :key="t.id"
+          class="todo-row"
+        >
+          <div
+            class="todo-bar"
+            :class="barClass(todoStatusMeta(t.status, t.due_at).type)"
+          />
           <div class="todo-main">
             <div class="todo-top">
-              <n-tag size="small" :bordered="false" :type="todoStatusMeta(t.status, t.due_at).type">
+              <n-tag
+                size="small"
+                :bordered="false"
+                :type="todoStatusMeta(t.status, t.due_at).type"
+              >
                 {{ todoStatusMeta(t.status, t.due_at).label }}
               </n-tag>
-              <span class="todo-action" :class="{ 'todo-action--done': t.status === 'done' }">
+              <span
+                class="todo-action"
+                :class="{ 'todo-action--done': t.status === 'done' }"
+              >
                 {{ t.action }}
               </span>
               <n-tag
@@ -233,13 +325,23 @@ function barClass(type: 'success' | 'default' | 'error' | 'warning' | 'info'): s
             </div>
             <div class="todo-meta muted">
               来源：
-              <n-a v-if="t.notice_url" :href="t.notice_url" target="_blank" rel="noopener">
+              <n-a
+                v-if="t.notice_url"
+                :href="t.notice_url"
+                target="_blank"
+                rel="noopener"
+              >
                 {{ t.notice_title || `通知 #${t.notice_id}` }}
               </n-a>
               <span v-else>{{ t.notice_title || `通知 #${t.notice_id}` }}</span>
               · 截止 {{ fmtDate(t.due_at) }} · {{ relativeDueText(t.due_at) }}
             </div>
-            <div v-if="t.notes" class="todo-notes">备注：{{ t.notes }}</div>
+            <div
+              v-if="t.notes"
+              class="todo-notes"
+            >
+              备注：{{ t.notes }}
+            </div>
           </div>
           <div class="todo-actions">
             <n-button
@@ -248,7 +350,9 @@ function barClass(type: 'success' | 'default' | 'error' | 'warning' | 'info'): s
               secondary
               @click="openEdit(t, 'edit')"
             >
-              <template #icon><n-icon><CreateOutline /></n-icon></template>
+              <template #icon>
+                <n-icon><CreateOutline /></n-icon>
+              </template>
               编辑
             </n-button>
             <n-button
@@ -257,7 +361,9 @@ function barClass(type: 'success' | 'default' | 'error' | 'warning' | 'info'): s
               secondary
               @click="openEdit(t, 'postpone')"
             >
-              <template #icon><n-icon><CalendarOutline /></n-icon></template>
+              <template #icon>
+                <n-icon><CalendarOutline /></n-icon>
+              </template>
               延期
             </n-button>
             <n-button
@@ -266,13 +372,25 @@ function barClass(type: 'success' | 'default' | 'error' | 'warning' | 'info'): s
               type="success"
               @click="mark(t.id, 'done')"
             >
-              <template #icon><n-icon><CheckmarkDoneOutline /></n-icon></template>
+              <template #icon>
+                <n-icon><CheckmarkDoneOutline /></n-icon>
+              </template>
               标记完成
             </n-button>
-            <n-button v-if="t.status === 'pending'" size="small" secondary @click="mark(t.id, 'skipped')">
+            <n-button
+              v-if="t.status === 'pending'"
+              size="small"
+              secondary
+              @click="mark(t.id, 'skipped')"
+            >
               跳过
             </n-button>
-            <n-button v-if="t.status !== 'pending'" size="small" secondary @click="mark(t.id, 'pending')">
+            <n-button
+              v-if="t.status !== 'pending'"
+              size="small"
+              secondary
+              @click="mark(t.id, 'pending')"
+            >
               恢复
             </n-button>
           </div>
@@ -280,22 +398,48 @@ function barClass(type: 'success' | 'default' | 'error' | 'warning' | 'info'): s
       </div>
     </n-card>
 
-    <n-modal v-model:show="editOpen" preset="card" :title="editMode === 'postpone' ? '延期待办' : '编辑待办'" style="width: 520px">
+    <n-modal
+      v-model:show="editOpen"
+      preset="card"
+      :title="editMode === 'postpone' ? '延期待办' : '编辑待办'"
+      style="width: 520px"
+    >
       <n-form label-placement="top">
         <n-form-item label="待办内容">
-          <n-input v-model:value="editForm.action" placeholder="待办内容" />
+          <n-input
+            v-model:value="editForm.action"
+            placeholder="待办内容"
+          />
         </n-form-item>
         <n-form-item label="截止时间（清空 = 无截止）">
-          <n-date-picker v-model:value="editForm.dueTs" type="datetime" clearable style="width: 100%" />
+          <n-date-picker
+            v-model:value="editForm.dueTs"
+            type="datetime"
+            clearable
+            style="width: 100%"
+          />
         </n-form-item>
         <n-form-item label="备注">
-          <n-input v-model:value="editForm.notes" type="textarea" :rows="3" placeholder="记录进展、补充说明" />
+          <n-input
+            v-model:value="editForm.notes"
+            type="textarea"
+            :rows="3"
+            placeholder="记录进展、补充说明"
+          />
         </n-form-item>
       </n-form>
       <template #footer>
         <n-space justify="end">
-          <n-button @click="editOpen = false">取消</n-button>
-          <n-button type="primary" :loading="saving" @click="saveEdit">保存</n-button>
+          <n-button @click="editOpen = false">
+            取消
+          </n-button>
+          <n-button
+            type="primary"
+            :loading="saving"
+            @click="saveEdit"
+          >
+            保存
+          </n-button>
         </n-space>
       </template>
     </n-modal>

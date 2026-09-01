@@ -1,32 +1,105 @@
 <template>
   <div class="page-root">
     <!-- 顶部：视图切换 + 搜索/筛选（公共库） -->
-    <n-card :bordered="false" class="filter-card">
+    <n-card
+      :bordered="false"
+      class="filter-card"
+    >
       <template #header>
         <div class="section-title-wrap">
-          <n-icon size="18" color="var(--primary)"><LibraryOutline /></n-icon>
+          <n-icon
+            size="18"
+            color="var(--primary)"
+          >
+            <LibraryOutline />
+          </n-icon>
           <span class="section-title-text">数据源</span>
           <span class="section-title-sub">公共数据源库 · 我的数据源 · 改完即存</span>
         </div>
       </template>
       <div class="view-tabs">
-        <n-tabs v-model:value="activeView" type="segment" size="small" animated>
-          <n-tab-pane name="catalog" tab="公共数据源" />
-          <n-tab-pane name="mine" tab="我的数据源" />
+        <n-tabs
+          v-model:value="activeView"
+          type="segment"
+          size="small"
+          animated
+        >
+          <n-tab-pane
+            name="catalog"
+            tab="公共数据源"
+          />
+          <n-tab-pane
+            name="mine"
+            tab="我的数据源"
+          />
         </n-tabs>
-        <div v-if="activeView === 'catalog'" class="stat-line">
-          <n-tag :bordered="false" type="info" size="small">共 {{ (store.overview.items ?? []).length }} 个公共数据源</n-tag>
-          <n-tag :bordered="false" type="success" size="small">已选用 {{ store.overview.adopted_count }} 个</n-tag>
-          <n-tag :bordered="false" type="warning" size="small">当前筛选 {{ store.filtered.length }} 个</n-tag>
+        <div
+          v-if="activeView === 'catalog'"
+          class="stat-line"
+        >
+          <n-tag
+            :bordered="false"
+            type="info"
+            size="small"
+          >
+            共 {{ (store.overview.items ?? []).length }} 个公共数据源
+          </n-tag>
+          <n-tag
+            :bordered="false"
+            type="success"
+            size="small"
+          >
+            已选用 {{ store.overview.adopted_count }} 个
+          </n-tag>
+          <n-tag
+            :bordered="false"
+            type="warning"
+            size="small"
+          >
+            当前筛选 {{ store.filtered.length }} 个
+          </n-tag>
         </div>
-        <div v-else class="stat-line">
-          <n-tag :bordered="false" type="success" size="small">我的数据源 {{ mySources.length }} 个</n-tag>
-          <n-tag v-if="saveBusy" :bordered="false" type="warning" size="small">保存中…</n-tag>
-          <n-tag v-else-if="hasPending" :bordered="false" type="error" size="small">有修改未保存</n-tag>
-          <n-tag v-else :bordered="false" type="default" size="small">所有修改已生效</n-tag>
+        <div
+          v-else
+          class="stat-line"
+        >
+          <n-tag
+            :bordered="false"
+            type="success"
+            size="small"
+          >
+            我的数据源 {{ mySources.length }} 个
+          </n-tag>
+          <n-tag
+            v-if="saveBusy"
+            :bordered="false"
+            type="warning"
+            size="small"
+          >
+            保存中…
+          </n-tag>
+          <n-tag
+            v-else-if="hasPending"
+            :bordered="false"
+            type="error"
+            size="small"
+          >
+            有修改未保存
+          </n-tag>
+          <n-tag
+            v-else
+            :bordered="false"
+            type="default"
+            size="small"
+          >
+            所有修改已生效
+          </n-tag>
         </div>
       </div>
-      <div v-if="activeView === 'catalog'" class="filter-bar">
+      <div
+        v-if="activeView === 'catalog'"
+        class="filter-bar"
+      >
         <n-input
           v-model:value="store.keyword"
           class="filter-search"
@@ -52,16 +125,33 @@
           clearable
           :options="orgOptions"
         />
-        <n-button quaternary size="small" @click="store.resetFilters()">重置</n-button>
+        <n-button
+          quaternary
+          size="small"
+          @click="store.resetFilters()"
+        >
+          重置
+        </n-button>
       </div>
     </n-card>
 
     <!-- 视图一：公共数据源库（左三级组织树 + 右卡片网格） -->
-    <div v-if="activeView === 'catalog'" class="center-layout">
-      <n-card :bordered="false" class="org-card">
+    <div
+      v-if="activeView === 'catalog'"
+      class="center-layout"
+    >
+      <n-card
+        :bordered="false"
+        class="org-card"
+      >
         <template #header>
           <div class="org-title">
-            <n-icon size="15" color="var(--text-3)"><SchoolOutline /></n-icon>
+            <n-icon
+              size="15"
+              color="var(--text-3)"
+            >
+              <SchoolOutline />
+            </n-icon>
             <span>学校组织架构</span>
           </div>
         </template>
@@ -74,24 +164,50 @@
             <span class="node-label">全部数据源</span>
             <span class="node-count">{{ (store.overview.items ?? []).length }}</span>
           </div>
-          <template v-for="g in store.overview.tree ?? []" :key="g.key">
-            <div class="tree-node group" :class="{ active: store.orgKey === g.key }" @click="selectOrg(g.key)">
-              <span class="node-caret" @click.stop="toggleGroup(g.key)">
+          <template
+            v-for="g in store.overview.tree ?? []"
+            :key="g.key"
+          >
+            <div
+              class="tree-node group"
+              :class="{ active: store.orgKey === g.key }"
+              @click="selectOrg(g.key)"
+            >
+              <span
+                class="node-caret"
+                @click.stop="toggleGroup(g.key)"
+              >
                 {{ expandedGroups.has(g.key) ? '▾' : '▸' }}
               </span>
               <span class="node-label">{{ g.label }}</span>
               <span class="node-count">{{ g.count }}</span>
             </div>
-            <div v-if="expandedGroups.has(g.key)" class="tree-children">
-              <template v-for="o in g.children ?? []" :key="o.key">
-                <div class="tree-node org" :class="{ active: store.orgKey === o.key }" @click="selectOrg(o.key)">
-                  <span class="node-caret" @click.stop="toggleOrg(o.key)">
+            <div
+              v-if="expandedGroups.has(g.key)"
+              class="tree-children"
+            >
+              <template
+                v-for="o in g.children ?? []"
+                :key="o.key"
+              >
+                <div
+                  class="tree-node org"
+                  :class="{ active: store.orgKey === o.key }"
+                  @click="selectOrg(o.key)"
+                >
+                  <span
+                    class="node-caret"
+                    @click.stop="toggleOrg(o.key)"
+                  >
                     {{ expandedOrgs.has(o.key) ? '▾' : '▸' }}
                   </span>
                   <span class="node-label">{{ o.label }}</span>
                   <span class="node-count">{{ o.count }}</span>
                 </div>
-                <div v-if="expandedOrgs.has(o.key)" class="tree-children">
+                <div
+                  v-if="expandedOrgs.has(o.key)"
+                  class="tree-children"
+                >
                   <div
                     v-for="c in o.children ?? []"
                     :key="c.key"
@@ -109,22 +225,56 @@
       </n-card>
 
       <div class="cards-col">
-        <div v-if="pagedItems.length" class="card-grid">
-          <div v-for="it in pagedItems" :key="it.id" class="source-card">
+        <div
+          v-if="pagedItems.length"
+          class="card-grid"
+        >
+          <div
+            v-for="it in pagedItems"
+            :key="it.id"
+            class="source-card"
+          >
             <div class="card-head">
-              <div class="card-name" :title="`${it.org}-${it.name}`">{{ it.name }}</div>
-              <div class="card-org" :title="it.org">{{ it.org }}</div>
+              <div
+                class="card-name"
+                :title="`${it.org}-${it.name}`"
+              >
+                {{ it.name }}
+              </div>
+              <div
+                class="card-org"
+                :title="it.org"
+              >
+                {{ it.org }}
+              </div>
             </div>
-            <div class="card-updated">更新于 {{ it.updated_at }}</div>
-            <div class="card-desc">{{ it.description }}</div>
+            <div class="card-updated">
+              更新于 {{ it.updated_at }}
+            </div>
+            <div class="card-desc">
+              {{ it.description }}
+            </div>
             <div class="card-tags">
-              <n-tag v-for="t in it.tags ?? []" :key="t" size="small" :bordered="false" round class="tag-chip">
+              <n-tag
+                v-for="t in it.tags ?? []"
+                :key="t"
+                size="small"
+                :bordered="false"
+                round
+                class="tag-chip"
+              >
                 {{ t }}
               </n-tag>
             </div>
             <div class="card-actions">
-              <n-button quaternary size="small" @click="openPreview(it)">
-                <template #icon><n-icon><EyeOutline /></n-icon></template>
+              <n-button
+                quaternary
+                size="small"
+                @click="openPreview(it)"
+              >
+                <template #icon>
+                  <n-icon><EyeOutline /></n-icon>
+                </template>
                 预览
               </n-button>
               <n-button
@@ -134,17 +284,31 @@
                 :loading="actingId === it.id"
                 @click="onAdopt(it)"
               >
-                <template #icon><n-icon><AddOutline /></n-icon></template>
+                <template #icon>
+                  <n-icon><AddOutline /></n-icon>
+                </template>
                 选用
               </n-button>
-              <n-button v-else type="primary" tertiary size="small" @click="onRemove(it)">
-                <template #icon><n-icon><CheckmarkCircleOutline /></n-icon></template>
+              <n-button
+                v-else
+                type="primary"
+                tertiary
+                size="small"
+                @click="onRemove(it)"
+              >
+                <template #icon>
+                  <n-icon><CheckmarkCircleOutline /></n-icon>
+                </template>
                 已选用
               </n-button>
             </div>
           </div>
         </div>
-        <n-empty v-else description="没有符合条件的数据源" class="empty-box" />
+        <n-empty
+          v-else
+          description="没有符合条件的数据源"
+          class="empty-box"
+        />
         <div class="pager">
           <n-pagination
             v-model:page="page"
@@ -157,17 +321,29 @@
     </div>
 
     <!-- 视图二：我的数据源（改完即存） -->
-    <div v-else class="mine-layout">
+    <div
+      v-else
+      class="mine-layout"
+    >
       <div class="mine-toolbar">
         <div class="mine-toolbar-left">
           <span class="mine-tip">参数修改后自动保存并立即生效，无需手动保存</span>
         </div>
-        <n-button secondary size="small" @click="addSource">
-          <template #icon><n-icon><AddOutline /></n-icon></template>
+        <n-button
+          secondary
+          size="small"
+          @click="addSource"
+        >
+          <template #icon>
+            <n-icon><AddOutline /></n-icon>
+          </template>
           添加数据源
         </n-button>
       </div>
-      <n-spin :show="myLoading" class="mine-spin">
+      <n-spin
+        :show="myLoading"
+        class="mine-spin"
+      >
         <template v-if="mySources.length">
           <div class="mine-list">
             <n-card
@@ -177,7 +353,10 @@
               class="mine-card"
               :class="{ 'mine-card-invalid': invalidIdx.has(idx) }"
             >
-              <div class="mine-card-head" @click="toggleMine(idx)">
+              <div
+                class="mine-card-head"
+                @click="toggleMine(idx)"
+              >
                 <span class="header-index">#{{ idx + 1 }}</span>
                 <span class="mine-card-title">{{ s.name || '未命名' }}</span>
                 <n-tag
@@ -186,22 +365,45 @@
                   :bordered="false"
                   type="info"
                   class="mine-from-catalog"
-                  @click.stop="jumpToCatalog(s.list_url)"
                   title="来自公共数据源库，点击定位"
+                  @click.stop="jumpToCatalog(s.list_url)"
                 >
                   公共库
                 </n-tag>
-                <n-tag size="small" :bordered="false" :type="s.enabled ? 'success' : 'default'">
+                <n-tag
+                  size="small"
+                  :bordered="false"
+                  :type="s.enabled ? 'success' : 'default'"
+                >
                   {{ s.enabled ? '已启用' : '已停用' }}
                 </n-tag>
-                <span class="mine-save-state" v-if="saveBusy && savingIdx === idx">
+                <span
+                  v-if="saveBusy && savingIdx === idx"
+                  class="mine-save-state"
+                >
                   <n-spin :size="12" /> 保存中…
                 </span>
-                <span class="mine-save-state ok" v-else-if="lastSavedAt[idx]">已保存 {{ lastSavedAt[idx] }}</span>
-                <span class="mine-save-state pending" v-else-if="pendingIdxSet.has(idx)">待保存…</span>
+                <span
+                  v-else-if="lastSavedAt[idx]"
+                  class="mine-save-state ok"
+                >已保存 {{ lastSavedAt[idx] }}</span>
+                <span
+                  v-else-if="pendingIdxSet.has(idx)"
+                  class="mine-save-state pending"
+                >待保存…</span>
                 <span class="header-spacer" />
-                <n-button size="tiny" quaternary type="error" @click.stop="removeMine(idx)">删除</n-button>
-                <n-icon size="14" color="var(--text-3)">
+                <n-button
+                  size="tiny"
+                  quaternary
+                  type="error"
+                  @click.stop="removeMine(idx)"
+                >
+                  删除
+                </n-button>
+                <n-icon
+                  size="14"
+                  color="var(--text-3)"
+                >
                   <component :is="expandedMine.has(idx) ? ChevronUpOutline : ChevronDownOutline" />
                 </n-icon>
               </div>
@@ -212,21 +414,41 @@
                 :title="s.list_url ? '点击预览样例' : ''"
                 @click="openPreviewUrl(s.name, s.list_url)"
               >
-                <n-icon v-if="s.list_url" size="12" class="summary-icon"><EyeOutline /></n-icon>
+                <n-icon
+                  v-if="s.list_url"
+                  size="12"
+                  class="summary-icon"
+                >
+                  <EyeOutline />
+                </n-icon>
                 {{ s.list_url || '未填写列表地址' }}
               </div>
               <n-collapse-transition :show="expandedMine.has(idx)">
                 <div class="mine-card-body">
-                  <n-form label-placement="left" label-width="96">
+                  <n-form
+                    label-placement="left"
+                    label-width="96"
+                  >
                     <n-form-item label="名称">
-                      <n-input v-model:value="s.name" placeholder="如 教务处-通知公告" @update:value="markDirty(idx)" />
+                      <n-input
+                        v-model:value="s.name"
+                        placeholder="如 教务处-通知公告"
+                        @update:value="markDirty(idx)"
+                      />
                     </n-form-item>
                     <n-form-item label="启用">
-                      <n-switch v-model:value="s.enabled" @update:value="markDirty(idx)" />
+                      <n-switch
+                        v-model:value="s.enabled"
+                        @update:value="markDirty(idx)"
+                      />
                       <span class="field-hint">停用后定时抓取与全量抓取会跳过该来源</span>
                     </n-form-item>
                     <n-form-item label="列表地址">
-                      <n-input v-model:value="s.list_url" placeholder="https://..." @update:value="markDirty(idx)">
+                      <n-input
+                        v-model:value="s.list_url"
+                        placeholder="https://..."
+                        @update:value="markDirty(idx)"
+                      >
                         <template #suffix>
                           <a
                             v-if="s.list_url"
@@ -234,12 +456,16 @@
                             :href="normalizeUrl(s.list_url)"
                             target="_blank"
                             rel="noopener noreferrer"
-                            @click.stop
                             title="在新窗口打开列表页"
+                            @click.stop
                           >
                             ↗
                           </a>
-                          <span v-else class="input-suffix-disabled" title="请先填写列表地址">↗</span>
+                          <span
+                            v-else
+                            class="input-suffix-disabled"
+                            title="请先填写列表地址"
+                          >↗</span>
                         </template>
                       </n-input>
                     </n-form-item>
@@ -249,33 +475,71 @@
                         placeholder="可选，正文链接正则；留空时点“测试链接”自动填充"
                         @update:value="markDirty(idx)"
                       />
-                      <template #feedback>只抓取匹配该正则的链接；留空则抓取全部发现链接</template>
+                      <template #feedback>
+                        只抓取匹配该正则的链接；留空则抓取全部发现链接
+                      </template>
                     </n-form-item>
                     <n-form-item label="抓取模式">
-                      <n-select v-model:value="s.crawl_mode" :options="crawlModeOptions" style="width: 320px" @update:value="markDirty(idx)" />
+                      <n-select
+                        v-model:value="s.crawl_mode"
+                        :options="crawlModeOptions"
+                        style="width: 320px"
+                        @update:value="markDirty(idx)"
+                      />
                     </n-form-item>
                     <n-form-item label="最近 N 天">
-                      <n-input-number v-model:value="s.max_age_days" :min="1" clearable style="width: 120px" @update:value="markDirty(idx)" />
-                      <template #feedback>留空 = 不限；只抓取发布时间在 N 天以内的通知</template>
+                      <n-input-number
+                        v-model:value="s.max_age_days"
+                        :min="1"
+                        clearable
+                        style="width: 120px"
+                        @update:value="markDirty(idx)"
+                      />
+                      <template #feedback>
+                        留空 = 不限；只抓取发布时间在 N 天以内的通知
+                      </template>
                     </n-form-item>
                     <n-form-item label="最大页数">
-                      <n-input-number v-model:value="s.max_pages" :min="1" style="width: 120px" @update:value="markDirty(idx)" />
+                      <n-input-number
+                        v-model:value="s.max_pages"
+                        :min="1"
+                        style="width: 120px"
+                        @update:value="markDirty(idx)"
+                      />
                     </n-form-item>
                     <n-form-item label="抓取正文">
-                      <n-switch v-model:value="s.fetch_detail" @update:value="markDirty(idx)" />
+                      <n-switch
+                        v-model:value="s.fetch_detail"
+                        @update:value="markDirty(idx)"
+                      />
                       <span class="field-hint">关闭后仅入库标题与链接（节省流量）</span>
                     </n-form-item>
                     <n-form-item label="深度检查">
-                      <n-switch v-model:value="s.deep_check" @update:value="markDirty(idx)" />
+                      <n-switch
+                        v-model:value="s.deep_check"
+                        @update:value="markDirty(idx)"
+                      />
                       <span class="field-hint">增量模式下周期重抓详情页比对内容变更</span>
                     </n-form-item>
                     <n-form-item label=" ">
                       <div class="mine-actions-row">
-                        <n-button size="small" secondary :loading="testBusyMine[idx]" @click="testMine(idx, s.list_url)">
+                        <n-button
+                          size="small"
+                          secondary
+                          :loading="testBusyMine[idx]"
+                          @click="testMine(idx, s.list_url)"
+                        >
                           测试链接
                         </n-button>
-                        <n-button size="small" secondary :disabled="!s.list_url" @click="openPreviewUrl(s.name, s.list_url)">
-                          <template #icon><n-icon><EyeOutline /></n-icon></template>
+                        <n-button
+                          size="small"
+                          secondary
+                          :disabled="!s.list_url"
+                          @click="openPreviewUrl(s.name, s.list_url)"
+                        >
+                          <template #icon>
+                            <n-icon><EyeOutline /></n-icon>
+                          </template>
                           预览样例
                         </n-button>
                       </div>
@@ -286,16 +550,27 @@
             </n-card>
           </div>
         </template>
-        <n-empty v-else-if="!myLoading" class="empty-box">
+        <n-empty
+          v-else-if="!myLoading"
+          class="empty-box"
+        >
           <template #description>
             <div class="mine-empty">
               <div>还没有「我的数据源」</div>
-              <div class="mine-empty-sub">去公共数据源库一键选用，或点击右上角「添加数据源」手动创建</div>
+              <div class="mine-empty-sub">
+                去公共数据源库一键选用，或点击右上角「添加数据源」手动创建
+              </div>
             </div>
           </template>
           <template #extra>
-            <n-button type="primary" size="small" @click="activeView = 'catalog'">
-              <template #icon><n-icon><LibraryOutline /></n-icon></template>
+            <n-button
+              type="primary"
+              size="small"
+              @click="activeView = 'catalog'"
+            >
+              <template #icon>
+                <n-icon><LibraryOutline /></n-icon>
+              </template>
               去公共数据源库选用
             </n-button>
           </template>
@@ -314,9 +589,19 @@
   >
     <template v-if="previewItem">
       <div class="preview-meta">
-        <n-tag v-for="t in previewItem.tags ?? []" :key="t" size="small" :bordered="false" round>{{ t }}</n-tag>
+        <n-tag
+          v-for="t in previewItem.tags ?? []"
+          :key="t"
+          size="small"
+          :bordered="false"
+          round
+        >
+          {{ t }}
+        </n-tag>
       </div>
-      <div class="preview-desc">{{ previewItem.description }}</div>
+      <div class="preview-desc">
+        {{ previewItem.description }}
+      </div>
     </template>
     <n-input
       :value="previewUrl"
@@ -326,35 +611,68 @@
       @click="copyUrl"
     />
     <n-divider style="margin: 12px 0" />
-    <div class="preview-title">样例数据（抓取自列表页，仅预览不落库）</div>
+    <div class="preview-title">
+      样例数据（抓取自列表页，仅预览不落库）
+    </div>
     <n-spin :show="previewLoading">
-      <n-alert v-if="previewError" type="warning" :show-icon="false" class="preview-error">
+      <n-alert
+        v-if="previewError"
+        type="warning"
+        :show-icon="false"
+        class="preview-error"
+      >
         {{ previewError }}
       </n-alert>
-      <n-list v-else-if="previewItems.length" bordered class="preview-list">
-        <n-list-item v-for="(s, i) in previewItems" :key="i">
+      <n-list
+        v-else-if="previewItems.length"
+        bordered
+        class="preview-list"
+      >
+        <n-list-item
+          v-for="(s, i) in previewItems"
+          :key="i"
+        >
           <div class="sample-row">
             <span class="sample-idx">{{ i + 1 }}</span>
-            <a :href="s.url" target="_blank" rel="noopener" class="sample-title">{{ s.title }}</a>
+            <a
+              :href="s.url"
+              target="_blank"
+              rel="noopener"
+              class="sample-title"
+            >{{ s.title }}</a>
             <span class="sample-date">{{ s.date ? s.date.slice(0, 10) : '' }}</span>
           </div>
         </n-list-item>
       </n-list>
-      <n-empty v-else-if="!previewLoading" description="暂未解析到样例数据" :size="'small'" />
+      <n-empty
+        v-else-if="!previewLoading"
+        description="暂未解析到样例数据"
+        :size="'small'"
+      />
     </n-spin>
     <template #footer>
       <div class="preview-footer">
-        <n-button @click="previewOpen = false">关闭</n-button>
+        <n-button @click="previewOpen = false">
+          关闭
+        </n-button>
         <n-button
           v-if="previewItem && !previewItem.adopted"
           type="primary"
           :loading="actingId === previewItem.id"
           @click="onAdopt(previewItem)"
         >
-          <template #icon><n-icon><AddOutline /></n-icon></template>
+          <template #icon>
+            <n-icon><AddOutline /></n-icon>
+          </template>
           选用该数据源
         </n-button>
-        <n-tag v-else-if="previewItem" :bordered="false" type="success">已在我的数据源中</n-tag>
+        <n-tag
+          v-else-if="previewItem"
+          :bordered="false"
+          type="success"
+        >
+          已在我的数据源中
+        </n-tag>
       </div>
     </template>
   </n-modal>

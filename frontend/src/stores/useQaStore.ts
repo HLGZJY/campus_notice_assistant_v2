@@ -138,33 +138,33 @@ export const useQaStore = defineStore('qa', () => {
               if (!line.startsWith('data:')) continue
               const raw = line.slice(5).trim()
               if (!raw) continue
-              let evt: Record<string, any>
+              let rawEvt: Record<string, unknown>
               try {
-                evt = JSON.parse(raw)
+                rawEvt = JSON.parse(raw) as Record<string, unknown>
               } catch {
                 continue
               }
-              if (evt.type === 'status') {
-                currentStage.value = evt.stage ?? ''
+              if (rawEvt.type === 'status') {
+                currentStage.value = (rawEvt.stage as string | undefined) ?? ''
                 currentStageStartedAt.value = Date.now()
                 onEvent({
                   type: 'status',
-                  stage: evt.stage ?? '',
-                  message: evt.message ?? '',
-                  elapsed_ms: evt.elapsed_ms ?? 0,
-                  similarity: evt.similarity,
+                  stage: rawEvt.stage as 'retrieval' | 'thinking' | 'generating' | 'cache_hit',
+                  message: (rawEvt.message as string | undefined) ?? '',
+                  elapsed_ms: (rawEvt.elapsed_ms as number | undefined) ?? 0,
+                  similarity: rawEvt.similarity as number | undefined,
                 })
-              } else if (evt.type === 'delta' && typeof evt.content === 'string') {
-                onEvent({ type: 'delta', content: evt.content })
-              } else if (evt.type === 'done') {
+              } else if (rawEvt.type === 'delta' && typeof rawEvt.content === 'string') {
+                onEvent({ type: 'delta', content: rawEvt.content })
+              } else if (rawEvt.type === 'done') {
                 onEvent({
                   type: 'done',
-                  answer: evt.answer ?? '',
-                  sources: evt.sources ?? [],
-                  retrieved_chunks: evt.retrieved_chunks ?? 0,
+                  answer: (rawEvt.answer as string | undefined) ?? '',
+                  sources: (rawEvt.sources as QaSourceRef[] | undefined) ?? [],
+                  retrieved_chunks: (rawEvt.retrieved_chunks as number | undefined) ?? 0,
                 })
-              } else if (evt.type === 'error') {
-                onEvent({ type: 'error', message: evt.message ?? 'stream error' })
+              } else if (rawEvt.type === 'error') {
+                onEvent({ type: 'error', message: (rawEvt.message as string | undefined) ?? 'stream error' })
               }
             }
           }

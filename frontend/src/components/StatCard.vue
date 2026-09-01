@@ -11,15 +11,28 @@ defineProps<{
 </script>
 
 <template>
-  <n-card size="small" class="stat-card" :bordered="false">
+  <n-card
+    size="small"
+    class="stat-card"
+    :bordered="false"
+  >
     <div class="stat-inner">
-      <div class="stat-icon" :class="`stat-icon--${color ?? 'primary'}`">
-        <n-icon size="22"><component :is="icon" /></n-icon>
+      <div
+        class="stat-icon"
+        :class="`stat-icon--${color ?? 'primary'}`"
+      >
+        <n-icon size="22">
+          <component :is="icon" />
+        </n-icon>
       </div>
       <div class="stat-meta">
         <div class="stat-label">
           {{ label }}
-          <n-tooltip v-if="hint" trigger="hover" placement="top">
+          <n-tooltip
+            v-if="hint"
+            trigger="hover"
+            placement="top"
+          >
             <template #trigger>
               <span class="stat-hint"><n-icon size="14"><InformationCircleOutline /></n-icon></span>
             </template>
@@ -27,7 +40,9 @@ defineProps<{
           </n-tooltip>
         </div>
         <div class="stat-value">
-          <slot name="value">{{ value ?? 0 }}</slot>
+          <slot name="value">
+            {{ value ?? 0 }}
+          </slot>
         </div>
       </div>
     </div>

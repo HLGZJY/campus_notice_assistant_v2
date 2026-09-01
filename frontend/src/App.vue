@@ -146,104 +146,152 @@ onUnmounted(() => {
     <n-message-provider>
       <n-dialog-provider>
         <n-notification-provider>
-          <n-layout position="absolute" has-sider style="inset: 0">
-          <n-layout-sider
-            bordered
-            :width="280"
-            :collapsed-width="64"
-            :collapsed="collapsed"
-            collapse-mode="width"
-            :show-trigger="false"
+          <n-layout
+            position="absolute"
+            has-sider
+            style="inset: 0"
           >
-            <div class="sider-inner">
-              <div class="brand" :class="{ collapsed }">
-                <div class="brand-logo">
-                  <n-icon size="22"><SchoolOutline /></n-icon>
-                </div>
-                <transition name="fade">
-                  <div v-if="!collapsed" class="brand-text">
-                    <div class="brand-title">校园通知智能助手</div>
-                    <div class="brand-sub">Campus Notice Assistant</div>
-                  </div>
-                </transition>
-              </div>
-              <div class="sider-menu">
-                <n-menu
-                  :value="route.path"
-                  :options="menuOptions"
-                  :collapsed="collapsed"
-                  :collapsed-width="64"
-                  :collapsed-icon-size="22"
-                  @update:value="onMenuUpdate"
-                />
-              </div>
-              <TaskListDrawer v-if="!collapsed" />
-            </div>
-          </n-layout-sider>
-
-          <n-layout :native-scrollbar="false">
-            <div class="topbar">
-              <div class="topbar-left">
-                <n-button quaternary circle @click="collapsed = !collapsed">
-                  <template #icon>
-                    <n-icon size="20"><MenuOutline /></n-icon>
-                  </template>
-                </n-button>
-                <div class="topbar-titles">
-                  <div class="topbar-title">{{ pageTitle }}</div>
-                  <div v-if="pageSubtitle" class="topbar-subtitle">{{ pageSubtitle }}</div>
-                </div>
-              </div>
-              <div class="topbar-right">
-                <router-link to="/todos" class="pending-link">
-                  <n-badge
-                    :value="pendingCount"
-                    :max="99"
-                    :show="pendingCount > 0"
-                    type="error"
-                    :offset="[-2, 2]"
-                  >
-                    <n-button quaternary circle title="待处理提醒">
-                      <template #icon>
-                        <n-icon size="20"><AlarmOutline /></n-icon>
-                      </template>
-                    </n-button>
-                  </n-badge>
-                </router-link>
-                <n-dropdown
-                  :options="themeOptions"
-                  :value="theme.mode"
-                  trigger="click"
-                  @select="onThemeSelect"
+            <n-layout-sider
+              bordered
+              :width="280"
+              :collapsed-width="64"
+              :collapsed="collapsed"
+              collapse-mode="width"
+              :show-trigger="false"
+            >
+              <div class="sider-inner">
+                <div
+                  class="brand"
+                  :class="{ collapsed }"
                 >
-                  <n-button quaternary circle title="切换主题">
+                  <div class="brand-logo">
+                    <n-icon size="22">
+                      <SchoolOutline />
+                    </n-icon>
+                  </div>
+                  <transition name="fade">
+                    <div
+                      v-if="!collapsed"
+                      class="brand-text"
+                    >
+                      <div class="brand-title">
+                        校园通知智能助手
+                      </div>
+                      <div class="brand-sub">
+                        Campus Notice Assistant
+                      </div>
+                    </div>
+                  </transition>
+                </div>
+                <div class="sider-menu">
+                  <n-menu
+                    :value="route.path"
+                    :options="menuOptions"
+                    :collapsed="collapsed"
+                    :collapsed-width="64"
+                    :collapsed-icon-size="22"
+                    @update:value="onMenuUpdate"
+                  />
+                </div>
+                <TaskListDrawer v-if="!collapsed" />
+              </div>
+            </n-layout-sider>
+
+            <n-layout :native-scrollbar="false">
+              <div class="topbar">
+                <div class="topbar-left">
+                  <n-button
+                    quaternary
+                    circle
+                    @click="collapsed = !collapsed"
+                  >
                     <template #icon>
                       <n-icon size="20">
-                        <component :is="theme.isDark ? MoonOutline : SunnyOutline" />
+                        <MenuOutline />
                       </n-icon>
                     </template>
                   </n-button>
-                </n-dropdown>
+                  <div class="topbar-titles">
+                    <div class="topbar-title">
+                      {{ pageTitle }}
+                    </div>
+                    <div
+                      v-if="pageSubtitle"
+                      class="topbar-subtitle"
+                    >
+                      {{ pageSubtitle }}
+                    </div>
+                  </div>
+                </div>
+                <div class="topbar-right">
+                  <router-link
+                    to="/todos"
+                    class="pending-link"
+                  >
+                    <n-badge
+                      :value="pendingCount"
+                      :max="99"
+                      :show="pendingCount > 0"
+                      type="error"
+                      :offset="[-2, 2]"
+                    >
+                      <n-button
+                        quaternary
+                        circle
+                        title="待处理提醒"
+                      >
+                        <template #icon>
+                          <n-icon size="20">
+                            <AlarmOutline />
+                          </n-icon>
+                        </template>
+                      </n-button>
+                    </n-badge>
+                  </router-link>
+                  <n-dropdown
+                    :options="themeOptions"
+                    :value="theme.mode"
+                    trigger="click"
+                    @select="onThemeSelect"
+                  >
+                    <n-button
+                      quaternary
+                      circle
+                      title="切换主题"
+                    >
+                      <template #icon>
+                        <n-icon size="20">
+                          <component :is="theme.isDark ? MoonOutline : SunnyOutline" />
+                        </n-icon>
+                      </template>
+                    </n-button>
+                  </n-dropdown>
+                </div>
               </div>
-            </div>
 
-            <n-layout-content content-style="padding: 24px 24px 48px" :native-scrollbar="false">
-              <div class="page-wrap">
-                <router-view v-slot="{ Component }">
-                  <!--
+              <n-layout-content
+                content-style="padding: 24px 24px 48px"
+                :native-scrollbar="false"
+              >
+                <div class="page-wrap">
+                  <router-view v-slot="{ Component }">
+                    <!--
                     注意：不要使用 mode="out-in"。out-in 下新页面必须等旧页面 leave
                     transitionend 完成才挂载；在 naive-ui 自定义滚动容器 / 快速连续切页 /
                     后台标签页场景下 transitionend 可能不触发，导致新页面永不挂载 → 内容区空白，
                     只有刷新（绕过过渡层）才恢复。默认模式新旧共存 0.18s，新页面立即渲染。
                   -->
-                  <transition name="page">
-                    <component :is="Component" :key="route.path" />
-                  </transition>
-                </router-view>
-              </div>
-            </n-layout-content>
+                    <transition name="page">
+                      <component
+                        :is="Component"
+                        :key="route.path"
+                      />
+                    </transition>
+                  </router-view>
+                </div>
+              </n-layout-content>
+            </n-layout>
           </n-layout>
-        </n-layout>
         </n-notification-provider>
       </n-dialog-provider>
     </n-message-provider>
@@ -255,13 +303,33 @@ onUnmounted(() => {
       style="max-width: 520px"
       :bordered="false"
     >
-      <n-space vertical size="medium" v-if="updateInfo">
-        <n-descriptions :column="1" size="small" bordered>
-          <n-descriptions-item label="最新版本">{{ updateInfo.latest_version }}</n-descriptions-item>
-          <n-descriptions-item label="当前版本">v{{ updateInfo.current_version }}</n-descriptions-item>
+      <n-space
+        v-if="updateInfo"
+        vertical
+        size="medium"
+      >
+        <n-descriptions
+          :column="1"
+          size="small"
+          bordered
+        >
+          <n-descriptions-item label="最新版本">
+            {{ updateInfo.latest_version }}
+          </n-descriptions-item>
+          <n-descriptions-item label="当前版本">
+            v{{ updateInfo.current_version }}
+          </n-descriptions-item>
         </n-descriptions>
-        <div v-if="updateInfo.notes" class="update-notes">{{ updateInfo.notes }}</div>
-        <n-space vertical v-if="updateInfo.assets?.length">
+        <div
+          v-if="updateInfo.notes"
+          class="update-notes"
+        >
+          {{ updateInfo.notes }}
+        </div>
+        <n-space
+          v-if="updateInfo.assets?.length"
+          vertical
+        >
           <n-button
             v-for="a in updateInfo.assets ?? []"
             :key="a.name"
@@ -273,7 +341,10 @@ onUnmounted(() => {
             下载 {{ a.name }}
           </n-button>
         </n-space>
-        <n-text depth="3" style="font-size: 12px">
+        <n-text
+          depth="3"
+          style="font-size: 12px"
+        >
           下载后运行安装包覆盖安装即可，数据不会丢失。也可稍后在「系统配置 → 检查更新」手动查看。
         </n-text>
       </n-space>

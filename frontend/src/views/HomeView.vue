@@ -64,13 +64,27 @@ const quickActions = [
   <div class="home">
     <div class="hero">
       <div class="hero-main">
-        <div class="hero-greet">{{ greeting }}，欢迎回来</div>
-        <div class="hero-date">{{ todayText }}</div>
-        <div class="hero-sub">校园通知智能助手为你聚合最新通知、提取行动项并跟踪截止时间。</div>
+        <div class="hero-greet">
+          {{ greeting }}，欢迎回来
+        </div>
+        <div class="hero-date">
+          {{ todayText }}
+        </div>
+        <div class="hero-sub">
+          校园通知智能助手为你聚合最新通知、提取行动项并跟踪截止时间。
+        </div>
       </div>
       <div class="hero-actions">
-        <router-link v-for="a in quickActions" :key="a.to" :to="a.to" class="hero-action">
-          <span class="hero-action-icon" :class="`stat-icon--${a.color}`">
+        <router-link
+          v-for="a in quickActions"
+          :key="a.to"
+          :to="a.to"
+          class="hero-action"
+        >
+          <span
+            class="hero-action-icon"
+            :class="`stat-icon--${a.color}`"
+          >
             <n-icon size="20"><component :is="a.icon" /></n-icon>
           </span>
           <span class="hero-action-text">
@@ -82,11 +96,40 @@ const quickActions = [
     </div>
 
     <div class="stats">
-      <StatCard :icon="DocumentOutline" label="未提取" :value="notices.statusCounts.raw" color="info" :hint="statusLabel('raw')" />
-      <StatCard :icon="CheckmarkDoneOutline" label="已提取" :value="notices.statusCounts.extracted" color="success" :hint="statusLabel('extracted')" />
-      <StatCard :icon="FlashOutline" label="部分提取" :value="notices.statusCounts.partial" color="warning" :hint="statusLabel('partial')" />
-      <StatCard :icon="CloseCircleOutline" label="提取失败" :value="notices.statusCounts.failed" color="error" :hint="statusLabel('failed')" />
-      <StatCard :icon="AlarmOutline" label="待处理提醒" color="error" hint="截止前 3/1 天自动生成的待办提醒">
+      <StatCard
+        :icon="DocumentOutline"
+        label="未提取"
+        :value="notices.statusCounts.raw"
+        color="info"
+        :hint="statusLabel('raw')"
+      />
+      <StatCard
+        :icon="CheckmarkDoneOutline"
+        label="已提取"
+        :value="notices.statusCounts.extracted"
+        color="success"
+        :hint="statusLabel('extracted')"
+      />
+      <StatCard
+        :icon="FlashOutline"
+        label="部分提取"
+        :value="notices.statusCounts.partial"
+        color="warning"
+        :hint="statusLabel('partial')"
+      />
+      <StatCard
+        :icon="CloseCircleOutline"
+        label="提取失败"
+        :value="notices.statusCounts.failed"
+        color="error"
+        :hint="statusLabel('failed')"
+      />
+      <StatCard
+        :icon="AlarmOutline"
+        label="待处理提醒"
+        color="error"
+        hint="截止前 3/1 天自动生成的待办提醒"
+      >
         <template #value>
           <span :style="{ color: reminders.pendingCount > 0 ? 'var(--error)' : undefined }">
             {{ reminders.pendingCount }}
@@ -95,17 +138,38 @@ const quickActions = [
       </StatCard>
     </div>
 
-    <n-card class="recent-card" :bordered="false">
+    <n-card
+      class="recent-card"
+      :bordered="false"
+    >
       <template #header>
         <div class="section-title">
-          <n-icon size="18" color="var(--primary)"><NewspaperOutline /></n-icon>
+          <n-icon
+            size="18"
+            color="var(--primary)"
+          >
+            <NewspaperOutline />
+          </n-icon>
           近期通知
-          <router-link to="/notices" class="recent-more">查看全部 →</router-link>
+          <router-link
+            to="/notices"
+            class="recent-more"
+          >
+            查看全部 →
+          </router-link>
         </div>
       </template>
 
-      <div v-if="notices.list.length === 0" class="empty-hint">暂无通知，去「通知浏览」页发起抓取。</div>
-      <div v-else class="notice-list">
+      <div
+        v-if="notices.list.length === 0"
+        class="empty-hint"
+      >
+        暂无通知，去「通知浏览」页发起抓取。
+      </div>
+      <div
+        v-else
+        class="notice-list"
+      >
         <router-link
           v-for="item in notices.list"
           :key="item.id"
@@ -116,7 +180,10 @@ const quickActions = [
           <span class="notice-title">{{ item.title }}</span>
           <span class="notice-meta">
             <span class="meta-main">{{ item.source }} · {{ fmtDate(item.published_at ?? item.crawled_at) }}</span>
-            <span v-if="item.deadline" class="deadline">截止 {{ fmtDate(item.deadline) }}</span>
+            <span
+              v-if="item.deadline"
+              class="deadline"
+            >截止 {{ fmtDate(item.deadline) }}</span>
           </span>
         </router-link>
       </div>

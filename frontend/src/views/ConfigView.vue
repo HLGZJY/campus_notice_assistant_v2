@@ -533,19 +533,43 @@ function goSources() {
   <n-card :bordered="false">
     <template #header>
       <div class="section-title">
-        <n-icon size="18" color="var(--primary)"><SettingsOutline /></n-icon>
+        <n-icon
+          size="18"
+          color="var(--primary)"
+        >
+          <SettingsOutline />
+        </n-icon>
         系统配置
       </div>
     </template>
     <n-spin :show="loading">
-      <n-tabs v-model:value="activeTab" type="line" animated>
-        <n-tab-pane name="models" tab="模型">
-          <n-alert type="info" :bordered="false" style="margin-bottom: 12px">
+      <n-tabs
+        v-model:value="activeTab"
+        type="line"
+        animated
+      >
+        <n-tab-pane
+          name="models"
+          tab="模型"
+        >
+          <n-alert
+            type="info"
+            :bordered="false"
+            style="margin-bottom: 12px"
+          >
             每个任务按序尝试候选模型（同供应商内）：前一个模型失败（配额不足/网络/5xx/404）时自动切换下一个。
             模型名下拉候选来自「供应商」tab 维护的可选模型列表，也可直接输入自定义模型名。
           </n-alert>
-          <n-form label-placement="left" label-width="90" v-if="modelsDraft">
-            <n-form-item v-for="task in taskKeys" :key="task" :label="taskLabels[task]">
+          <n-form
+            v-if="modelsDraft"
+            label-placement="left"
+            label-width="90"
+          >
+            <n-form-item
+              v-for="task in taskKeys"
+              :key="task"
+              :label="taskLabels[task]"
+            >
               <n-space vertical>
                 <n-space>
                   <n-select
@@ -555,17 +579,25 @@ function goSources() {
                     style="width: 200px"
                   />
                 </n-space>
-                <n-space v-for="(m, idx) in modelsDraft[task].models" :key="idx">
+                <n-space
+                  v-for="(m, idx) in modelsDraft[task].models"
+                  :key="idx"
+                >
                   <n-select
                     :value="modelsDraft[task].models[idx]"
-                    @update:value="(v: SelectValue) => setTaskModel(task, idx, v)"
                     :options="modelOptionsFor(modelsDraft[task].provider)"
                     filterable
                     tag
                     placeholder="模型名（可输入自定义）"
                     style="width: 300px"
+                    @update:value="(v: SelectValue) => setTaskModel(task, idx, v)"
                   />
-                  <n-button size="small" quaternary :disabled="idx === 0" @click="moveTaskModel(task, idx, -1)">
+                  <n-button
+                    size="small"
+                    quaternary
+                    :disabled="idx === 0"
+                    @click="moveTaskModel(task, idx, -1)"
+                  >
                     ↑
                   </n-button>
                   <n-button
@@ -576,7 +608,12 @@ function goSources() {
                   >
                     ↓
                   </n-button>
-                  <n-button size="small" quaternary type="error" @click="removeTaskModel(task, idx)">
+                  <n-button
+                    size="small"
+                    quaternary
+                    type="error"
+                    @click="removeTaskModel(task, idx)"
+                  >
                     移除
                   </n-button>
                   <n-button
@@ -589,17 +626,35 @@ function goSources() {
                   </n-button>
                 </n-space>
                 <n-space>
-                  <n-button size="small" secondary @click="addTaskModel(task)">添加候选模型</n-button>
+                  <n-button
+                    size="small"
+                    secondary
+                    @click="addTaskModel(task)"
+                  >
+                    添加候选模型
+                  </n-button>
                   <span style="font-size: 12px; color: #999">先尝试在上，失败自动切向下一个</span>
                 </n-space>
               </n-space>
             </n-form-item>
-            <n-button type="primary" :loading="saving" @click="saveModels">保存模型配置</n-button>
+            <n-button
+              type="primary"
+              :loading="saving"
+              @click="saveModels"
+            >
+              保存模型配置
+            </n-button>
           </n-form>
         </n-tab-pane>
 
-        <n-tab-pane name="providers" tab="供应商">
-          <n-space vertical size="large">
+        <n-tab-pane
+          name="providers"
+          tab="供应商"
+        >
+          <n-space
+            vertical
+            size="large"
+          >
             <n-card
               v-for="(p, name) in providerDraft"
               :key="name"
@@ -609,95 +664,160 @@ function goSources() {
             >
               <template #header>
                 <div class="card-header-bar">
-                  <n-icon size="16" color="var(--text-3)"><ServerOutline /></n-icon>
+                  <n-icon
+                    size="16"
+                    color="var(--text-3)"
+                  >
+                    <ServerOutline />
+                  </n-icon>
                   <span class="card-header-title">{{ p.display_name || name }}</span>
-                  <n-tag size="small" :bordered="false" :type="badgeType(p.type)">{{ typeLabel(p.type) }}</n-tag>
-                  <n-tag size="small" :bordered="false" :type="keyStatus(name) ? 'success' : 'warning'">
+                  <n-tag
+                    size="small"
+                    :bordered="false"
+                    :type="badgeType(p.type)"
+                  >
+                    {{ typeLabel(p.type) }}
+                  </n-tag>
+                  <n-tag
+                    size="small"
+                    :bordered="false"
+                    :type="keyStatus(name) ? 'success' : 'warning'"
+                  >
                     {{ keyStatus(name) ? '已就绪' : '未就绪' }}
                   </n-tag>
                   <span class="header-spacer" />
-                  <n-button size="small" quaternary type="error" @click.stop="confirmRemoveProvider(name)">删除</n-button>
-                  <n-icon size="14" color="var(--text-3)">
+                  <n-button
+                    size="small"
+                    quaternary
+                    type="error"
+                    @click.stop="confirmRemoveProvider(name)"
+                  >
+                    删除
+                  </n-button>
+                  <n-icon
+                    size="14"
+                    color="var(--text-3)"
+                  >
                     <component :is="provShow(name) ? ChevronUpOutline : ChevronDownOutline" />
                   </n-icon>
                 </div>
               </template>
               <n-collapse-transition :show="provShow(name)">
-              <n-form label-placement="left" label-width="100">
-                <n-form-item label="实例名">
-                  <n-input v-model:value="p.display_name" placeholder="实例名" style="width: 240px" />
-                </n-form-item>
-                <n-form-item label="Base URL">
-                  <n-input v-model:value="p.base_url" placeholder="https://api.example.com" />
-                </n-form-item>
-                <n-form-item label="API Key">
-                  <n-space align="center">
+                <n-form
+                  label-placement="left"
+                  label-width="100"
+                >
+                  <n-form-item label="实例名">
                     <n-input
-                      v-model:value="providerKeyDraft[name]"
-                      type="password"
-                      show-password-on="click"
-                      placeholder="粘贴 API Key，保存后写入 .env"
-                      style="width: 300px"
+                      v-model:value="p.display_name"
+                      placeholder="实例名"
+                      style="width: 240px"
                     />
-                    <n-button
-                      size="small"
-                      secondary
-                      type="primary"
-                      :loading="savingKey[name]"
-                      @click="saveProviderKey(name)"
-                    >
-                      <template #icon><n-icon><KeyOutline /></n-icon></template>
-                      保存密钥
-                    </n-button>
-                    <span class="key-dot" :class="keyStatus(name) ? 'ok' : 'bad'" />
-                    <span style="font-size: 12px; color: #999">{{ keyStatus(name) ? '已就绪' : '未就绪' }}</span>
-                  </n-space>
-                  <template #feedback>
-                    <span class="muted">密钥仅写入项目根 .env（已忽略 Git，即时生效）</span>
-                    <n-tooltip trigger="hover" placement="right">
-                      <template #trigger>
-                        <span class="help-icon"><n-icon size="14"><InformationCircleOutline /></n-icon></span>
-                      </template>
-                      保存后自动 upsert 到项目根目录 .env，不落库、不进 YAML；若环境变量名为空会自动生成
-                      &lt;标识&gt;_API_KEY。写入后进程内立即生效，无需重启。
-                    </n-tooltip>
-                  </template>
-                </n-form-item>
-                <n-form-item label="可用模型">
-                  <n-space vertical style="width: 100%">
-                    <n-space>
-                      <n-select
-                        v-model:value="pendingModel[name]"
-                        filterable
-                        tag
-                        :options="modelAddOptions(name)"
-                        placeholder="下拉选择或输入模型名"
-                        style="width: 280px"
+                  </n-form-item>
+                  <n-form-item label="Base URL">
+                    <n-input
+                      v-model:value="p.base_url"
+                      placeholder="https://api.example.com"
+                    />
+                  </n-form-item>
+                  <n-form-item label="API Key">
+                    <n-space align="center">
+                      <n-input
+                        v-model:value="providerKeyDraft[name]"
+                        type="password"
+                        show-password-on="click"
+                        placeholder="粘贴 API Key，保存后写入 .env"
+                        style="width: 300px"
                       />
-                      <n-button size="small" secondary @click="addProviderModel(name)">添加</n-button>
-                    </n-space>
-                    <n-space v-if="p.models.length">
-                      <n-tag
-                        v-for="(m, idx) in p.models"
-                        :key="m"
-                        closable
+                      <n-button
                         size="small"
-                        @close="removeProviderModel(name, idx)"
+                        secondary
+                        type="primary"
+                        :loading="savingKey[name]"
+                        @click="saveProviderKey(name)"
                       >
-                        {{ m }}
-                      </n-tag>
+                        <template #icon>
+                          <n-icon><KeyOutline /></n-icon>
+                        </template>
+                        保存密钥
+                      </n-button>
+                      <span
+                        class="key-dot"
+                        :class="keyStatus(name) ? 'ok' : 'bad'"
+                      />
+                      <span style="font-size: 12px; color: #999">{{ keyStatus(name) ? '已就绪' : '未就绪' }}</span>
                     </n-space>
-                    <span v-else style="font-size: 12px; color: #999">
-                      暂无模型；此处维护的模型会作为「模型」tab 的下拉候选
-                    </span>
-                  </n-space>
-                </n-form-item>
-                <n-button size="small" quaternary style="margin: 2px 0 8px" @click="toggleAdvanced(name)">
-                    <template #icon><n-icon><component :is="advancedOpen[name] ? ChevronUpOutline : ChevronDownOutline" /></n-icon></template>
+                    <template #feedback>
+                      <span class="muted">密钥仅写入项目根 .env（已忽略 Git，即时生效）</span>
+                      <n-tooltip
+                        trigger="hover"
+                        placement="right"
+                      >
+                        <template #trigger>
+                          <span class="help-icon"><n-icon size="14"><InformationCircleOutline /></n-icon></span>
+                        </template>
+                        保存后自动 upsert 到项目根目录 .env，不落库、不进 YAML；若环境变量名为空会自动生成
+                        &lt;标识&gt;_API_KEY。写入后进程内立即生效，无需重启。
+                      </n-tooltip>
+                    </template>
+                  </n-form-item>
+                  <n-form-item label="可用模型">
+                    <n-space
+                      vertical
+                      style="width: 100%"
+                    >
+                      <n-space>
+                        <n-select
+                          v-model:value="pendingModel[name]"
+                          filterable
+                          tag
+                          :options="modelAddOptions(name)"
+                          placeholder="下拉选择或输入模型名"
+                          style="width: 280px"
+                        />
+                        <n-button
+                          size="small"
+                          secondary
+                          @click="addProviderModel(name)"
+                        >
+                          添加
+                        </n-button>
+                      </n-space>
+                      <n-space v-if="p.models.length">
+                        <n-tag
+                          v-for="(m, idx) in p.models"
+                          :key="m"
+                          closable
+                          size="small"
+                          @close="removeProviderModel(name, idx)"
+                        >
+                          {{ m }}
+                        </n-tag>
+                      </n-space>
+                      <span
+                        v-else
+                        style="font-size: 12px; color: #999"
+                      >
+                        暂无模型；此处维护的模型会作为「模型」tab 的下拉候选
+                      </span>
+                    </n-space>
+                  </n-form-item>
+                  <n-button
+                    size="small"
+                    quaternary
+                    style="margin: 2px 0 8px"
+                    @click="toggleAdvanced(name)"
+                  >
+                    <template #icon>
+                      <n-icon><component :is="advancedOpen[name] ? ChevronUpOutline : ChevronDownOutline" /></n-icon>
+                    </template>
                     {{ advancedOpen[name] ? '收起高级选项' : '连通性测试 · 环境变量 · 标识' }}
                   </n-button>
                   <div v-show="advancedOpen[name]">
-                    <n-form label-placement="left" label-width="100">
+                    <n-form
+                      label-placement="left"
+                      label-width="100"
+                    >
                       <n-form-item label="连通性测试">
                         <n-space vertical>
                           <n-space>
@@ -715,7 +835,9 @@ function goSources() {
                               :loading="testBusy[name]"
                               @click="testProvider(name)"
                             >
-                              <template #icon><n-icon><PulseOutline /></n-icon></template>
+                              <template #icon>
+                                <n-icon><PulseOutline /></n-icon>
+                              </template>
                               开始测试
                             </n-button>
                           </n-space>
@@ -730,165 +852,330 @@ function goSources() {
                         </n-space>
                       </n-form-item>
                       <n-form-item label="环境变量名">
-                        <n-input v-model:value="p.api_key_env" placeholder="OPENAI_API_KEY" style="width: 240px" />
-                        <template #feedback>Key 写入 .env 使用的变量名；留空时保存 Key 自动生成 &lt;标识&gt;_API_KEY</template>
+                        <n-input
+                          v-model:value="p.api_key_env"
+                          placeholder="OPENAI_API_KEY"
+                          style="width: 240px"
+                        />
+                        <template #feedback>
+                          Key 写入 .env 使用的变量名；留空时保存 Key 自动生成 &lt;标识&gt;_API_KEY
+                        </template>
                       </n-form-item>
                       <n-form-item label="标识">
-                        <n-input :value="name" disabled style="width: 240px" />
-                        <template #feedback>唯一标识，任务模型通过它引用本供应商，不可在页面修改（如需改名请编辑 YAML）</template>
+                        <n-input
+                          :value="name"
+                          disabled
+                          style="width: 240px"
+                        />
+                        <template #feedback>
+                          唯一标识，任务模型通过它引用本供应商，不可在页面修改（如需改名请编辑 YAML）
+                        </template>
                       </n-form-item>
                     </n-form>
                   </div>
-              </n-form>
+                </n-form>
               </n-collapse-transition>
             </n-card>
             <n-space>
-              <n-button secondary @click="addProvider">添加供应商</n-button>
-              <n-button type="primary" :loading="saving" @click="saveProviders">保存供应商配置</n-button>
+              <n-button
+                secondary
+                @click="addProvider"
+              >
+                添加供应商
+              </n-button>
+              <n-button
+                type="primary"
+                :loading="saving"
+                @click="saveProviders"
+              >
+                保存供应商配置
+              </n-button>
             </n-space>
           </n-space>
         </n-tab-pane>
 
-        <n-tab-pane name="sources" tab="数据源">
-          <n-alert type="info" :show-icon="true">
+        <n-tab-pane
+          name="sources"
+          tab="数据源"
+        >
+          <n-alert
+            type="info"
+            :show-icon="true"
+          >
             <template #default>
               数据源管理已移至「数据源中心」，增删改与参数调整统一在那里完成，改完即生效
-              <n-button size="small" quaternary type="primary" @click="goSources" style="margin-left: 8px">
+              <n-button
+                size="small"
+                quaternary
+                type="primary"
+                style="margin-left: 8px"
+                @click="goSources"
+              >
                 前往数据源中心 →
               </n-button>
             </template>
           </n-alert>
         </n-tab-pane>
 
-        <n-tab-pane name="crawl" tab="抓取与提取">
-          <n-space vertical size="large">
+        <n-tab-pane
+          name="crawl"
+          tab="抓取与提取"
+        >
+          <n-space
+            vertical
+            size="large"
+          >
             <n-card
-              size="small"
               v-if="crawlDraft"
+              size="small"
               class="collapsible-card"
               @click="toggleCrawl($event)"
             >
               <template #header>
                 <div class="card-header-bar">
-                  <n-icon size="16" color="var(--text-3)"><CloudDownloadOutline /></n-icon>
+                  <n-icon
+                    size="16"
+                    color="var(--text-3)"
+                  >
+                    <CloudDownloadOutline />
+                  </n-icon>
                   <span class="card-header-title">全局抓取参数</span>
                   <span class="header-spacer" />
-                  <n-icon size="14" color="var(--text-3)">
+                  <n-icon
+                    size="14"
+                    color="var(--text-3)"
+                  >
                     <component :is="crawlExpanded ? ChevronUpOutline : ChevronDownOutline" />
                   </n-icon>
                 </div>
               </template>
               <n-collapse-transition :show="crawlExpanded">
-              <n-form label-placement="left" label-width="160">
-                <n-form-item label="抓取间隔（分钟）">
-                  <n-input-number v-model:value="crawlDraft.interval_minutes" :min="1" style="width: 120px" />
-                </n-form-item>
-                <n-form-item label="早停（增量）">
-                  <n-switch v-model:value="crawlDraft.stop_when_caught_up" />
-                  <span style="margin-left: 8px; color: #999; font-size: 12px">某页全部是已知通知时停止翻页（仅增量模式生效）</span>
-                </n-form-item>
-                <n-form-item label="请求超时（秒）">
-                  <n-input-number v-model:value="crawlDraft.request_timeout" :min="3" style="width: 120px" />
-                </n-form-item>
-                <n-form-item label="失败重试次数">
-                  <n-input-number v-model:value="crawlDraft.retry_times" :min="0" :max="5" style="width: 120px" />
-                </n-form-item>
-                <n-form-item label="详情并发数">
-                  <n-input-number v-model:value="crawlDraft.concurrency" :min="1" :max="8" style="width: 120px" />
-                  <template #feedback>仅详情页抓取走并发（1-8），列表页始终串行</template>
-                </n-form-item>
-                <n-form-item label="深度检查周期">
-                  <n-input-number v-model:value="crawlDraft.deep_check_interval_cycles" :min="0" style="width: 120px" />
-                  <template #feedback>每 N 轮抓取自动做一次全来源深度变更检测；0 = 关闭</template>
-                </n-form-item>
-                <n-form-item label="清理过期">
-                  <n-switch v-model:value="crawlDraft.cleanup_enabled" />
-                </n-form-item>
-                <n-form-item label="过期天数">
-                  <n-input-number v-model:value="crawlDraft.expire_days" :min="1" style="width: 120px" />
-                </n-form-item>
-                <n-form-item label="User-Agent">
-                  <n-input v-model:value="crawlDraft.user_agent" style="width: 360px" />
-                </n-form-item>
-                <n-button type="primary" :loading="saving" @click="saveCrawl">保存抓取参数</n-button>
-              </n-form>
+                <n-form
+                  label-placement="left"
+                  label-width="160"
+                >
+                  <n-form-item label="抓取间隔（分钟）">
+                    <n-input-number
+                      v-model:value="crawlDraft.interval_minutes"
+                      :min="1"
+                      style="width: 120px"
+                    />
+                  </n-form-item>
+                  <n-form-item label="早停（增量）">
+                    <n-switch v-model:value="crawlDraft.stop_when_caught_up" />
+                    <span style="margin-left: 8px; color: #999; font-size: 12px">某页全部是已知通知时停止翻页（仅增量模式生效）</span>
+                  </n-form-item>
+                  <n-form-item label="请求超时（秒）">
+                    <n-input-number
+                      v-model:value="crawlDraft.request_timeout"
+                      :min="3"
+                      style="width: 120px"
+                    />
+                  </n-form-item>
+                  <n-form-item label="失败重试次数">
+                    <n-input-number
+                      v-model:value="crawlDraft.retry_times"
+                      :min="0"
+                      :max="5"
+                      style="width: 120px"
+                    />
+                  </n-form-item>
+                  <n-form-item label="详情并发数">
+                    <n-input-number
+                      v-model:value="crawlDraft.concurrency"
+                      :min="1"
+                      :max="8"
+                      style="width: 120px"
+                    />
+                    <template #feedback>
+                      仅详情页抓取走并发（1-8），列表页始终串行
+                    </template>
+                  </n-form-item>
+                  <n-form-item label="深度检查周期">
+                    <n-input-number
+                      v-model:value="crawlDraft.deep_check_interval_cycles"
+                      :min="0"
+                      style="width: 120px"
+                    />
+                    <template #feedback>
+                      每 N 轮抓取自动做一次全来源深度变更检测；0 = 关闭
+                    </template>
+                  </n-form-item>
+                  <n-form-item label="清理过期">
+                    <n-switch v-model:value="crawlDraft.cleanup_enabled" />
+                  </n-form-item>
+                  <n-form-item label="过期天数">
+                    <n-input-number
+                      v-model:value="crawlDraft.expire_days"
+                      :min="1"
+                      style="width: 120px"
+                    />
+                  </n-form-item>
+                  <n-form-item label="User-Agent">
+                    <n-input
+                      v-model:value="crawlDraft.user_agent"
+                      style="width: 360px"
+                    />
+                  </n-form-item>
+                  <n-button
+                    type="primary"
+                    :loading="saving"
+                    @click="saveCrawl"
+                  >
+                    保存抓取参数
+                  </n-button>
+                </n-form>
               </n-collapse-transition>
             </n-card>
             <n-card
-              size="small"
               v-if="extractDraft"
+              size="small"
               class="collapsible-card"
               @click="toggleExtract($event)"
             >
               <template #header>
                 <div class="card-header-bar">
-                  <n-icon size="16" color="var(--text-3)"><FilterOutline /></n-icon>
+                  <n-icon
+                    size="16"
+                    color="var(--text-3)"
+                  >
+                    <FilterOutline />
+                  </n-icon>
                   <span class="card-header-title">提取前置过滤</span>
                   <span class="header-spacer" />
-                  <n-icon size="14" color="var(--text-3)">
+                  <n-icon
+                    size="14"
+                    color="var(--text-3)"
+                  >
                     <component :is="extractExpanded ? ChevronUpOutline : ChevronDownOutline" />
                   </n-icon>
                 </div>
               </template>
               <n-collapse-transition :show="extractExpanded">
-              <n-alert type="info" :bordered="false" style="margin-bottom: 12px">
-                批量提取前先按规则预筛，不通过的通知不调 LLM（标记为“已跳过提取”），节省 Token。
-                全部条件为“且”关系，留空/关闭的条件不参与判定。
-              </n-alert>
-              <n-form label-placement="left" label-width="160">
-                <n-form-item label="单批上限">
-                  <n-input-number v-model:value="extractDraft.batch_limit" :min="1" style="width: 120px" />
-                </n-form-item>
-                <n-form-item label="提取并发数">
-                  <n-input-number v-model:value="extractDraft.concurrency" :min="1" :max="8" style="width: 120px" />
-                  <template #feedback>批量提取并发上限（1–8，默认 3）；调大前注意供应商限流</template>
-                </n-form-item>
-                <n-form-item label="最短正文长度">
-                  <n-input-number v-model:value="extractDraft.min_content_length" :min="0" style="width: 120px" />
-                  <template #feedback>正文长度低于该值的通知跳过（默认 100，过滤空页面/占位页）</template>
-                </n-form-item>
-                <n-form-item label="最大通知天数">
-                  <n-input-number v-model:value="extractDraft.max_age_days" :min="1" clearable style="width: 120px" />
-                  <template #feedback>只提取 N 天以内发布的通知；留空 = 不限</template>
-                </n-form-item>
-                <n-form-item label="仅含关键词">
-                  <n-input v-model:value="extractDraft.keyword_filter" placeholder="逗号分隔，标题或正文含任一关键词才提取" style="width: 360px" />
-                </n-form-item>
-                <n-form-item label="排除关键词">
-                  <n-input v-model:value="extractDraft.skip_keywords" placeholder="逗号分隔，标题含任一关键词则跳过（如 公示,公示期）" style="width: 360px" />
-                </n-form-item>
-                <n-form-item label="必须含时间线索">
-                  <n-switch v-model:value="extractDraft.require_time_hint" />
-                  <span style="margin-left: 8px; color: #999; font-size: 12px">标题/正文须含日期（如 2026-08-16）才提取</span>
-                </n-form-item>
-                <n-form-item label="仅订阅命中">
-                  <n-switch v-model:value="extractDraft.match_subscription_only" />
-                  <span style="margin-left: 8px; color: #999; font-size: 12px">只提取至少命中一条订阅的通知</span>
-                </n-form-item>
-                <n-form-item label="重试失败项">
-                  <n-switch v-model:value="extractDraft.retry_failed" />
-                  <span style="margin-left: 8px; color: #999; font-size: 12px">每次提取顺带重试 status=failed 的旧通知</span>
-                </n-form-item>
-                <n-form-item label="跳过 LLM 提取">
-                  <n-switch v-model:value="extractDraft.skip_llm" />
-                  <span style="margin-left: 8px; color: #999; font-size: 12px">不调 LLM，仅入库 + 建向量索引（状态置“部分提取”），最省 Token 模式</span>
-                </n-form-item>
-                <n-button type="primary" :loading="saving" @click="saveExtract">保存提取过滤配置</n-button>
-              </n-form>
+                <n-alert
+                  type="info"
+                  :bordered="false"
+                  style="margin-bottom: 12px"
+                >
+                  批量提取前先按规则预筛，不通过的通知不调 LLM（标记为“已跳过提取”），节省 Token。
+                  全部条件为“且”关系，留空/关闭的条件不参与判定。
+                </n-alert>
+                <n-form
+                  label-placement="left"
+                  label-width="160"
+                >
+                  <n-form-item label="单批上限">
+                    <n-input-number
+                      v-model:value="extractDraft.batch_limit"
+                      :min="1"
+                      style="width: 120px"
+                    />
+                  </n-form-item>
+                  <n-form-item label="提取并发数">
+                    <n-input-number
+                      v-model:value="extractDraft.concurrency"
+                      :min="1"
+                      :max="8"
+                      style="width: 120px"
+                    />
+                    <template #feedback>
+                      批量提取并发上限（1–8，默认 3）；调大前注意供应商限流
+                    </template>
+                  </n-form-item>
+                  <n-form-item label="最短正文长度">
+                    <n-input-number
+                      v-model:value="extractDraft.min_content_length"
+                      :min="0"
+                      style="width: 120px"
+                    />
+                    <template #feedback>
+                      正文长度低于该值的通知跳过（默认 100，过滤空页面/占位页）
+                    </template>
+                  </n-form-item>
+                  <n-form-item label="最大通知天数">
+                    <n-input-number
+                      v-model:value="extractDraft.max_age_days"
+                      :min="1"
+                      clearable
+                      style="width: 120px"
+                    />
+                    <template #feedback>
+                      只提取 N 天以内发布的通知；留空 = 不限
+                    </template>
+                  </n-form-item>
+                  <n-form-item label="仅含关键词">
+                    <n-input
+                      v-model:value="extractDraft.keyword_filter"
+                      placeholder="逗号分隔，标题或正文含任一关键词才提取"
+                      style="width: 360px"
+                    />
+                  </n-form-item>
+                  <n-form-item label="排除关键词">
+                    <n-input
+                      v-model:value="extractDraft.skip_keywords"
+                      placeholder="逗号分隔，标题含任一关键词则跳过（如 公示,公示期）"
+                      style="width: 360px"
+                    />
+                  </n-form-item>
+                  <n-form-item label="必须含时间线索">
+                    <n-switch v-model:value="extractDraft.require_time_hint" />
+                    <span style="margin-left: 8px; color: #999; font-size: 12px">标题/正文须含日期（如 2026-08-16）才提取</span>
+                  </n-form-item>
+                  <n-form-item label="仅订阅命中">
+                    <n-switch v-model:value="extractDraft.match_subscription_only" />
+                    <span style="margin-left: 8px; color: #999; font-size: 12px">只提取至少命中一条订阅的通知</span>
+                  </n-form-item>
+                  <n-form-item label="重试失败项">
+                    <n-switch v-model:value="extractDraft.retry_failed" />
+                    <span style="margin-left: 8px; color: #999; font-size: 12px">每次提取顺带重试 status=failed 的旧通知</span>
+                  </n-form-item>
+                  <n-form-item label="跳过 LLM 提取">
+                    <n-switch v-model:value="extractDraft.skip_llm" />
+                    <span style="margin-left: 8px; color: #999; font-size: 12px">不调 LLM，仅入库 + 建向量索引（状态置“部分提取”），最省 Token 模式</span>
+                  </n-form-item>
+                  <n-button
+                    type="primary"
+                    :loading="saving"
+                    @click="saveExtract"
+                  >
+                    保存提取过滤配置
+                  </n-button>
+                </n-form>
               </n-collapse-transition>
             </n-card>
           </n-space>
         </n-tab-pane>
 
-        <n-tab-pane name="usage" tab="Token 用量">
-          <n-space vertical size="large">
+        <n-tab-pane
+          name="usage"
+          tab="Token 用量"
+        >
+          <n-space
+            vertical
+            size="large"
+          >
             <n-space align="center">
-              <n-radio-group v-model:value="usageDays" size="small">
-                <n-radio-button :value="7">近 7 天</n-radio-button>
-                <n-radio-button :value="30">近 30 天</n-radio-button>
-                <n-radio-button :value="90">近 90 天</n-radio-button>
+              <n-radio-group
+                v-model:value="usageDays"
+                size="small"
+              >
+                <n-radio-button :value="7">
+                  近 7 天
+                </n-radio-button>
+                <n-radio-button :value="30">
+                  近 30 天
+                </n-radio-button>
+                <n-radio-button :value="90">
+                  近 90 天
+                </n-radio-button>
               </n-radio-group>
-              <n-button size="small" :loading="usageLoading" @click="loadUsage">刷新</n-button>
+              <n-button
+                size="small"
+                :loading="usageLoading"
+                @click="loadUsage"
+              >
+                刷新
+              </n-button>
               <span style="color: #999; font-size: 12px">
                 统计近 {{ usageDays }} 天所有 LLM 调用（提取 / 问答 / 待办 / Embedding / 连通性测试）
               </span>
@@ -897,11 +1184,36 @@ function goSources() {
             <n-spin :show="usageLoading">
               <template v-if="usageTotal.calls">
                 <div class="usage-stats">
-                  <StatCard :icon="PulseOutline" label="调用次数" :value="Number(usageTotal.calls ?? 0)" color="primary" />
-                  <StatCard :icon="PencilOutline" label="输入 tokens" :value="Number(usageTotal.input_tokens ?? 0)" color="info" />
-                  <StatCard :icon="PaperPlaneOutline" label="输出 tokens" :value="Number(usageTotal.output_tokens ?? 0)" color="violet" />
-                  <StatCard :icon="CheckmarkCircleOutline" label="成功" :value="Number(usageTotal.success ?? 0)" color="success" />
-                  <StatCard :icon="CloseCircleOutline" label="失败" :value="Number(usageTotal.failed ?? 0)" color="error" />
+                  <StatCard
+                    :icon="PulseOutline"
+                    label="调用次数"
+                    :value="Number(usageTotal.calls ?? 0)"
+                    color="primary"
+                  />
+                  <StatCard
+                    :icon="PencilOutline"
+                    label="输入 tokens"
+                    :value="Number(usageTotal.input_tokens ?? 0)"
+                    color="info"
+                  />
+                  <StatCard
+                    :icon="PaperPlaneOutline"
+                    label="输出 tokens"
+                    :value="Number(usageTotal.output_tokens ?? 0)"
+                    color="violet"
+                  />
+                  <StatCard
+                    :icon="CheckmarkCircleOutline"
+                    label="成功"
+                    :value="Number(usageTotal.success ?? 0)"
+                    color="success"
+                  />
+                  <StatCard
+                    :icon="CloseCircleOutline"
+                    label="失败"
+                    :value="Number(usageTotal.failed ?? 0)"
+                    color="error"
+                  />
                 </div>
                 <n-data-table
                   :columns="usageColumns"
@@ -912,29 +1224,59 @@ function goSources() {
                   style="margin-top: 12px"
                 />
               </template>
-              <n-empty v-else-if="!usageLoading" description="暂无 Token 调用记录" />
+              <n-empty
+                v-else-if="!usageLoading"
+                description="暂无 Token 调用记录"
+              />
             </n-spin>
           </n-space>
         </n-tab-pane>
 
-        <n-tab-pane name="reload" tab="重载与磁盘">
-          <n-space vertical size="large">
+        <n-tab-pane
+          name="reload"
+          tab="重载与磁盘"
+        >
+          <n-space
+            vertical
+            size="large"
+          >
             <n-space>
-              <n-button type="primary" :loading="reloading" @click="reloadConfig">
-                <template #icon><n-icon><ReloadOutline /></n-icon></template>
+              <n-button
+                type="primary"
+                :loading="reloading"
+                @click="reloadConfig"
+              >
+                <template #icon>
+                  <n-icon><ReloadOutline /></n-icon>
+                </template>
                 强制重载配置
               </n-button>
             </n-space>
-            <n-card size="small" v-if="cfg.disk">
+            <n-card
+              v-if="cfg.disk"
+              size="small"
+            >
               <template #header>
                 <div class="section-title">
-                  <n-icon size="16" color="var(--text-3)"><DiscOutline /></n-icon>
+                  <n-icon
+                    size="16"
+                    color="var(--text-3)"
+                  >
+                    <DiscOutline />
+                  </n-icon>
                   磁盘信息
                 </div>
               </template>
-                <n-descriptions :column="1" size="small">
-                <n-descriptions-item label="路径">{{ cfg.disk.path }}</n-descriptions-item>
-                <n-descriptions-item label="存在">{{ cfg.disk.exists ? '是' : '否' }}</n-descriptions-item>
+              <n-descriptions
+                :column="1"
+                size="small"
+              >
+                <n-descriptions-item label="路径">
+                  {{ cfg.disk.path }}
+                </n-descriptions-item>
+                <n-descriptions-item label="存在">
+                  {{ cfg.disk.exists ? '是' : '否' }}
+                </n-descriptions-item>
                 <n-descriptions-item label="最后修改">
                   {{ cfg.disk.last_modified || '—' }}
                 </n-descriptions-item>
@@ -943,53 +1285,120 @@ function goSources() {
           </n-space>
         </n-tab-pane>
 
-        <n-tab-pane name="update" tab="检查更新">
-          <n-space vertical size="large">
+        <n-tab-pane
+          name="update"
+          tab="检查更新"
+        >
+          <n-space
+            vertical
+            size="large"
+          >
             <n-space>
-              <n-button type="primary" :loading="updateChecking" @click="checkUpdate">
-                <template #icon><n-icon><CloudDownloadOutline /></n-icon></template>
+              <n-button
+                type="primary"
+                :loading="updateChecking"
+                @click="checkUpdate"
+              >
+                <template #icon>
+                  <n-icon><CloudDownloadOutline /></n-icon>
+                </template>
                 检查更新
               </n-button>
-              <n-tag v-if="!updateChecking && updateResult?.current_version" :bordered="false">
+              <n-tag
+                v-if="!updateChecking && updateResult?.current_version"
+                :bordered="false"
+              >
                 当前版本 v{{ updateResult.current_version }}
               </n-tag>
             </n-space>
 
-            <n-card size="small" v-if="updateResult">
+            <n-card
+              v-if="updateResult"
+              size="small"
+            >
               <template #header>
                 <div class="section-title">
-                  <n-icon size="16" color="var(--text-3)"><CloudDownloadOutline /></n-icon>
+                  <n-icon
+                    size="16"
+                    color="var(--text-3)"
+                  >
+                    <CloudDownloadOutline />
+                  </n-icon>
                   {{ updateResult.update_available ? `发现新版本 ${updateResult.latest_version}` : '已是最新版本' }}
                 </div>
               </template>
-              <n-space vertical size="medium">
-                <n-alert v-if="updateResult.error" type="warning" :bordered="false">
+              <n-space
+                vertical
+                size="medium"
+              >
+                <n-alert
+                  v-if="updateResult.error"
+                  type="warning"
+                  :bordered="false"
+                >
                   {{ updateResult.error }}
                 </n-alert>
                 <template v-if="updateResult.update_available">
-                  <n-descriptions :column="1" size="small">
-                    <n-descriptions-item label="最新版本">{{ updateResult.latest_version }}</n-descriptions-item>
-                    <n-descriptions-item label="当前版本">v{{ updateResult.current_version }}</n-descriptions-item>
+                  <n-descriptions
+                    :column="1"
+                    size="small"
+                  >
+                    <n-descriptions-item label="最新版本">
+                      {{ updateResult.latest_version }}
+                    </n-descriptions-item>
+                    <n-descriptions-item label="当前版本">
+                      v{{ updateResult.current_version }}
+                    </n-descriptions-item>
                   </n-descriptions>
-                  <n-card size="small" embedded v-if="updateResult.notes" title="更新日志">
-                    <div class="changelog">{{ updateResult.notes }}</div>
+                  <n-card
+                    v-if="updateResult.notes"
+                    size="small"
+                    embedded
+                    title="更新日志"
+                  >
+                    <div class="changelog">
+                      {{ updateResult.notes }}
+                    </div>
                   </n-card>
-                  <n-space vertical v-if="updateResult.assets?.length">
-                    <div v-for="a in updateResult.assets ?? []" :key="a.name" class="asset-row">
-                      <n-button size="small" @click="openExternal(a.browser_download_url)">
+                  <n-space
+                    v-if="updateResult.assets?.length"
+                    vertical
+                  >
+                    <div
+                      v-for="a in updateResult.assets ?? []"
+                      :key="a.name"
+                      class="asset-row"
+                    >
+                      <n-button
+                        size="small"
+                        @click="openExternal(a.browser_download_url)"
+                      >
                         下载 {{ a.name }}
                       </n-button>
                       <span class="asset-size">{{ formatSize(a.size) }}</span>
                     </div>
                   </n-space>
-                  <n-button v-if="updateResult.html_url" text type="primary" @click="openExternal(updateResult.html_url)">
+                  <n-button
+                    v-if="updateResult.html_url"
+                    text
+                    type="primary"
+                    @click="openExternal(updateResult.html_url)"
+                  >
                     查看发布页 →
                   </n-button>
-                  <n-text depth="3" style="font-size: 12px">
+                  <n-text
+                    depth="3"
+                    style="font-size: 12px"
+                  >
                     下载完成后直接运行新版本安装包覆盖安装，数据（通知/待办/配置）不会丢失。
                   </n-text>
                 </template>
-                <n-text v-else-if="!updateResult.error" depth="3">检查时间：{{ updateResult.checked_at }}</n-text>
+                <n-text
+                  v-else-if="!updateResult.error"
+                  depth="3"
+                >
+                  检查时间：{{ updateResult.checked_at }}
+                </n-text>
               </n-space>
             </n-card>
           </n-space>

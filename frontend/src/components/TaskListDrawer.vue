@@ -161,32 +161,66 @@ const sortedTasks = computed(() =>
         />
       </span>
       <n-space :size="2">
-        <n-button quaternary circle size="tiny" title="刷新" @click="store.fetchList()">
+        <n-button
+          quaternary
+          circle
+          size="tiny"
+          title="刷新"
+          @click="store.fetchList()"
+        >
           <template #icon>
-            <n-icon size="14"><RefreshOutline /></n-icon>
+            <n-icon size="14">
+              <RefreshOutline />
+            </n-icon>
           </template>
         </n-button>
-        <n-button quaternary circle size="tiny" title="清理已完成" @click="store.clearFinished()">
+        <n-button
+          quaternary
+          circle
+          size="tiny"
+          title="清理已完成"
+          @click="store.clearFinished()"
+        >
           <template #icon>
-            <n-icon size="14"><TrashOutline /></n-icon>
+            <n-icon size="14">
+              <TrashOutline />
+            </n-icon>
           </template>
         </n-button>
       </n-space>
     </div>
 
     <div class="task-panel-body">
-      <n-empty v-if="sortedTasks.length === 0" description="暂无任务" size="small" />
-      <div v-else class="task-list">
-        <div v-for="task in sortedTasks" :key="task.id" class="task-item">
+      <n-empty
+        v-if="sortedTasks.length === 0"
+        description="暂无任务"
+        size="small"
+      />
+      <div
+        v-else
+        class="task-list"
+      >
+        <div
+          v-for="task in sortedTasks"
+          :key="task.id"
+          class="task-item"
+        >
           <div class="task-item-top">
             <span class="task-type">{{ typeLabel(task.type) }}</span>
-            <n-tag :type="statusTagType(task.status)" size="tiny" round>
+            <n-tag
+              :type="statusTagType(task.status)"
+              size="tiny"
+              round
+            >
               {{ statusLabel(task.status) }}
             </n-tag>
           </div>
           <div class="task-item-meta">
             <span>#{{ task.id }}</span>
-            <span v-if="paramsSummary(task)" class="task-params">{{ paramsSummary(task) }}</span>
+            <span
+              v-if="paramsSummary(task)"
+              class="task-params"
+            >{{ paramsSummary(task) }}</span>
           </div>
           <n-progress
             v-if="task.status !== 'failed'"
@@ -198,10 +232,21 @@ const sortedTasks = computed(() =>
           />
           <div class="task-item-bottom">
             <span class="task-elapsed">{{ formatElapsed(task) }}</span>
-            <span v-if="tokenSummary(task)" class="task-token">{{ tokenSummary(task) }}</span>
+            <span
+              v-if="tokenSummary(task)"
+              class="task-token"
+            >{{ tokenSummary(task) }}</span>
           </div>
-          <div v-if="task.status === 'failed' && task.error" class="task-error">
-            <n-text type="error" depth="2">{{ task.error }}</n-text>
+          <div
+            v-if="task.status === 'failed' && task.error"
+            class="task-error"
+          >
+            <n-text
+              type="error"
+              depth="2"
+            >
+              {{ task.error }}
+            </n-text>
           </div>
         </div>
       </div>

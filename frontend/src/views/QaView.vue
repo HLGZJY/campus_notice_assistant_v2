@@ -118,35 +118,72 @@ function openDetail(msg: QaMessage) {
 </script>
 
 <template>
-  <n-card :bordered="false" class="qa-card">
+  <n-card
+    :bordered="false"
+    class="qa-card"
+  >
     <template #header>
       <div class="section-title">
         <div class="title-left">
-          <n-icon size="18" color="var(--violet)"><ChatbubbleEllipsesOutline /></n-icon>
+          <n-icon
+            size="18"
+            color="var(--violet)"
+          >
+            <ChatbubbleEllipsesOutline />
+          </n-icon>
           <span class="title-text">智能问答</span>
-          <n-tag :bordered="false" round :type="indexStats?.error ? 'error' : 'info'" size="small" class="index-tag">
+          <n-tag
+            :bordered="false"
+            round
+            :type="indexStats?.error ? 'error' : 'info'"
+            size="small"
+            class="index-tag"
+          >
             <template #icon>
               <n-icon><LayersOutline /></n-icon>
             </template>
             {{ indexStats?.chunks ?? 0 }} chunks
-            <template v-if="indexStats?.persist_dir"> · {{ indexStats.persist_dir }}</template>
-            <template v-if="indexStats?.error"> · 索引异常</template>
+            <template v-if="indexStats?.persist_dir">
+              · {{ indexStats.persist_dir }}
+            </template>
+            <template v-if="indexStats?.error">
+              · 索引异常
+            </template>
           </n-tag>
         </div>
-        <n-button quaternary size="small" class="history-btn" @click="historyOpen = true">
-          <template #icon><n-icon><LayersOutline /></n-icon></template>
+        <n-button
+          quaternary
+          size="small"
+          class="history-btn"
+          @click="historyOpen = true"
+        >
+          <template #icon>
+            <n-icon><LayersOutline /></n-icon>
+          </template>
           历史 ({{ qa.historyItems.length }})
         </n-button>
       </div>
     </template>
 
-    <div ref="chatBody" class="chat-body">
-      <div v-if="qa.messages.length === 0" class="chat-empty">
+    <div
+      ref="chatBody"
+      class="chat-body"
+    >
+      <div
+        v-if="qa.messages.length === 0"
+        class="chat-empty"
+      >
         <div class="chat-empty-icon">
-          <n-icon size="44"><ChatbubbleEllipsesOutline /></n-icon>
+          <n-icon size="44">
+            <ChatbubbleEllipsesOutline />
+          </n-icon>
         </div>
-        <div class="chat-empty-title">输入问题，开始与通知库对话</div>
-        <div class="chat-empty-sub">基于已入库通知的语义问答，答案附带引用来源</div>
+        <div class="chat-empty-title">
+          输入问题，开始与通知库对话
+        </div>
+        <div class="chat-empty-sub">
+          基于已入库通知的语义问答，答案附带引用来源
+        </div>
         <div class="chat-suggestions">
           <n-tag
             v-for="s in suggestions"
@@ -163,46 +200,98 @@ function openDetail(msg: QaMessage) {
       </div>
 
       <template v-else>
-        <div v-for="msg in qa.messages" :key="msg.id" class="msg-pair" :id="`qa-msg-${msg.id}`">
+        <div
+          v-for="msg in qa.messages"
+          :id="`qa-msg-${msg.id}`"
+          :key="msg.id"
+          class="msg-pair"
+        >
           <div class="msg msg--user">
             <div class="msg-avatar msg-avatar--user">
-              <n-icon size="16"><SparklesOutline /></n-icon>
+              <n-icon size="16">
+                <SparklesOutline />
+              </n-icon>
             </div>
-            <div class="bubble bubble--user">{{ msg.question }}</div>
+            <div class="bubble bubble--user">
+              {{ msg.question }}
+            </div>
           </div>
           <div class="msg msg--assistant">
             <div class="msg-avatar msg-avatar--assistant">
-              <n-icon size="16"><ChatbubbleEllipsesOutline /></n-icon>
+              <n-icon size="16">
+                <ChatbubbleEllipsesOutline />
+              </n-icon>
             </div>
             <div class="bubble bubble--assistant">
-              <div v-if="msg.cached" class="cache-badge">命中缓存</div>
+              <div
+                v-if="msg.cached"
+                class="cache-badge"
+              >
+                命中缓存
+              </div>
               <template v-if="msg.answer">
                 <MarkdownView :content="msg.answer" />
               </template>
-              <div v-else-if="msg.error" class="answer-error">[错误] {{ msg.error }}</div>
-              <div v-else class="stage-indicator">
-                <span class="stage-dot"></span>
+              <div
+                v-else-if="msg.error"
+                class="answer-error"
+              >
+                [错误] {{ msg.error }}
+              </div>
+              <div
+                v-else
+                class="stage-indicator"
+              >
+                <span class="stage-dot" />
                 <span class="stage-text">{{ stageLabel(msg.currentStage ?? qa.currentStage) }}</span>
-                <span v-if="stageElapsed" class="stage-elapsed">{{ stageElapsed }}</span>
-                <span v-if="msg.cached" class="stage-cached">缓存</span>
+                <span
+                  v-if="stageElapsed"
+                  class="stage-elapsed"
+                >{{ stageElapsed }}</span>
+                <span
+                  v-if="msg.cached"
+                  class="stage-cached"
+                >缓存</span>
               </div>
 
-              <div v-if="msg.sources.length" class="sources">
+              <div
+                v-if="msg.sources.length"
+                class="sources"
+              >
                 <div class="sources-header">
-                  <n-icon size="14"><LayersOutline /></n-icon>
+                  <n-icon size="14">
+                    <LayersOutline />
+                  </n-icon>
                   引用来源（{{ msg.retrievedChunks }} chunks）
                 </div>
                 <div class="source-list">
-                  <div v-for="(s, i) in msg.sources" :key="i" class="source-item">
+                  <div
+                    v-for="(s, i) in msg.sources"
+                    :key="i"
+                    class="source-item"
+                  >
                     <span class="source-idx">{{ i + 1 }}</span>
                     <div class="source-info">
                       <div class="source-title">
                         {{ s.title || '（无标题）' }}
-                        <n-tag size="small" :bordered="false" type="info">{{ s.notice_type || '未分类' }}</n-tag>
+                        <n-tag
+                          size="small"
+                          :bordered="false"
+                          type="info"
+                        >
+                          {{ s.notice_type || '未分类' }}
+                        </n-tag>
                       </div>
                       <div class="source-meta">
                         <span v-if="s.deadline">截止 {{ s.deadline }}</span>
-                        <n-a v-if="s.url" :href="s.url" target="_blank" rel="noopener">查看原文</n-a>
+                        <n-a
+                          v-if="s.url"
+                          :href="s.url"
+                          target="_blank"
+                          rel="noopener"
+                        >
+                          查看原文
+                        </n-a>
                       </div>
                     </div>
                   </div>
@@ -224,39 +313,90 @@ function openDetail(msg: QaMessage) {
       />
       <div class="chat-input-bar">
         <span class="input-hint muted">Enter 发送</span>
-        <n-space align="center" :size="8">
-          <n-button v-if="qa.messages.length" quaternary size="small" @click="newConversation">
-            <template #icon><n-icon><TrashOutline /></n-icon></template>
+        <n-space
+          align="center"
+          :size="8"
+        >
+          <n-button
+            v-if="qa.messages.length"
+            quaternary
+            size="small"
+            @click="newConversation"
+          >
+            <template #icon>
+              <n-icon><TrashOutline /></n-icon>
+            </template>
             新对话
           </n-button>
-          <n-button v-if="qa.streaming" secondary @click="cancel">取消</n-button>
-          <n-button type="primary" :loading="qa.streaming" :disabled="!question.trim()" @click="ask">
-            <template #icon><n-icon><SendOutline /></n-icon></template>
+          <n-button
+            v-if="qa.streaming"
+            secondary
+            @click="cancel"
+          >
+            取消
+          </n-button>
+          <n-button
+            type="primary"
+            :loading="qa.streaming"
+            :disabled="!question.trim()"
+            @click="ask"
+          >
+            <template #icon>
+              <n-icon><SendOutline /></n-icon>
+            </template>
             发送
           </n-button>
         </n-space>
       </div>
     </div>
 
-    <n-drawer v-model:show="historyOpen" :width="420" placement="left">
-      <n-drawer-content title="问答历史" closable>
+    <n-drawer
+      v-model:show="historyOpen"
+      :width="420"
+      placement="left"
+    >
+      <n-drawer-content
+        title="问答历史"
+        closable
+      >
         <template #header-extra>
-          <n-button quaternary size="small" @click="qa.clearAllHistory">
-            <template #icon><n-icon><TrashOutline /></n-icon></template>
+          <n-button
+            quaternary
+            size="small"
+            @click="qa.clearAllHistory"
+          >
+            <template #icon>
+              <n-icon><TrashOutline /></n-icon>
+            </template>
             清空
           </n-button>
         </template>
-        <n-empty v-if="qa.historyItems.length === 0" description="暂无历史记录" />
-        <div v-else class="history-list">
+        <n-empty
+          v-if="qa.historyItems.length === 0"
+          description="暂无历史记录"
+        />
+        <div
+          v-else
+          class="history-list"
+        >
           <div
             v-for="msg in qa.historyItems"
             :key="msg.id"
             class="history-item"
             @click="openDetail(msg)"
           >
-            <div class="history-q">{{ msg.question }}</div>
+            <div class="history-q">
+              {{ msg.question }}
+            </div>
             <div class="history-meta">
-              <n-tag v-if="msg.cached" size="small" type="warning" :bordered="false">缓存</n-tag>
+              <n-tag
+                v-if="msg.cached"
+                size="small"
+                type="warning"
+                :bordered="false"
+              >
+                缓存
+              </n-tag>
               <span class="muted">{{ msg.answer.slice(0, 60) }}{{ msg.answer.length > 60 ? '...' : '' }}</span>
             </div>
             <n-button
@@ -265,42 +405,84 @@ function openDetail(msg: QaMessage) {
               size="tiny"
               @click.stop="qa.removeHistory(msg.id)"
             >
-              <template #icon><n-icon><TrashOutline /></n-icon></template>
+              <template #icon>
+                <n-icon><TrashOutline /></n-icon>
+              </template>
             </n-button>
           </div>
         </div>
       </n-drawer-content>
     </n-drawer>
 
-    <n-drawer v-model:show="detailOpen" :width="640" placement="right">
-      <n-drawer-content title="历史详情" closable>
+    <n-drawer
+      v-model:show="detailOpen"
+      :width="640"
+      placement="right"
+    >
+      <n-drawer-content
+        title="历史详情"
+        closable
+      >
         <template v-if="detailMsg">
           <div class="detail-block">
-            <div class="detail-label">问题</div>
-            <div class="detail-question">{{ detailMsg.question }}</div>
+            <div class="detail-label">
+              问题
+            </div>
+            <div class="detail-question">
+              {{ detailMsg.question }}
+            </div>
           </div>
           <div class="detail-block">
             <div class="detail-label">
               回答
-              <n-tag v-if="detailMsg.cached" size="small" type="warning" :bordered="false">命中缓存</n-tag>
+              <n-tag
+                v-if="detailMsg.cached"
+                size="small"
+                type="warning"
+                :bordered="false"
+              >
+                命中缓存
+              </n-tag>
             </div>
             <div class="detail-answer">
               <MarkdownView :content="detailMsg.answer" />
             </div>
           </div>
-          <div v-if="detailMsg.sources.length" class="detail-block">
-            <div class="detail-label">引用来源（{{ detailMsg.retrievedChunks }} chunks）</div>
+          <div
+            v-if="detailMsg.sources.length"
+            class="detail-block"
+          >
+            <div class="detail-label">
+              引用来源（{{ detailMsg.retrievedChunks }} chunks）
+            </div>
             <div class="source-list">
-              <div v-for="(s, i) in detailMsg.sources" :key="i" class="source-item">
+              <div
+                v-for="(s, i) in detailMsg.sources"
+                :key="i"
+                class="source-item"
+              >
                 <span class="source-idx">{{ i + 1 }}</span>
                 <div class="source-info">
                   <div class="source-title">
                     {{ s.title || '（无标题）' }}
-                    <n-tag size="small" :bordered="false" type="info">{{ s.notice_type || '未分类' }}</n-tag>
+                    <n-tag
+                      size="small"
+                      :bordered="false"
+                      type="info"
+                    >
+                      {{ s.notice_type || '未分类' }}
+                    </n-tag>
                   </div>
                   <div class="source-meta">
                     <span v-if="s.deadline">截止 {{ s.deadline }}</span>
-                    <n-a v-if="s.url" :href="s.url" target="_blank" rel="noopener">查看原文</n-a>
+                    <n-a
+                      v-if="s.url"
+                      :href="s.url"
+                      target="_blank"
+                      rel="noopener"
+                    >
+                      查看原文
+                    </n-a>
                   </div>
                 </div>
               </div>

@@ -294,62 +294,131 @@ async function openDetailById(id: number) {
 </script>
 
 <template>
-  <n-space vertical size="large">
+  <n-space
+    vertical
+    size="large"
+  >
     <n-card :bordered="false">
       <template #header>
         <div class="section-title">
-          <n-icon size="18" color="var(--primary)"><NotificationsOutline /></n-icon>
+          <n-icon
+            size="18"
+            color="var(--primary)"
+          >
+            <NotificationsOutline />
+          </n-icon>
           订阅管理
         </div>
       </template>
       <template #header-extra>
-        <n-space align="center" size="small">
-          <n-tooltip trigger="hover" placement="bottom">
+        <n-space
+          align="center"
+          size="small"
+        >
+          <n-tooltip
+            trigger="hover"
+            placement="bottom"
+          >
             <template #trigger>
-              <n-tag :bordered="false" round>全库 {{ subs.stats.total_notices }} 条通知</n-tag>
+              <n-tag
+                :bordered="false"
+                round
+              >
+                全库 {{ subs.stats.total_notices }} 条通知
+              </n-tag>
             </template>
             统计口径：命中基于全库所有历史通知（含已读），与首页“未读”无关。
           </n-tooltip>
-          <n-tooltip trigger="hover" placement="bottom">
+          <n-tooltip
+            trigger="hover"
+            placement="bottom"
+          >
             <template #trigger>
-              <n-button size="small" secondary :loading="matchingAll" @click="matchAll">
-                <template #icon><n-icon><FlashOutline /></n-icon></template>
+              <n-button
+                size="small"
+                secondary
+                :loading="matchingAll"
+                @click="matchAll"
+              >
+                <template #icon>
+                  <n-icon><FlashOutline /></n-icon>
+                </template>
                 全库重匹配
               </n-button>
             </template>
             按当前订阅词重新扫描全部通知，重算命中关系（数据量大时较慢）。
           </n-tooltip>
-          <n-button type="primary" @click="openCreate">
-            <template #icon><n-icon><AddOutline /></n-icon></template>
+          <n-button
+            type="primary"
+            @click="openCreate"
+          >
+            <template #icon>
+              <n-icon><AddOutline /></n-icon>
+            </template>
             新增订阅
           </n-button>
         </n-space>
       </template>
 
       <div class="stats">
-        <StatCard :icon="NotificationsOutline" label="订阅总数" :value="subs.stats.total" color="primary" hint="已配置的订阅词数量（含已停用）" />
-        <StatCard :icon="CheckmarkCircleOutline" label="启用中" :value="subs.stats.enabled" color="success" hint="当前生效、会对新通知自动标记的订阅词数量" />
-        <StatCard :icon="LinkOutline" label="命中总数" :value="subs.stats.matches" color="violet" hint="全库所有历史通知与启用订阅词的匹配总数；点击各订阅卡片的「命中 N 条」可查看明细" />
+        <StatCard
+          :icon="NotificationsOutline"
+          label="订阅总数"
+          :value="subs.stats.total"
+          color="primary"
+          hint="已配置的订阅词数量（含已停用）"
+        />
+        <StatCard
+          :icon="CheckmarkCircleOutline"
+          label="启用中"
+          :value="subs.stats.enabled"
+          color="success"
+          hint="当前生效、会对新通知自动标记的订阅词数量"
+        />
+        <StatCard
+          :icon="LinkOutline"
+          label="命中总数"
+          :value="subs.stats.matches"
+          color="violet"
+          hint="全库所有历史通知与启用订阅词的匹配总数；点击各订阅卡片的「命中 N 条」可查看明细"
+        />
       </div>
 
-      <div class="muted" style="font-size: 12px; margin-bottom: 16px">
+      <div
+        class="muted"
+        style="font-size: 12px; margin-bottom: 16px"
+      >
         口径说明：命中基于全库历史通知（含已读）做标题/摘要包含匹配（大小写不敏感，可选限定类型）；修改订阅词后自动全库重匹配；停用不清历史命中记录。
       </div>
 
       <n-spin :show="subs.loading">
-        <n-empty v-if="subs.list.length === 0 && !subs.loading" size="large">
+        <n-empty
+          v-if="subs.list.length === 0 && !subs.loading"
+          size="large"
+        >
           <template #extra>
-            <n-space vertical align="center">
+            <n-space
+              vertical
+              align="center"
+            >
               <div style="color: #888; max-width: 420px">
                 添加订阅词后，系统会对库中通知的标题/摘要做包含匹配（可选限定类型），并在新通知抓取时自动标记命中。
                 展开订阅卡片即可查看命中的通知列表。示例词：「奖学金」「竞赛」「讲座」。
               </div>
-              <n-button type="primary" @click="openCreate">新增订阅</n-button>
+              <n-button
+                type="primary"
+                @click="openCreate"
+              >
+                新增订阅
+              </n-button>
             </n-space>
           </template>
         </n-empty>
 
-        <div v-else class="sub-list">
+        <div
+          v-else
+          class="sub-list"
+        >
           <n-card
             v-for="s in subs.list"
             :key="s.id"
@@ -360,52 +429,134 @@ async function openDetailById(id: number) {
             <template #header>
               <div class="sub-header">
                 <span class="sub-keyword">{{ s.keyword }}</span>
-                <n-tag :bordered="false" :type="s.enabled === 1 ? 'success' : 'default'" size="small">
+                <n-tag
+                  :bordered="false"
+                  :type="s.enabled === 1 ? 'success' : 'default'"
+                  size="small"
+                >
                   {{ s.enabled === 1 ? '已启用' : '已停用' }}
                 </n-tag>
-                <n-tag v-if="s.type_label" :bordered="false" type="info" size="small">{{ s.type_label }}</n-tag>
+                <n-tag
+                  v-if="s.type_label"
+                  :bordered="false"
+                  type="info"
+                  size="small"
+                >
+                  {{ s.type_label }}
+                </n-tag>
               </div>
             </template>
 
             <template #header-extra>
-              <n-space class="sub-actions-inline" align="center" :size="6">
-                <button type="button" class="sub-count-link" @click="toggleExpand(s)">
-                  <n-icon size="14" class="sub-count-caret"><component :is="expandedId === s.id ? ChevronUpOutline : ChevronDownOutline" /></n-icon>
+              <n-space
+                class="sub-actions-inline"
+                align="center"
+                :size="6"
+              >
+                <button
+                  type="button"
+                  class="sub-count-link"
+                  @click="toggleExpand(s)"
+                >
+                  <n-icon
+                    size="14"
+                    class="sub-count-caret"
+                  >
+                    <component :is="expandedId === s.id ? ChevronUpOutline : ChevronDownOutline" />
+                  </n-icon>
                   命中 {{ s.match_count }} 条通知
                 </button>
-                <n-button size="tiny" secondary @click="toggleSubscription(s)">
-                  <template #icon><n-icon><component :is="s.enabled === 1 ? PauseOutline : PlayOutline" /></n-icon></template>
+                <n-button
+                  size="tiny"
+                  secondary
+                  @click="toggleSubscription(s)"
+                >
+                  <template #icon>
+                    <n-icon><component :is="s.enabled === 1 ? PauseOutline : PlayOutline" /></n-icon>
+                  </template>
                   {{ s.enabled === 1 ? '停用' : '启用' }}
                 </n-button>
-                <n-button size="tiny" tertiary @click="openEdit(s)">编辑</n-button>
-                <n-button size="tiny" quaternary type="error" @click="onDelete(s)">
-                  <template #icon><n-icon><TrashOutline /></n-icon></template>
+                <n-button
+                  size="tiny"
+                  tertiary
+                  @click="openEdit(s)"
+                >
+                  编辑
+                </n-button>
+                <n-button
+                  size="tiny"
+                  quaternary
+                  type="error"
+                  @click="onDelete(s)"
+                >
+                  <template #icon>
+                    <n-icon><TrashOutline /></n-icon>
+                  </template>
                   删除
                 </n-button>
               </n-space>
             </template>
 
             <template #default>
-              <div v-if="expandedId === s.id" class="sub-matched">
+              <div
+                v-if="expandedId === s.id"
+                class="sub-matched"
+              >
                 <n-spin :show="!!matchedLoading[s.id]">
-                  <div v-if="matchedError[s.id]" class="sub-error">加载失败：{{ matchedError[s.id] }}</div>
+                  <div
+                    v-if="matchedError[s.id]"
+                    class="sub-error"
+                  >
+                    加载失败：{{ matchedError[s.id] }}
+                  </div>
                   <n-empty
                     v-else-if="!matchedLoading[s.id] && matchedState(s)?.items.length === 0"
                     size="small"
                   >
                     <template #description>
-                      <n-space vertical align="center" style="padding: 4px 0">
+                      <n-space
+                        vertical
+                        align="center"
+                        style="padding: 4px 0"
+                      >
                         <span>暂无命中通知。可尝试更宽泛的关键词，或检查类型过滤。</span>
-                        <n-button size="small" secondary @click="openEdit(s)">调整订阅词</n-button>
+                        <n-button
+                          size="small"
+                          secondary
+                          @click="openEdit(s)"
+                        >
+                          调整订阅词
+                        </n-button>
                       </n-space>
                     </template>
                   </n-empty>
-                  <div v-else-if="matchedState(s)" class="matched-list">
-                    <div v-for="n in matchedState(s)!.items" :key="n.id" class="matched-row">
+                  <div
+                    v-else-if="matchedState(s)"
+                    class="matched-list"
+                  >
+                    <div
+                      v-for="n in matchedState(s)!.items"
+                      :key="n.id"
+                      class="matched-row"
+                    >
                       <span class="matched-type">{{ typeLabel(n.notice_type) }}</span>
-                      <a href="#" class="matched-title" @click.prevent="openDetail(n)">{{ n.title }}</a>
-                      <template v-for="kw in n.keywords" :key="kw">
-                        <n-tag size="small" :bordered="false" type="warning" round>命中 · {{ kw }}</n-tag>
+                      <a
+                        href="#"
+                        class="matched-title"
+                        @click.prevent="openDetail(n)"
+                      >{{ n.title }}</a>
+                      <template
+                        v-for="kw in n.keywords"
+                        :key="kw"
+                      >
+                        <n-tag
+                          size="small"
+                          :bordered="false"
+                          type="warning"
+                          round
+                        >
+                          命中 · {{ kw }}
+                        </n-tag>
                       </template>
                       <span class="matched-meta">{{ n.source }} · {{ fmtDate(n.published_at ?? n.crawled_at) }}</span>
                     </div>
@@ -436,9 +587,15 @@ async function openDetailById(id: number) {
       :title="isEditing ? '编辑订阅' : '新增订阅'"
       style="width: 640px"
     >
-      <n-form label-placement="left" label-width="90">
+      <n-form
+        label-placement="left"
+        label-width="90"
+      >
         <n-form-item label="关键词">
-          <n-input v-model:value="keyword" placeholder="如 奖学金 / 课程表" />
+          <n-input
+            v-model:value="keyword"
+            placeholder="如 奖学金 / 课程表"
+          />
         </n-form-item>
         <n-form-item label="通知类型">
           <n-select
@@ -453,16 +610,40 @@ async function openDetailById(id: number) {
         </n-form-item>
         <n-form-item label="影响面预览">
           <n-space vertical>
-            <n-button size="small" secondary :loading="previewLoading" @click="runPreview">预览命中</n-button>
-            <div v-if="preview" style="font-size: 13px">
+            <n-button
+              size="small"
+              secondary
+              :loading="previewLoading"
+              @click="runPreview"
+            >
+              预览命中
+            </n-button>
+            <div
+              v-if="preview"
+              style="font-size: 13px"
+            >
               <div>
                 命中 <b>{{ preview.matched }}</b> / {{ preview.total }} 条通知
-                <span v-if="!enabled" style="color: #888">（当前为停用状态，不计入命中）</span>
+                <span
+                  v-if="!enabled"
+                  style="color: #888"
+                >（当前为停用状态，不计入命中）</span>
               </div>
-              <div v-if="preview.samples?.length" style="margin-top: 8px">
-                <div style="color: #888; margin-bottom: 4px">样例标题（点击查看详情）：</div>
-                <div v-for="(t, i) in preview.samples" :key="i">
-                  <a href="#" @click.prevent="openDetailById(preview.sample_ids?.[i] ?? 0)">· {{ t }}</a>
+              <div
+                v-if="preview.samples?.length"
+                style="margin-top: 8px"
+              >
+                <div style="color: #888; margin-bottom: 4px">
+                  样例标题（点击查看详情）：
+                </div>
+                <div
+                  v-for="(t, i) in preview.samples"
+                  :key="i"
+                >
+                  <a
+                    href="#"
+                    @click.prevent="openDetailById(preview.sample_ids?.[i] ?? 0)"
+                  >· {{ t }}</a>
                 </div>
               </div>
             </div>
@@ -471,35 +652,91 @@ async function openDetailById(id: number) {
       </n-form>
       <template #footer>
         <n-space justify="end">
-          <n-button @click="showModal = false">取消</n-button>
-          <n-button type="primary" :loading="submitting" @click="confirm">
+          <n-button @click="showModal = false">
+            取消
+          </n-button>
+          <n-button
+            type="primary"
+            :loading="submitting"
+            @click="confirm"
+          >
             {{ isEditing ? '保存更新' : '确认创建' }}
           </n-button>
         </n-space>
       </template>
     </n-modal>
 
-    <n-drawer v-model:show="detailOpen" :width="560">
-      <n-drawer-content v-if="detail" :title="detail.title" closable>
-        <n-space vertical size="large">
-          <n-descriptions :column="1" label-placement="left" size="small">
-            <n-descriptions-item label="来源">{{ detail.source }}</n-descriptions-item>
-            <n-descriptions-item label="发布时间">{{ fmtDate(detail.published_at) }}</n-descriptions-item>
-            <n-descriptions-item label="抓取时间">{{ fmtDate(detail.crawled_at) }}</n-descriptions-item>
-            <n-descriptions-item label="类型">{{ typeLabel(detail.notice_type) }}</n-descriptions-item>
-            <n-descriptions-item label="状态">{{ detail.status }}</n-descriptions-item>
-            <n-descriptions-item label="目标受众">{{ detail.target_audience || '—' }}</n-descriptions-item>
-            <n-descriptions-item label="报名方式">{{ detail.signup_method || '—' }}</n-descriptions-item>
-            <n-descriptions-item v-if="detail.signup_url" label="报名链接">
-              <n-a :href="detail.signup_url" target="_blank" rel="noopener">{{ detail.signup_url }}</n-a>
+    <n-drawer
+      v-model:show="detailOpen"
+      :width="560"
+    >
+      <n-drawer-content
+        v-if="detail"
+        :title="detail.title"
+        closable
+      >
+        <n-space
+          vertical
+          size="large"
+        >
+          <n-descriptions
+            :column="1"
+            label-placement="left"
+            size="small"
+          >
+            <n-descriptions-item label="来源">
+              {{ detail.source }}
             </n-descriptions-item>
-            <n-descriptions-item label="地点">{{ detail.location || '—' }}</n-descriptions-item>
-            <n-descriptions-item label="截止时间">{{ fmtDate(detail.deadline) }}</n-descriptions-item>
+            <n-descriptions-item label="发布时间">
+              {{ fmtDate(detail.published_at) }}
+            </n-descriptions-item>
+            <n-descriptions-item label="抓取时间">
+              {{ fmtDate(detail.crawled_at) }}
+            </n-descriptions-item>
+            <n-descriptions-item label="类型">
+              {{ typeLabel(detail.notice_type) }}
+            </n-descriptions-item>
+            <n-descriptions-item label="状态">
+              {{ detail.status }}
+            </n-descriptions-item>
+            <n-descriptions-item label="目标受众">
+              {{ detail.target_audience || '—' }}
+            </n-descriptions-item>
+            <n-descriptions-item label="报名方式">
+              {{ detail.signup_method || '—' }}
+            </n-descriptions-item>
+            <n-descriptions-item
+              v-if="detail.signup_url"
+              label="报名链接"
+            >
+              <n-a
+                :href="detail.signup_url"
+                target="_blank"
+                rel="noopener"
+              >
+                {{ detail.signup_url }}
+              </n-a>
+            </n-descriptions-item>
+            <n-descriptions-item label="地点">
+              {{ detail.location || '—' }}
+            </n-descriptions-item>
+            <n-descriptions-item label="截止时间">
+              {{ fmtDate(detail.deadline) }}
+            </n-descriptions-item>
             <n-descriptions-item label="原文链接">
-              <n-a :href="detail.url" target="_blank" rel="noopener">{{ detail.url }}</n-a>
+              <n-a
+                :href="detail.url"
+                target="_blank"
+                rel="noopener"
+              >
+                {{ detail.url }}
+              </n-a>
             </n-descriptions-item>
           </n-descriptions>
-          <n-card title="摘要" v-if="detail.summary">
+          <n-card
+            v-if="detail.summary"
+            title="摘要"
+          >
             <div>{{ detail.summary }}</div>
           </n-card>
           <n-card title="正文">

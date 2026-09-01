@@ -577,18 +577,33 @@ function keyDatesText(d: NoticeDetail): string {
 </script>
 
 <template>
-  <n-space vertical size="large">
+  <n-space
+    vertical
+    size="large"
+  >
     <n-card :bordered="false">
       <template #header>
         <div class="section-title-wrap">
-          <n-icon size="18" color="var(--primary)"><NewspaperOutline /></n-icon>
+          <n-icon
+            size="18"
+            color="var(--primary)"
+          >
+            <NewspaperOutline />
+          </n-icon>
           <span class="section-title-text">通知列表</span>
         </div>
       </template>
       <template #header-extra>
-        <n-space align="center" wrap class="header-actions">
+        <n-space
+          align="center"
+          wrap
+          class="header-actions"
+        >
           <div class="action-group">
-            <n-tooltip trigger="hover" placement="top">
+            <n-tooltip
+              trigger="hover"
+              placement="top"
+            >
               <template #trigger>
                 <n-input-number
                   v-model:value="oldDays"
@@ -596,12 +611,17 @@ function keyDatesText(d: NoticeDetail): string {
                   :max="3650"
                   :style="{ width: oldDaysWidth }"
                 >
-                  <template #suffix>天</template>
+                  <template #suffix>
+                    天
+                  </template>
                 </n-input-number>
               </template>
               清理天数：删除抓取时间在 {{ oldDays }} 天前的通知
             </n-tooltip>
-            <n-tooltip trigger="hover" placement="top">
+            <n-tooltip
+              trigger="hover"
+              placement="top"
+            >
               <template #trigger>
                 <n-button
                   size="small"
@@ -610,9 +630,9 @@ function keyDatesText(d: NoticeDetail): string {
                   :loading="batchRunning"
                   @click="onDeleteOld"
                 >
-                  <template #icon
-                    ><n-icon><TrashBinOutline /></n-icon
-                  ></template>
+                  <template #icon>
+                    <n-icon><TrashBinOutline /></n-icon>
+                  </template>
                   清理 {{ oldDays }} 天前
                 </n-button>
               </template>
@@ -627,9 +647,9 @@ function keyDatesText(d: NoticeDetail): string {
             :loading="batchRunning"
             @click="onBatchDelete"
           >
-            <template #icon
-              ><n-icon><TrashOutline /></n-icon
-            ></template>
+            <template #icon>
+              <n-icon><TrashOutline /></n-icon>
+            </template>
             批量删除当前筛选
           </n-button>
           <n-button
@@ -639,9 +659,9 @@ function keyDatesText(d: NoticeDetail): string {
             :loading="batchRunning"
             @click="onBatchReset"
           >
-            <template #icon
-              ><n-icon><ArrowUndoOutline /></n-icon
-            ></template>
+            <template #icon>
+              <n-icon><ArrowUndoOutline /></n-icon>
+            </template>
             批量重置当前筛选
           </n-button>
           <n-button
@@ -651,9 +671,9 @@ function keyDatesText(d: NoticeDetail): string {
             :loading="taskRunning"
             @click="openCrawlDialog"
           >
-            <template #icon
-              ><n-icon><CloudDownloadOutline /></n-icon
-            ></template>
+            <template #icon>
+              <n-icon><CloudDownloadOutline /></n-icon>
+            </template>
             抓取
           </n-button>
           <n-button
@@ -663,9 +683,9 @@ function keyDatesText(d: NoticeDetail): string {
             :loading="taskRunning"
             @click="openExtractPreview"
           >
-            <template #icon
-              ><n-icon><SparklesOutline /></n-icon
-            ></template>
+            <template #icon>
+              <n-icon><SparklesOutline /></n-icon>
+            </template>
             批量提取
           </n-button>
           <n-progress
@@ -678,9 +698,16 @@ function keyDatesText(d: NoticeDetail): string {
         </n-space>
       </template>
 
-      <n-form inline class="filter-form" @submit.prevent="refresh">
+      <n-form
+        inline
+        class="filter-form"
+        @submit.prevent="refresh"
+      >
         <n-form-item label="数据源">
-          <n-tooltip :disabled="!filterSource" placement="top">
+          <n-tooltip
+            :disabled="!filterSource"
+            placement="top"
+          >
             <template #trigger>
               <n-select
                 v-model:value="filterSource"
@@ -724,18 +751,24 @@ function keyDatesText(d: NoticeDetail): string {
               { label: '发布时间 ↓', value: 'published' },
               { label: '抓取时间 ↓', value: 'crawled' },
             ]"
-            @update:value="refresh"
             style="width: 130px"
+            @update:value="refresh"
           />
         </n-form-item>
         <n-form-item>
-          <n-checkbox v-model:checked="filterMatched">只看行动型</n-checkbox>
+          <n-checkbox v-model:checked="filterMatched">
+            只看行动型
+          </n-checkbox>
         </n-form-item>
         <n-form-item>
-          <n-button type="primary" attr-type="submit" :loading="loading">
-            <template #icon
-              ><n-icon><SearchOutline /></n-icon
-            ></template>
+          <n-button
+            type="primary"
+            attr-type="submit"
+            :loading="loading"
+          >
+            <template #icon>
+              <n-icon><SearchOutline /></n-icon>
+            </template>
             查询
           </n-button>
         </n-form-item>
@@ -766,14 +799,20 @@ function keyDatesText(d: NoticeDetail): string {
           description="暂无通知"
           style="padding: 40px 0"
         />
-        <div v-else class="notice-list">
+        <div
+          v-else
+          class="notice-list"
+        >
           <div
             v-for="item in notices.list"
             :key="item.id"
             class="notice-row"
             @click="openDetail(item)"
           >
-            <div class="notice-bar" :class="`bar--${item.status}`" />
+            <div
+              class="notice-bar"
+              :class="`bar--${item.status}`"
+            />
             <div class="notice-content">
               <div class="notice-top">
                 <n-tag
@@ -791,8 +830,7 @@ function keyDatesText(d: NoticeDetail): string {
                   href="#"
                   class="notice-title"
                   @click.prevent="openDetail(item)"
-                  >{{ item.title }}</a
-                >
+                >{{ item.title }}</a>
                 <template
                   v-for="kw in matchedKeywords(item.id)"
                   :key="`${item.id}-${kw}`"
@@ -803,39 +841,58 @@ function keyDatesText(d: NoticeDetail): string {
                     type="warning"
                     round
                     class="kw-tag"
-                    >订阅命中 · {{ kw }}</n-tag
                   >
+                    订阅命中 · {{ kw }}
+                  </n-tag>
                 </template>
-                <n-tooltip v-if="item.extract_skipped_reason" trigger="hover">
+                <n-tooltip
+                  v-if="item.extract_skipped_reason"
+                  trigger="hover"
+                >
                   <template #trigger>
-                    <n-tag size="small" :bordered="false" type="default"
-                      >已跳过提取</n-tag
+                    <n-tag
+                      size="small"
+                      :bordered="false"
+                      type="default"
                     >
+                      已跳过提取
+                    </n-tag>
                   </template>
                   {{ item.extract_skipped_reason }}
                 </n-tooltip>
               </div>
               <div class="notice-meta">
-                <n-icon size="14" class="meta-icon"><GlobeOutline /></n-icon>
+                <n-icon
+                  size="14"
+                  class="meta-icon"
+                >
+                  <GlobeOutline />
+                </n-icon>
                 {{ item.source }}
                 <span class="meta-dot">·</span>
                 {{ fmtDate(item.published_at ?? item.crawled_at) }}
-                <span v-if="item.deadline" class="deadline">
+                <span
+                  v-if="item.deadline"
+                  class="deadline"
+                >
                   <n-icon size="14"><TimeOutline /></n-icon>
                   截止 {{ fmtDate(item.deadline) }}
                 </span>
               </div>
             </div>
-            <div class="notice-actions" @click.stop>
+            <div
+              class="notice-actions"
+              @click.stop
+            >
               <n-button
                 v-if="isActionType(item)"
                 size="small"
                 :loading="generating === item.id"
                 @click="generateTodos(item)"
               >
-                <template #icon
-                  ><n-icon><CheckmarkDoneCircleOutline /></n-icon
-                ></template>
+                <template #icon>
+                  <n-icon><CheckmarkDoneCircleOutline /></n-icon>
+                </template>
                 生成待办
               </n-button>
               <n-button
@@ -843,15 +900,18 @@ function keyDatesText(d: NoticeDetail): string {
                 :loading="reExtracting === item.id"
                 @click="onReExtract(item)"
               >
-                <template #icon
-                  ><n-icon><RefreshOutline /></n-icon
-                ></template>
+                <template #icon>
+                  <n-icon><RefreshOutline /></n-icon>
+                </template>
                 重新提取
               </n-button>
-              <n-button size="small" @click="onReset(item)">
-                <template #icon
-                  ><n-icon><ArrowUndoOutline /></n-icon
-                ></template>
+              <n-button
+                size="small"
+                @click="onReset(item)"
+              >
+                <template #icon>
+                  <n-icon><ArrowUndoOutline /></n-icon>
+                </template>
                 重置
               </n-button>
               <n-button
@@ -860,9 +920,9 @@ function keyDatesText(d: NoticeDetail): string {
                 secondary
                 @click="onDelete(item)"
               >
-                <template #icon
-                  ><n-icon><TrashOutline /></n-icon
-                ></template>
+                <template #icon>
+                  <n-icon><TrashOutline /></n-icon>
+                </template>
                 删除
               </n-button>
             </div>
@@ -870,7 +930,10 @@ function keyDatesText(d: NoticeDetail): string {
         </div>
       </n-spin>
 
-      <n-space justify="end" style="margin-top: 16px">
+      <n-space
+        justify="end"
+        style="margin-top: 16px"
+      >
         <n-pagination
           :page="notices.page"
           :page-size="notices.pageSize"
@@ -890,7 +953,10 @@ function keyDatesText(d: NoticeDetail): string {
       style="width: 520px"
       :bordered="false"
     >
-      <n-form label-placement="left" label-width="110">
+      <n-form
+        label-placement="left"
+        label-width="110"
+      >
         <n-form-item label="数据源">
           <n-select
             v-model:value="crawlSources"
@@ -901,9 +967,9 @@ function keyDatesText(d: NoticeDetail): string {
             placeholder="全部启用来源"
             style="width: 100%"
           />
-          <template #feedback
-            >不选 = 抓取全部启用来源；停用来源始终跳过</template
-          >
+          <template #feedback>
+            不选 = 抓取全部启用来源；停用来源始终跳过
+          </template>
         </n-form-item>
         <n-form-item label="模式">
           <n-select
@@ -927,17 +993,21 @@ function keyDatesText(d: NoticeDetail): string {
         </n-form-item>
         <n-form-item label="深度检查">
           <n-switch v-model:value="crawlDeepCheck" />
-          <span style="margin-left: 8px; color: #999; font-size: 12px"
-            >重抓已入库详情页比对内容变更</span
-          >
+          <span style="margin-left: 8px; color: #999; font-size: 12px">重抓已入库详情页比对内容变更</span>
         </n-form-item>
       </n-form>
       <template #footer>
         <n-space justify="end">
-          <n-button @click="crawlDialogOpen = false">取消</n-button>
-          <n-button type="primary" :loading="taskRunning" @click="runCrawl"
-            >开始抓取</n-button
+          <n-button @click="crawlDialogOpen = false">
+            取消
+          </n-button>
+          <n-button
+            type="primary"
+            :loading="taskRunning"
+            @click="runCrawl"
           >
+            开始抓取
+          </n-button>
         </n-space>
       </template>
     </n-modal>
@@ -950,23 +1020,27 @@ function keyDatesText(d: NoticeDetail): string {
       :bordered="false"
     >
       <n-spin :show="previewLoading">
-        <n-space vertical size="large">
+        <n-space
+          vertical
+          size="large"
+        >
           <div v-if="previewPassed.length">
             <div style="margin-bottom: 8px">
               将提取 {{ previewPassed.length }} 条（可取消勾选）：
             </div>
             <n-scrollbar style="max-height: 240px">
               <n-checkbox-group v-model:value="selectedIds">
-                <n-space vertical size="small">
+                <n-space
+                  vertical
+                  size="small"
+                >
                   <n-checkbox
                     v-for="p in previewPassed"
                     :key="p.id"
                     :value="p.id"
                   >
                     {{ p.title }}
-                    <span style="color: #999"
-                      >（{{ p.source }} · {{ fmtDate(p.published_at) }}）</span
-                    >
+                    <span style="color: #999">（{{ p.source }} · {{ fmtDate(p.published_at) }}）</span>
                   </n-checkbox>
                 </n-space>
               </n-checkbox-group>
@@ -978,15 +1052,30 @@ function keyDatesText(d: NoticeDetail): string {
             </div>
             <n-scrollbar style="max-height: 200px">
               <n-list size="small">
-                <n-list-item v-for="s in previewSkipped" :key="s.id">
-                  <n-space align="center" size="small">
-                    <n-tag size="small" :bordered="false" type="default"
-                      >跳过</n-tag
+                <n-list-item
+                  v-for="s in previewSkipped"
+                  :key="s.id"
+                >
+                  <n-space
+                    align="center"
+                    size="small"
+                  >
+                    <n-tag
+                      size="small"
+                      :bordered="false"
+                      type="default"
                     >
+                      跳过
+                    </n-tag>
                     <span style="color: #999">{{ s.title }}</span>
                     <n-tooltip trigger="hover">
                       <template #trigger>
-                        <n-text depth="3" style="cursor: help">原因</n-text>
+                        <n-text
+                          depth="3"
+                          style="cursor: help"
+                        >
+                          原因
+                        </n-text>
                       </template>
                       {{ s.reason }}
                     </n-tooltip>
@@ -1002,7 +1091,9 @@ function keyDatesText(d: NoticeDetail): string {
       </n-spin>
       <template #footer>
         <n-space justify="end">
-          <n-button @click="previewOpen = false">取消</n-button>
+          <n-button @click="previewOpen = false">
+            取消
+          </n-button>
           <n-button
             type="primary"
             :disabled="!selectedIds.length"
@@ -1015,57 +1106,113 @@ function keyDatesText(d: NoticeDetail): string {
       </template>
     </n-modal>
 
-    <n-drawer v-model:show="detailOpen" :width="560">
-      <n-drawer-content v-if="detail" :title="detail.title" closable>
-        <n-space vertical size="large">
-          <n-descriptions :column="1" label-placement="left" size="small">
-            <n-descriptions-item label="来源">{{
-              detail.source
-            }}</n-descriptions-item>
-            <n-descriptions-item label="发布时间">{{
-              fmtDate(detail.published_at)
-            }}</n-descriptions-item>
-            <n-descriptions-item label="抓取时间">{{
-              fmtDate(detail.crawled_at)
-            }}</n-descriptions-item>
-            <n-descriptions-item label="类型">{{
-              typeLabel(detail.notice_type)
-            }}</n-descriptions-item>
-            <n-descriptions-item label="状态">{{
-              statusLabel(detail.status)
-            }}</n-descriptions-item>
+    <n-drawer
+      v-model:show="detailOpen"
+      :width="560"
+    >
+      <n-drawer-content
+        v-if="detail"
+        :title="detail.title"
+        closable
+      >
+        <n-space
+          vertical
+          size="large"
+        >
+          <n-descriptions
+            :column="1"
+            label-placement="left"
+            size="small"
+          >
+            <n-descriptions-item label="来源">
+              {{
+                detail.source
+              }}
+            </n-descriptions-item>
+            <n-descriptions-item label="发布时间">
+              {{
+                fmtDate(detail.published_at)
+              }}
+            </n-descriptions-item>
+            <n-descriptions-item label="抓取时间">
+              {{
+                fmtDate(detail.crawled_at)
+              }}
+            </n-descriptions-item>
+            <n-descriptions-item label="类型">
+              {{
+                typeLabel(detail.notice_type)
+              }}
+            </n-descriptions-item>
+            <n-descriptions-item label="状态">
+              {{
+                statusLabel(detail.status)
+              }}
+            </n-descriptions-item>
             <n-descriptions-item
               v-if="detail.extract_skipped_reason"
               label="跳过提取原因"
-              >{{ detail.extract_skipped_reason }}</n-descriptions-item
             >
-            <n-descriptions-item label="目标受众">{{
-              detail.target_audience || "—"
-            }}</n-descriptions-item>
-            <n-descriptions-item label="报名方式">{{
-              detail.signup_method || "—"
-            }}</n-descriptions-item>
-            <n-descriptions-item v-if="detail.signup_url" label="报名链接">
-              <n-a :href="detail.signup_url" target="_blank" rel="noopener">{{
-                detail.signup_url
-              }}</n-a>
+              {{ detail.extract_skipped_reason }}
             </n-descriptions-item>
-            <n-descriptions-item label="地点">{{
-              detail.location || "—"
-            }}</n-descriptions-item>
-            <n-descriptions-item label="截止时间">{{
-              fmtDate(detail.deadline)
-            }}</n-descriptions-item>
-            <n-descriptions-item v-if="keyDatesText(detail)" label="关键日期">{{
-              keyDatesText(detail)
-            }}</n-descriptions-item>
+            <n-descriptions-item label="目标受众">
+              {{
+                detail.target_audience || "—"
+              }}
+            </n-descriptions-item>
+            <n-descriptions-item label="报名方式">
+              {{
+                detail.signup_method || "—"
+              }}
+            </n-descriptions-item>
+            <n-descriptions-item
+              v-if="detail.signup_url"
+              label="报名链接"
+            >
+              <n-a
+                :href="detail.signup_url"
+                target="_blank"
+                rel="noopener"
+              >
+                {{
+                  detail.signup_url
+                }}
+              </n-a>
+            </n-descriptions-item>
+            <n-descriptions-item label="地点">
+              {{
+                detail.location || "—"
+              }}
+            </n-descriptions-item>
+            <n-descriptions-item label="截止时间">
+              {{
+                fmtDate(detail.deadline)
+              }}
+            </n-descriptions-item>
+            <n-descriptions-item
+              v-if="keyDatesText(detail)"
+              label="关键日期"
+            >
+              {{
+                keyDatesText(detail)
+              }}
+            </n-descriptions-item>
             <n-descriptions-item label="原文链接">
-              <n-a :href="detail.url" target="_blank" rel="noopener">{{
-                detail.url
-              }}</n-a>
+              <n-a
+                :href="detail.url"
+                target="_blank"
+                rel="noopener"
+              >
+                {{
+                  detail.url
+                }}
+              </n-a>
             </n-descriptions-item>
           </n-descriptions>
-          <n-card title="摘要" v-if="detail.summary">
+          <n-card
+            v-if="detail.summary"
+            title="摘要"
+          >
             <div>{{ detail.summary }}</div>
           </n-card>
           <n-card title="正文">

@@ -66,50 +66,92 @@ function callFakeService() {
     <n-card :bordered="false">
       <template #header>
         <div class="section-title">
-          <n-icon size="18" color="var(--primary)"><StorefrontOutline /></n-icon>
+          <n-icon
+            size="18"
+            color="var(--primary)"
+          >
+            <StorefrontOutline />
+          </n-icon>
           服务市场
           <span class="section-sub muted">可扩展服务（演示）</span>
         </div>
       </template>
 
       <div class="service-grid">
-        <div v-for="s in services" :key="s.key" class="service-card">
-          <div class="service-icon" :class="`service-icon--${s.color}`">
-            <n-icon size="26"><component :is="s.icon" /></n-icon>
+        <div
+          v-for="s in services"
+          :key="s.key"
+          class="service-card"
+        >
+          <div
+            class="service-icon"
+            :class="`service-icon--${s.color}`"
+          >
+            <n-icon size="26">
+              <component :is="s.icon" />
+            </n-icon>
           </div>
           <div class="service-info">
             <div class="service-title">
               {{ s.title }}
-              <n-tag size="small" :bordered="false" type="success">内置</n-tag>
+              <n-tag
+                size="small"
+                :bordered="false"
+                type="success"
+              >
+                内置
+              </n-tag>
             </div>
-            <div class="service-desc muted">{{ s.desc }}</div>
+            <div class="service-desc muted">
+              {{ s.desc }}
+            </div>
           </div>
         </div>
 
         <div class="service-card service-card--fake">
           <div class="service-icon service-icon--warning">
-            <n-icon size="26"><ConstructOutline /></n-icon>
+            <n-icon size="26">
+              <ConstructOutline />
+            </n-icon>
           </div>
           <div class="service-info">
             <div class="service-title">
               第三方服务（假服务）
-              <n-tag size="small" :bordered="false" type="warning">演示</n-tag>
+              <n-tag
+                size="small"
+                :bordered="false"
+                type="warning"
+              >
+                演示
+              </n-tag>
             </div>
             <div class="service-desc muted">
               市场功能演示：调用假服务并上报埋点 service_button_click。
             </div>
           </div>
           <div class="service-action">
-            <n-button type="primary" :loading="calling" @click="callFakeService">
-              <template #icon><n-icon><ExtensionPuzzleOutline /></n-icon></template>
+            <n-button
+              type="primary"
+              :loading="calling"
+              @click="callFakeService"
+            >
+              <template #icon>
+                <n-icon><ExtensionPuzzleOutline /></n-icon>
+              </template>
               调用假服务
             </n-button>
           </div>
         </div>
       </div>
 
-      <n-alert type="info" :bordered="false" style="margin-top: 20px">
-        <template #icon><n-icon><NewspaperOutline /></n-icon></template>
+      <n-alert
+        type="info"
+        :bordered="false"
+        style="margin-top: 20px"
+      >
+        <template #icon>
+          <n-icon><NewspaperOutline /></n-icon>
+        </template>
         服务市场为预留模块：后续可在此接入通知源扩展、导出服务等第三方能力。当前页面为演示占位。
       </n-alert>
     </n-card>
