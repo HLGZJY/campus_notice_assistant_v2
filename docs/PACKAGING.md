@@ -50,6 +50,22 @@
 
 ## 发布 SOP（以后每次更新）
 
+### 方式一：CI 自动发布（桌面版推荐，B19）
+
+桌面版已接入 GitHub Actions（`.github/workflows/release-desktop.yml`），**推 tag 即自动
+构建 → 冒烟 → 打安装包 → 上传 GitHub Release**：
+
+```
+git tag v0.2.0
+git push origin v0.2.0
+```
+
+Actions 会在 `windows-latest` runner 上完成：创建构建专用 venv → 前端 typecheck/lint/
+gen:api/build → PyInstaller desktop flavor → Inno 打安装包 → `smoke_desktop.py --apply`
+（装→跑→退→卸）→ 上传 Release（附件已自动转 ASCII 名）。
+
+### 方式二：手动发布（在线版 / 需本地联调时）
+
 ```
 改版本号 → 跑构建脚本 → gh release create v0.x.0 --notes "更新日志" → 完成
 ```
@@ -75,6 +91,8 @@ gh release create v0.2.0 ^
   --title "v0.2.0 新功能" ^
   --notes "更新日志写这里"
 ```
+
+> 桌面版分发页（下载说明 + sha256 核对 + 误报申诉）见 [DISTRIBUTION.md](DISTRIBUTION.md)。
 
 ## 已知风险
 
