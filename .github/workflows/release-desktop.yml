@@ -1,0 +1,149 @@
+# 校园通知智能助手 · 桌面版 CI 分发（B19.T1，P5 阶段，里程碑 M2）
+#
+# 目标（DESKTOP-UPGRADE.md §5.1~5.2 / DESKTOP-BATCH-PLAN.md B19）：
+#   windows-latest 构建 → 冒烟 → 打安装包 → 上传 Release。
+#   只做 Windows x64（B20 macOS 已决策不排期，本流水线不设 macos runner）。
+#
+# 触发：
+#   - 推 tag `v*`          → 完整构建 + 冒烟 + 打安装包 + 上传 GitHub Release
+#   - 手动 workflow_dispatch → 仅构建产物并上传 Actions artifact（不发 Release，供预发布联调）
+#   - push 到 main          → 仅跑「构建 + 冒烟 + 打安装包」校验（不上传，作为提交级 CI 门禁）
+#
+# 环境要点：
+#   - 构建用专用干净 venv `packaging/venv-build`（沿用 PACKAGING.md「体积瘦身」教训，
+#     避免无关大件打入产物）。CI 里现场创建：backend runtime 依赖 + 桌面壳依赖。
+#   - 桌面版 Inno 产物含中文名（校园通知助手-桌面版-setup.exe），Release 附件按
+#     PACKAGING.md 约定改 ASCII 名上传（GitHub API 对中文附件名编码会破坏）。
+#   - 冒烟用 tools/smoke_desktop.py --apply（在 runner 上真实装→跑→退→卸，D-46 语义）。
+
+name: desktop-release
+
+on:
+  push:
+    tags:
+      - 'v*'
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  PYTHON_VERSION: '3.11'
+  NODE_VERSION: '20'
+  # 桌面版构建环境变量（campus_notice.spec 据此选入口与 console 值）
+  CNA_FLAVOR: 'desktop'
+
+jobs:
+  build-desktop:
+    name: Windows x64 桌面版构建+冒烟+安装包
+    runs-on: windows-latest
+    permissions:
+      contents: write          # 上传 Release asset 需要
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Inno Setup 6
+        # choco 在 windows runner 预装；装到 Program Files (x86)\Inno Setup 6，
+        # build.py 候选路径已覆盖。安装后输出版本以便排障。
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress
+          if (Test-Path 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe') {
+            Write-Host "ISCC found: C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+            & 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe' /? | Select-Object -First 3
+          } else {
+            Write-Error "Inno Setup 6 安装后未找到 ISCC.exe"
+            exit 1
+          }
+
+      - name: 安装 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: 安装 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: 创建桌面构建专用 venv 并安装依赖
+        # 沿用 PACKAGING.md「体积瘦身」：构建环境必须是干净专用 venv，
+        # 依赖 = 后端运行时(requirements-build-cloud.txt) + 桌面壳(requirements-build-desktop.txt)
+        shell: pwsh
+        run: |
+          python -m venv packaging/venv-build
+          & packaging/venv-build/Scripts/python.exe -m pip install --upgrade pip
+          & packaging/venv-build/Scripts/python.exe -m pip install `
+            -r packaging/requirements-build-cloud.txt `
+            -r packaging/requirements-build-desktop.txt
+
+      - name: 前端契约与构建
+        # B02 门禁：typecheck + lint + gen:api 一致 + build 出 dist/
+        shell: pwsh
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run typecheck
+          npm run lint
+          npm run gen:api
+          git diff --exit-code -- src/api/types.ts  # 单一事实源：gen:api 不应产生漂移
+          npm run build
+
+      - name: 桌面版 PyInstaller 打包 + Inno 安装包
+        shell: pwsh
+        run: |
+          & packaging/venv-build/Scripts/python.exe packaging/build.py `
+            --flavor desktop `
+            --skip-frontend `
+            --innosetup `
+            --latest-json `
+            --iscc 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+
+      - name: 上传构建产物（Actions artifact，供预发布下载联调）
+        uses: actions/upload-artifact@v4
+        with:
+          name: campus-notice-desktop-setup
+          path: |
+            packaging/out/*.exe
+            packaging/out/*.sha256
+            packaging/out/latest.json
+          if-no-files-found: error
+
+      - name: 桌面产物冒烟（装→跑→退→卸，D-46 语义）
+        # --apply 在 runner 上真实执行：静默安装→启动→health→8页面→SSE→退出→卸载。
+        # 用系统 Python（非构建 venv）跑冒烟脚本即可（仅依赖 stdlib urllib/subprocess）。
+        shell: pwsh
+        run: |
+          python tools/smoke_desktop.py `
+            --setup packaging/out/校园通知助手-桌面版-setup.exe `
+            --apply `
+            --json-out docs-local/acceptance/smoke-b19.json
+        env:
+          DESKTOP_TOKEN_CHECK: '0'
+
+      - name: 上传冒烟结果
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-b19-result
+          path: docs-local/acceptance/smoke-b19.json
+          if-no-files-found: warn
+
+      # ---- 仅在推 tag v* 时发布 GitHub Release（PACKAGING.md 发布 SOP）----
+      - name: 发布 GitHub Release（tag 触发）
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ github.ref_name }}
+        run: |
+          # 附件改 ASCII 名（PACKAGING.md：中文附件名会被编码破坏成 -.-setup.exe）
+          $exe = 'packaging/out/校园通知助手-桌面版-setup.exe'
+          $ascii = "packaging/out/campus-notice-assistant-desktop-setup-$env:VERSION.exe"
+          Copy-Item $exe $ascii
+          $sha = Get-Content 'packaging/out/校园通知助手-桌面版-setup.exe.sha256' -Raw
+          $shaNote = $sha.Trim()
+          gh release create $env:VERSION $ascii `
+            --title "校园通知智能助手 $env:VERSION（桌面版）" `
+            --notes "## 桌面版 $env:VERSION`n`n**安装包 sha256**`n``````text`n$shaNote`n```````n`n> 下载说明与误报申诉见仓库分发页（docs/DISTRIBUTION.md）。"
