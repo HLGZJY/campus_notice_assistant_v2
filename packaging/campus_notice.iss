@@ -20,6 +20,8 @@
 
 #if Flavor == "cloud"
 #define SetupSuffix "云端版"
+#elif Flavor == "desktop"
+#define SetupSuffix "桌面版"
 #else
 #define SetupSuffix "完整版"
 #endif
