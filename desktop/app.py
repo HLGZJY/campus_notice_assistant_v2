@@ -666,9 +666,10 @@ class DesktopApp:
                 logger.debug("单实例锁释放异常（忽略）", exc_info=True)
             self.single_instance = None
         # 5b. 停空闲重活 gate（B14）
-        if self.idle_gate is not None:
+        idle_gate = getattr(self, "idle_gate", None)
+        if idle_gate is not None:
             try:
-                self.idle_gate.stop()
+                idle_gate.stop()
                 logger.info("空闲重活 gate 已停止")
             except Exception:  # noqa: BLE001 - 停止失败不阻塞退出
                 logger.debug("空闲重活 gate 停止异常（忽略）", exc_info=True)
