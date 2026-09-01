@@ -310,16 +310,33 @@ def _migrate(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def apply_wal_pragmas(conn: sqlite3.Connection) -> sqlite3.Connection:
+    """对连接应用 WAL 模式与 NORMAL 同步级别（K8，桌面版 B17）。
+
+    - `PRAGMA journal_mode=WAL`：读写不互斥——托盘后台跑调度时前端轮询不被阻塞；
+      代价是 data/ 目录会出现 `-wal` / `-shm` 附属文件，备份脚本必须一并处理。
+    - `PRAGMA synchronous=NORMAL`：WAL 下 NORMAL 已足够防崩溃丢数据（仅掉电可能丢
+      最近提交但数据库不损坏），换取更低写延迟。
+
+    返回同一连接以便链式调用；幂等（重复调用无害）。
+    """
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA synchronous=NORMAL")
+    return conn
+
+
 def get_connection(db_path: Optional[Path] = None) -> sqlite3.Connection:
     """获取 SQLite 连接，自动建库建表 + 迁移。
 
     并发加固（阶段 A）：check_same_thread=False 允许跨线程复用连接；
     timeout=30.0 在写锁竞争时等待而非立即抛 "database is locked"。
+    WAL 模式（B17/K8）：读写并发不互斥，见 apply_wal_pragmas。
     """
     path = db_path or DB_PATH
     path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(path), check_same_thread=False, timeout=30.0)
     conn.row_factory = sqlite3.Row
+    apply_wal_pragmas(conn)
     conn.executescript(SCHEMA)
     _migrate(conn)
     return conn
