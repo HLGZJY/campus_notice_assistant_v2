@@ -71,20 +71,38 @@ def _(tok):
 
 @suite.case("3. 开发模式（python -m desktop）关闭校验")
 def _(tok):
+    import os
+
+    install = suite.require(tok, "install_token_middleware")
     is_enabled = suite.require(tok, "token_check_enabled")
-    suite.pending(
-        "以开发模式（未注入令牌 / DESKTOP_TOKEN_CHECK=0）构造 app，"
-        "is_enabled() 应为 False，无令牌请求 /api/v1/ping 返回 200"
-    )
+
+    # 开发模式（未注入令牌 / DESKTOP_TOKEN_CHECK=0）：校验关闭
+    os.environ["DESKTOP_TOKEN_CHECK"] = "0"
+    try:
+        assert is_enabled() is False, "开发模式（DESKTOP_TOKEN_CHECK=0）应关闭校验"
+    finally:
+        os.environ.pop("DESKTOP_TOKEN_CHECK", None)
+
+    # 关闭校验时无令牌请求 /api/v1/ping 返回 200
+    app, TestClient = _client()
+    install(app, token="T" * 43, enabled=False)
+    with TestClient(app) as c:
+        r = c.get("/api/v1/ping")
+    assert r.status_code == 200, f"开发模式关闭校验，期望 200，实际 {r.status_code}"
 
 
 @suite.case("4. --browser 降级模式关闭校验")
 def _(tok):
+    import os
+
     is_enabled = suite.require(tok, "token_check_enabled")
-    suite.pending(
-        "以 --browser 模式构造 app，is_enabled() 应为 False，"
-        "保证 webview 故障降级时浏览器仍可正常访问 API"
-    )
+
+    # --browser 降级模式（CNA_BROWSER_MODE=1）：校验关闭
+    os.environ["CNA_BROWSER_MODE"] = "1"
+    try:
+        assert is_enabled() is False, "--browser 模式应关闭校验"
+    finally:
+        os.environ.pop("CNA_BROWSER_MODE", None)
 
 
 @suite.case("5. 令牌每次启动不同")
