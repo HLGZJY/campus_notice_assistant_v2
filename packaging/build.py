@@ -172,6 +172,64 @@ def compile_innosetup(flavor: str, version: str, iscc_path: str | None = None) -
     return setup
 
 
+def write_latest_json(setup: Path, version: str) -> Path | None:
+    """生成桌面版更新清单 latest.json（B18 更新闭环的清单侧）。
+
+    产出挂到 GitHub Release 下，供 desktop.updater 拉取（含 sha256 校验依据）：
+
+        out/latest.json：
+        {"version": "<VERSION>",
+         "notes": "",
+         "assets": [{"name": "<桌面版安装包名>",
+                     "url": "https://github.com/<repo>/releases/latest/download/<名>",
+                     "sha256": "<hex>"}]}
+
+    url 用 GitHub Releases 下载约定（releases/latest/download/<asset 名>），与
+    desktop.updater.manifest_url 拼法一致；repo 从 config/app.yaml 的 update.repo
+    读取，未配置则 url 留空（发布前需人工回填或先配置 repo）。
+
+    Args:
+        setup: 桌面版安装包完整路径。
+        version: 应用版本号（取自 VERSION）。
+    Returns:
+        latest.json 路径；写入失败返回 None。
+    """
+    out_dir = setup.parent
+    name = setup.name
+    sha = hashlib.sha256(setup.read_bytes()).hexdigest()
+
+    # 尝试从 config/app.yaml 读 update.repo，拼 release 下载 URL
+    url = ""
+    try:
+        with (PROJECT_ROOT / "config" / "app.yaml").open(encoding="utf-8") as f:
+            cfg = yaml.safe_load(f) or {}
+        repo = ((cfg.get("update") or {}).get("repo") or "").strip()
+        if repo:
+            url = f"https://github.com/{repo}/releases/latest/download/{name}"
+    except Exception as e:  # noqa: BLE001 - 读配置失败只影响 url 回填
+        log(f"读 update.repo 失败（url 留空待发布时回填）：{e}")
+
+    manifest = {
+        "version": version,
+        "notes": "",
+        "assets": [{"name": name, "url": url, "sha256": sha}],
+    }
+    target = out_dir / "latest.json"
+    try:
+        target.write_text(
+            __import__("json").dumps(manifest, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        log(f"更新清单：{target}")
+        if not url:
+            log("提示：update.repo 未配置，latest.json 的 url 为空，发布前需在 "
+                "config/app.yaml 配置 update.repo 或手动回填 url")
+        return target
+    except OSError as e:
+        log(f"写入 latest.json 失败：{e}")
+        return None
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="校园通知智能助手一键构建")
     parser.add_argument("--flavor", choices=["cloud", "full", "desktop"], default="cloud",
@@ -180,6 +238,8 @@ def main() -> None:
     parser.add_argument("--skip-frontend", action="store_true", help="跳过前端构建（复用现有 dist）")
     parser.add_argument("--force-frontend", action="store_true", help="强制重新构建前端")
     parser.add_argument("--innosetup", action="store_true", help="构建后调用 Inno Setup 编译安装包")
+    parser.add_argument("--latest-json", action="store_true",
+                        help="desktop flavor 且 --innosetup 时生成更新清单 latest.json（B18）")
     parser.add_argument("--iscc", default=None, help="ISCC.exe 路径（Inno Setup 装在非默认位置时指定）")
     parser.add_argument("--cloud-embedding-provider", default=CLOUD_EMBEDDING_DEFAULT_PROVIDER,
                         help=f"云端版 embedding 供应商（默认 {CLOUD_EMBEDDING_DEFAULT_PROVIDER}）")
@@ -229,7 +289,10 @@ def main() -> None:
     log(f"冒烟测试：双击 {app_dir / 'CampusNoticeAssistant.exe'} → 自动开浏览器 → 抓一轮数据 → 问答可用")
 
     if args.innosetup:
-        compile_innosetup(args.flavor, version, iscc_path=args.iscc)
+        setup = compile_innosetup(args.flavor, version, iscc_path=args.iscc)
+        # B18：desktop flavor 且显式 --latest-json 时生成更新清单（供桌面更新闭环拉取）
+        if args.latest_json and args.flavor == "desktop" and setup is not None:
+            write_latest_json(setup, version)
 
 
 if __name__ == "__main__":
