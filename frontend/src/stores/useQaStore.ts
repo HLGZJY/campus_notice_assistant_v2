@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { endpoints } from '../api/endpoints'
-import { get } from '../api/http'
+import { desktopTokenHeaders, get } from '../api/http'
 import { fetchQaHistory, deleteQaHistory, clearQaHistory } from '../api/qa'
 import type { IndexStatsView, QaHistoryItem, QaSourceRef, QaStreamEvent } from '../api/schema'
 
@@ -111,7 +111,7 @@ export const useQaStore = defineStore('qa', () => {
       }
       const res = await fetch(`${endpoints.qa.stream}?${params.toString()}`, {
         method: 'GET',
-        headers: { 'Accept': 'text/event-stream' },
+        headers: { 'Accept': 'text/event-stream', ...desktopTokenHeaders() },
         signal: abort.signal,
       })
 

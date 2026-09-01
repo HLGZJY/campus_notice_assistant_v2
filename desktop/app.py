@@ -101,6 +101,7 @@ class DesktopApp:
         self.server = ServerManager(host=host, port=port)
         self._window: Any | None = None
         self.tray: Any = None
+        self.token: str = ""  # B11.T3（K7）：本次启动令牌，供 webview 注入
         self._exiting = False  # 托盘「退出」触发后置位，closing 放行
         self._tray_available = False  # 托盘是否成功启动（影响关闭语义）
         self._shutdown_done = False  # B08：退出序列是否已执行（幂等）
@@ -155,7 +156,22 @@ class DesktopApp:
 
     # ---------- 后端 ----------
     def start_backend(self) -> None:
-        """起 uvicorn daemon 线程。"""
+        """起 uvicorn daemon 线程。
+
+        B11.T3（K7）：启动前初始化桌面令牌（写入模块态 + 环境变量
+        CNA_DESKTOP_TOKEN），并把自身注册进控制面路由注册表，使
+        /api/v1/desktop/* 能触达壳实例。
+        """
+        from api import desktop_token
+        from api.routes import desktop as desktop_route
+
+        # K7：生成并固化本次启动令牌（后端中间件 / 前端 webview 共用）
+        desktop_token.init_token()
+        self.token = desktop_token.get_token()
+        logger.debug("桌面启动令牌已生成")
+        # 控制面路由注册：让 /api/v1/desktop/* 能触达本壳实例
+        desktop_route.set_desktop_app(self)
+
         self.server.start()
 
     def _await_ready(self) -> bool:
@@ -201,6 +217,10 @@ class DesktopApp:
         )
         # B10.T2：页面加载后注入外链兜底脚本（覆写 window.open + 拦截点击）
         self._window.events.loaded += lambda: inject_new_window_guard(self._window)
+        # B11.T3（K7）：页面加载后注入启动令牌到 window.__CNA_TOKEN__，
+        # 供前端 http client 统一加 X-Desktop-Token 头。先于任何 API 调用
+        # 生效（loaded 后前端才会发请求）。
+        self._inject_token_script()
         # K5：点 X 是否最小化到托盘，由 closing handler 决定（见 _on_closing）
         self._window.events.closing += self._on_closing
         # B08.T2：注册 Windows 关机/注销信号（WM_QUERYENDSESSION 走同一退出路径）。
@@ -214,6 +234,30 @@ class DesktopApp:
             logger.exception("窗口事件循环异常")
         finally:
             self._shutdown()
+
+    def _inject_token_script(self) -> None:
+        """K7：把启动令牌注入 webview 的 window.__CNA_TOKEN__。
+
+        令牌为 secrets.token_urlsafe(32) 的安全串，JSON 编码后可安全嵌入 JS。
+        前端 http client 在发请求时读 window.__CNA_TOKEN__ 加到 X-Desktop-Token。
+        注入失败（无令牌 / 环境不支持）仅记日志，不影响启动——此时后端中间件
+        校验默认关闭（见 api/desktop_token.token_check_enabled）。
+        """
+        import json
+
+        token = getattr(self, "token", "") or ""
+        if not token:
+            logger.debug("无桌面令牌，跳过 window.__CNA_TOKEN__ 注入")
+            return
+        js = f"window.__CNA_TOKEN__ = {json.dumps(token)};"
+        win = self._window
+        if win is None:
+            return
+        try:
+            win.evaluate_js(js)
+            logger.debug("启动令牌已注入 webview window.__CNA_TOKEN__")
+        except Exception:  # noqa: BLE001 - 注入失败不影响启动（前端后端头缺省）
+            logger.debug("启动令牌注入 webview 失败", exc_info=True)
 
     def _webview_storage_path(self) -> str:
         """返回 WebView2 持久化 user-data 目录（B10.T5）。

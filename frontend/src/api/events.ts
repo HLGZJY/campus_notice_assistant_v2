@@ -1,4 +1,5 @@
 import { endpoints } from './endpoints'
+import { desktopTokenHeaders } from './http'
 
 export const EVENT_TYPES = {
   PAGE_VIEW: 'page_view',
@@ -15,7 +16,7 @@ export function trackEvent(
 ): void {
   fetch(endpoints.events, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...desktopTokenHeaders() },
     body: JSON.stringify({ event_type: eventType, ref_id: refId, note }),
   }).catch(() => {
     // fire-and-forget: 埋点失败不影响主流程

@@ -86,6 +86,19 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    # B11.T4（K7）：桌面启动令牌校验中间件。
+    # 仅当壳启动时经环境变量注入了令牌（CNA_DESKTOP_TOKEN）才安装；
+    # 纯后端 / dev / --browser 未注入 → 不安装，校验关闭（不影响既有测试）。
+    try:
+        from api import desktop_token
+
+        _token = os.environ.get("CNA_DESKTOP_TOKEN") or desktop_token.get_token()
+        if _token and desktop_token.token_check_enabled():
+            desktop_token.install_token_middleware(app, token=_token)
+            logger.debug("已安装桌面令牌校验中间件")
+    except Exception:  # noqa: BLE001 - 令牌中间件安装失败不阻断启动（放行）
+        logger.warning("安装桌面令牌校验中间件失败（降级放行）", exc_info=True)
+
     # 业务路由（统一 /api/v1 前缀）
     # 顺序：subscriptions 的 /notices/count、/notices/matched-ids 等精确路径须先于
     # notices 的 /notices/{notice_id} 注册，否则会被通配段捕获而 422（Starlette 顺序匹配）。
