@@ -4220,6 +4220,50 @@
         }
       }
     },
+    "/api/v1/desktop/settings": {
+      "post": {
+        "tags": [
+          "desktop"
+        ],
+        "summary": "Update Settings",
+        "description": "更新壳设置（B15：桌面设置页的「启动方式 / 关闭行为」）。\n\n仅覆盖传入的非 None 字段并落盘 settings.json；即时生效的项（close_action）\n由壳在下一次窗口事件（如点 X）读取最新值，无需重启。\n``start_minimized`` 属启动时行为，改动后下一次启动生效（D-39「重启后保持」）。",
+        "operationId": "update_settings_api_v1_desktop_settings_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SettingsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Update Settings Api V1 Desktop Settings Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/desktop/scheduler": {
       "post": {
         "tags": [
@@ -4270,7 +4314,7 @@
           "desktop"
         ],
         "summary": "Autostart",
-        "description": "开关开机自启（P0）。\n\n实际写入 HKCU Run 由 B13 落地；本批先把开关持久化到壳 settings.json，\n并把期望值返回，供前端展示与 B13 对接。",
+        "description": "开关开机自启（P0，B13.T2 落地注册表写入）。\n\n两步：\n  1. 把开关持久化到壳 settings.json（壳未注册时也尽力记录，保留用户意图）；\n  2. 实际写/删 HKCU Run 注册表值（复用 desktop.autostart，B13.T1）。\n\n``desktop.autostart`` 是叶子模块（仅依赖 winreg/sys/logging，不拉 webview/\npystray 壳），从控制面路由安全 import，不会把桌面壳连带拉进纯后端进程。\n返回 ``supported``/``applied`` 表示注册表操作是否成功，``enabled`` 为生效值，\n``message`` 供前端展示。",
         "operationId": "autostart_api_v1_desktop_autostart_post",
         "requestBody": {
           "content": {
@@ -6256,6 +6300,35 @@
         ],
         "title": "SchoolConfig",
         "description": "单个学校的数据源配置。"
+      },
+      "SettingsRequest": {
+        "properties": {
+          "close_action": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Close Action"
+          },
+          "start_minimized": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Minimized"
+          }
+        },
+        "type": "object",
+        "title": "SettingsRequest",
+        "description": "B15：壳设置更新（桌面设置页）。仅覆盖传入的非 None 字段。"
       },
       "SourceCenterAdoptRequest": {
         "properties": {

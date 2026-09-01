@@ -1216,6 +1216,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/desktop/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Update Settings
+         * @description 更新壳设置（B15：桌面设置页的「启动方式 / 关闭行为」）。
+         *
+         *     仅覆盖传入的非 None 字段并落盘 settings.json；即时生效的项（close_action）
+         *     由壳在下一次窗口事件（如点 X）读取最新值，无需重启。
+         *     ``start_minimized`` 属启动时行为，改动后下一次启动生效（D-39「重启后保持」）。
+         */
+        post: operations["update_settings_api_v1_desktop_settings_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/desktop/scheduler": {
         parameters: {
             query?: never;
@@ -1250,10 +1274,16 @@ export interface paths {
         put?: never;
         /**
          * Autostart
-         * @description 开关开机自启（P0）。
+         * @description 开关开机自启（P0，B13.T2 落地注册表写入）。
          *
-         *     实际写入 HKCU Run 由 B13 落地；本批先把开关持久化到壳 settings.json，
-         *     并把期望值返回，供前端展示与 B13 对接。
+         *     两步：
+         *       1. 把开关持久化到壳 settings.json（壳未注册时也尽力记录，保留用户意图）；
+         *       2. 实际写/删 HKCU Run 注册表值（复用 desktop.autostart，B13.T1）。
+         *
+         *     ``desktop.autostart`` 是叶子模块（仅依赖 winreg/sys/logging，不拉 webview/
+         *     pystray 壳），从控制面路由安全 import，不会把桌面壳连带拉进纯后端进程。
+         *     返回 ``supported``/``applied`` 表示注册表操作是否成功，``enabled`` 为生效值，
+         *     ``message`` 供前端展示。
          */
         post: operations["autostart_api_v1_desktop_autostart_post"];
         delete?: never;
@@ -2237,6 +2267,16 @@ export interface components {
             code: string;
             /** Sources */
             sources: components["schemas"]["SourceConfig"][];
+        };
+        /**
+         * SettingsRequest
+         * @description B15：壳设置更新（桌面设置页）。仅覆盖传入的非 None 字段。
+         */
+        SettingsRequest: {
+            /** Close Action */
+            close_action?: string | null;
+            /** Start Minimized */
+            start_minimized?: boolean | null;
         };
         /**
          * SourceCenterAdoptRequest
@@ -5341,6 +5381,41 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+        };
+    };
+    update_settings_api_v1_desktop_settings_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
