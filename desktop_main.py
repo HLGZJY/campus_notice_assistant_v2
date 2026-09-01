@@ -58,7 +58,6 @@ def main() -> None:
     logger.info("校园通知智能助手 桌面版 v%s 启动中……", get_version())
     app = DesktopApp(
         enable_tray=not args.no_tray,
-        enable_single_instance=args.single_instance,
         start_minimized=args.minimized,
         autostart=args.autostart,
         browser_mode=args.browser,

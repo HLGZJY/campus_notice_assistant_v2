@@ -62,12 +62,6 @@ def parse_cli_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="禁用托盘（回滚点：关闭窗口即退出）",
     )
-    parser.add_argument(
-        "--single-instance",
-        action="store_true",
-        default=True,
-        help="启用单实例锁（默认开启）",
-    )
     return parser.parse_args(argv)
 
 
