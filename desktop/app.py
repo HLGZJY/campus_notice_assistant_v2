@@ -151,6 +151,7 @@ class DesktopApp:
         self._shutdown_done = False  # B08：退出序列是否已执行（幂等）
         self.shutdown_hook: Any = None  # B08：WM_QUERYENDSESSION 关机钩子
         self.single_instance: Any = None  # B07：单实例锁（见 run()）
+        self.idle_gate: Any = None  # B14：空闲重活 gate（见 run()）
 
     # ---------- 主入口 ----------
     def run(self) -> None:
@@ -179,6 +180,8 @@ class DesktopApp:
         if not self._await_ready():
             logger.error("后端在 %.0fs 内未就绪，退出", HEALTH_TIMEOUT)
             sys.exit(1)
+        # B14：启动空闲重活 gate（后台监控，活跃时挂起重活、空闲满阈值才恢复）
+        self._setup_idle_gate()
         self._create_window()
 
     # ---------- 单实例（B07） ----------
@@ -448,6 +451,38 @@ class DesktopApp:
         except Exception:  # noqa: BLE001
             logger.exception("打开日志目录失败")
 
+    def _setup_idle_gate(self) -> None:
+        """启动空闲重活 gate（B14，desktop.idle.IdleGate）。
+
+        后台 daemon 线程轮询用户空闲状态：活跃时挂起 crawl/extract 重活，
+        空闲满阈值（settings.idle_heavy_seconds，默认 5 分钟）才恢复；含
+        睡眠唤醒补偿与电池低电量抑制（R11）。失败/不可用静默降级，不阻断启动。
+        """
+        try:
+            from desktop.idle import DEFAULT_IDLE_HEAVY_SECONDS, IdleGate
+
+            threshold = self.settings.get(
+                "idle_heavy_seconds", DEFAULT_IDLE_HEAVY_SECONDS
+            ) if self.settings is not None else DEFAULT_IDLE_HEAVY_SECONDS
+            try:
+                threshold = int(threshold)
+            except (TypeError, ValueError):
+                threshold = DEFAULT_IDLE_HEAVY_SECONDS
+
+            def _get_scheduler():
+                from api.main import app
+
+                return getattr(app.state, "scheduler", None)
+
+            self.idle_gate = IdleGate(
+                get_scheduler=_get_scheduler,
+                idle_threshold_seconds=threshold,
+            )
+            self.idle_gate.start()
+        except Exception:  # noqa: BLE001 - gate 启动失败不影响主流程
+            logger.debug("空闲重活 gate 启动失败（降级为不触发）", exc_info=True)
+            self.idle_gate = None
+
     def _toggle_pause_scheduler(self) -> None:
         """托盘「暂停调度」：在全局 pause/resume 间切换（B14，K9）。
 
@@ -630,6 +665,14 @@ class DesktopApp:
             except Exception:  # noqa: BLE001 - 释放失败不阻塞退出
                 logger.debug("单实例锁释放异常（忽略）", exc_info=True)
             self.single_instance = None
+        # 5b. 停空闲重活 gate（B14）
+        if self.idle_gate is not None:
+            try:
+                self.idle_gate.stop()
+                logger.info("空闲重活 gate 已停止")
+            except Exception:  # noqa: BLE001 - 停止失败不阻塞退出
+                logger.debug("空闲重活 gate 停止异常（忽略）", exc_info=True)
+            self.idle_gate = None
         # 6. 收尾
         if self.shutdown_hook is not None:
             try:
