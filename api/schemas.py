@@ -508,6 +508,42 @@ class ApiKeyResult(BaseModel):
     error: Optional[str] = None
 
 
+# ---------- 本地嵌入模型（B21 增强：下载选项） ----------
+
+
+class EmbeddingModelInfo(BaseModel):
+    """本地嵌入模型清单项（含已下载状态）。"""
+
+    model_config = ConfigDict(extra="allow")
+
+    model_id: str
+    hf_repo_id: str
+    display_name: str = ""
+    desc: str = ""
+    size_mb: int = 0
+    local_path: str = ""
+    downloaded: bool = False
+    has_weights: bool = False
+    size_bytes: int = 0
+    local_size_mb: float = 0.0
+
+
+class EmbeddingModelDownloadRequest(BaseModel):
+    """本地嵌入模型下载请求体。"""
+
+    model_id: str
+
+
+class EmbeddingModelDownloadResult(BaseModel):
+    """本地嵌入模型下载结果（202 提交后返回 task_id 供轮询）。"""
+
+    model_config = ConfigDict(extra="allow")
+
+    task_id: int
+    model_id: str
+    status: str = "queued"
+
+
 # ---------- 异步任务（阶段 4） ----------
 
 

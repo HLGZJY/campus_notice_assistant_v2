@@ -9,7 +9,7 @@ schema 级校验错误由 FastAPI 自动返回 422。
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from api.deps import require_auth
 from api.schemas import (
@@ -18,6 +18,9 @@ from api.schemas import (
     ConfigMutationResult,
     ConfigView,
     DiskInfo,
+    EmbeddingModelDownloadRequest,
+    EmbeddingModelDownloadResult,
+    EmbeddingModelInfo,
     ModelsView,
     ProviderView,
     ReloadResult,
@@ -154,3 +157,45 @@ def test_source(body: TestSourceRequest) -> dict:
 def test_model(body: TestModelRequest) -> dict:
     """测试模型连接可用性（发送最小 chat completion，长耗时，前端 loading 态）。"""
     return test_model_connection(body.provider, body.model, timeout=body.timeout)
+
+
+# ---------------------------------------------------------------------------
+# 本地嵌入模型（B21 增强：切分语块本地模型下载选项）
+# ---------------------------------------------------------------------------
+@router.get("/embedding-models", response_model=list[EmbeddingModelInfo])
+def list_embedding_models() -> list[dict]:
+    """列出可下载的本地嵌入模型 + 每个模型在 models/ 的已下载状态。
+
+    供设置页「向量嵌入」本地模型区块渲染「已下载 / 未下载 + 下载」。
+    既有 /config/models、/config/providers 端点零改动。
+    """
+    from services.embedding_model_service import list_local_embedding_models
+
+    return list_local_embedding_models()
+
+
+@router.post("/embedding-download", status_code=202, response_model=EmbeddingModelDownloadResult)
+def download_embedding_model(body: EmbeddingModelDownloadRequest, request: Request) -> dict:
+    """提交本地嵌入模型下载任务（异步，经 TaskManager worker 后台执行）。
+
+    - 已下载（含权重）的模型直接返回 {downloaded: true} 不重复下载；
+    - 否则提交 task（type=embedding_download，按 model_id 去重），前端轮询
+      GET /tasks/{task_id} 查看进度与结果。
+    """
+    from services.embedding_model_service import get_catalog_model, is_model_downloaded
+
+    item = get_catalog_model(body.model_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail=f"未知的本地嵌入模型: {body.model_id}")
+    if is_model_downloaded(body.model_id):
+        return {
+            "task_id": -1,
+            "model_id": body.model_id,
+            "status": "already_downloaded",
+        }
+
+    from api.routes.tasks import get_task_manager
+
+    manager = get_task_manager(request)
+    task_id = manager.submit("embedding_download", {"model_id": body.model_id})
+    return {"task_id": task_id, "model_id": body.model_id, "status": "queued"}

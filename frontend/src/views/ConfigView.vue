@@ -21,6 +21,7 @@ import {
   SettingsOutline,
 } from '@vicons/ionicons5'
 import { useConfigStore } from '../stores/useConfigStore'
+import { useTaskStore } from '../stores/useTaskStore'
 import { endpoints } from '../api/endpoints'
 import { get as httpGet, post as httpPost } from '../api/http'
 import { openExternal } from '../utils/openExternal'
@@ -34,6 +35,8 @@ import type {
   DesktopSettingsRequest,
   DesktopSettingsResult,
   DesktopStatus,
+  EmbeddingModelDownloadResult,
+  EmbeddingModelInfo,
   ExtractConfig,
   ModelProfileView,
   ModelsConfig,
@@ -48,6 +51,7 @@ const message = useMessage()
 const dialog = useDialog()
 const router = useRouter()
 const cfg = useConfigStore()
+const taskStore = useTaskStore()
 const activeTab = ref('models')
 
 const modelsDraft = ref<ModelsConfig | null>(null)
@@ -101,7 +105,22 @@ const usageColumns = [
 watch(usageDays, () => loadUsage())
 watch(activeTab, (tab) => {
   if (tab === 'usage') loadUsage()
+  // B21：进入「模型」tab 且向量嵌入为本地 provider 时，加载本地模型清单
+  if (tab === 'model') maybeLoadEmbeddingModels()
 })
+
+// B21：向量嵌入 provider 切换为本地时，自动加载本地嵌入模型下载清单
+watch(
+  () => modelsDraft.value?.embedding?.provider,
+  () => maybeLoadEmbeddingModels(),
+)
+
+function maybeLoadEmbeddingModels() {
+  const provider = modelsDraft.value?.embedding?.provider
+  if (provider && isLocalProvider(provider)) {
+    loadEmbeddingModels()
+  }
+}
 
 // ---- 检查更新 Tab（GET /update/check，打包发布方案 Step 5） ----
 const updateChecking = ref(false)
@@ -329,6 +348,62 @@ async function testModelRow(provider: string, model: string) {
     message.error(e instanceof Error ? e.message : String(e))
   } finally {
     testBusy.value[id] = false
+  }
+}
+
+// ---------- 本地嵌入模型下载（B21：切分语块本地模型下载选项） ----------
+
+const embeddingModels = ref<EmbeddingModelInfo[]>([])
+const embeddingModelsLoading = ref(false)
+// 正在下载的 model_id → 进度(0~1)
+const embeddingDownloading = ref<Record<string, number>>({})
+const embeddingModelsError = ref('')
+
+/** 判断某 task 的 provider 是否本地（决定是否展示本地嵌入模型下载区块）。 */
+function isLocalProvider(provider: string): boolean {
+  const p = cfg.providers?.[provider]
+  if (!p) return false
+  return p.type === 'local' || !p.base_url
+}
+
+/** 加载本地嵌入模型清单（含已下载状态）。 */
+async function loadEmbeddingModels() {
+  embeddingModelsLoading.value = true
+  embeddingModelsError.value = ''
+  try {
+    embeddingModels.value = await httpGet<EmbeddingModelInfo[]>(endpoints.config.embeddingModels)
+  } catch (e) {
+    embeddingModelsError.value = e instanceof Error ? e.message : String(e)
+    embeddingModels.value = []
+  } finally {
+    embeddingModelsLoading.value = false
+  }
+}
+
+/** 触发下载：提交异步任务并轮询进度。 */
+async function downloadEmbeddingModel(modelId: string) {
+  if (embeddingDownloading.value[modelId]) return
+  try {
+    // 提交下载任务（后端已下载则返回 already_downloaded，无需轮询）
+    const res = await httpPost<EmbeddingModelDownloadResult>(endpoints.config.embeddingDownload, {
+      model_id: modelId,
+    })
+    if (res.status === 'already_downloaded' || res.task_id === -1) {
+      message.info('该模型已下载')
+      await loadEmbeddingModels()
+      return
+    }
+    embeddingDownloading.value[modelId] = 0
+    // 轮询任务，实时更新进度
+    await taskStore.submit('embedding_download', { model_id: modelId }, (task) => {
+      embeddingDownloading.value[modelId] = (task.progress ?? 0) / 100
+    })
+    message.success('模型下载完成')
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : String(e))
+  } finally {
+    delete embeddingDownloading.value[modelId]
+    await loadEmbeddingModels()
   }
 }
 
@@ -756,6 +831,99 @@ function goUpdateTab() {
                   </n-button>
                   <span style="font-size: 12px; color: #999">先尝试在上，失败自动切向下一个</span>
                 </n-space>
+
+                <!-- B21：向量嵌入为本地 provider 时，展示本地嵌入模型下载选项 -->
+                <div
+                  v-if="task === 'embedding' && isLocalProvider(modelsDraft[task].provider)"
+                  class="embedding-download-section"
+                >
+                  <div class="embedding-download-title">
+                    <n-icon size="16">
+                      <CloudDownloadOutline />
+                    </n-icon>
+                    本地嵌入模型（切分语块用）
+                  </div>
+                  <n-alert
+                    type="info"
+                    :bordered="false"
+                    style="margin-bottom: 8px"
+                  >
+                    本地嵌入模型需要先下载到 <code>models/</code> 目录。选择下方模型并点击「下载」即可，进度实时显示；已下载的模型可直接在模型名中使用。
+                  </n-alert>
+                  <div
+                    v-if="embeddingModelsLoading"
+                    class="embedding-download-empty"
+                  >
+                    加载中…
+                  </div>
+                  <div
+                    v-else-if="embeddingModelsError"
+                    class="embedding-download-empty"
+                  >
+                    {{ embeddingModelsError }}
+                  </div>
+                  <div
+                    v-else-if="embeddingModels.length === 0"
+                    class="embedding-download-empty"
+                  >
+                    暂无可用模型
+                  </div>
+                  <div
+                    v-else
+                    class="embedding-model-list"
+                  >
+                    <div
+                      v-for="m in embeddingModels"
+                      :key="m.model_id"
+                      class="embedding-model-item"
+                    >
+                      <div class="embedding-model-info">
+                        <div class="embedding-model-name">
+                          {{ m.display_name }}
+                          <n-tag
+                            size="small"
+                            :type="m.downloaded ? 'success' : 'default'"
+                            :bordered="false"
+                          >
+                            {{ m.downloaded ? '已下载' : '未下载' }}
+                          </n-tag>
+                        </div>
+                        <div class="embedding-model-desc">
+                          {{ m.desc }}
+                        </div>
+                        <div class="embedding-model-meta">
+                          <span v-if="m.downloaded && m.local_size_mb">
+                            本地占用 {{ m.local_size_mb }}MB
+                          </span>
+                          <span v-else>需下载约 {{ m.size_mb }}MB</span>
+                          <span>· {{ m.hf_repo_id }}</span>
+                        </div>
+                      </div>
+                      <div class="embedding-model-action">
+                        <template v-if="embeddingDownloading[m.model_id] !== undefined">
+                          <n-progress
+                            type="line"
+                            :percentage="Math.round((embeddingDownloading[m.model_id] ?? 0) * 100)"
+                            :show-indicator="true"
+                            style="width: 160px"
+                          />
+                        </template>
+                        <n-button
+                          v-else
+                          size="small"
+                          :type="m.downloaded ? 'default' : 'primary'"
+                          :disabled="m.downloaded"
+                          @click="downloadEmbeddingModel(m.model_id)"
+                        >
+                          <template #icon>
+                            <n-icon><CloudDownloadOutline /></n-icon>
+                          </template>
+                          {{ m.downloaded ? '已下载' : '下载' }}
+                        </n-button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </n-space>
             </n-form-item>
             <n-button
@@ -1753,5 +1921,71 @@ function goUpdateTab() {
   cursor: not-allowed;
   font-size: 14px;
   padding: 0 2px;
+}
+/* B21：本地嵌入模型下载区块 */
+.embedding-download-section {
+  margin-top: 4px;
+  padding: 12px;
+  border: 1px dashed var(--border, rgba(127, 127, 127, 0.3));
+  border-radius: 8px;
+  background: var(--bg-2, rgba(127, 127, 127, 0.04));
+}
+.embedding-download-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text-1, #222);
+  margin-bottom: 8px;
+}
+.embedding-download-empty {
+  font-size: 13px;
+  color: var(--text-3, #999);
+  padding: 8px 0;
+}
+.embedding-model-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.embedding-model-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 12px;
+  background: var(--card-bg, #fff);
+  border: 1px solid var(--border, rgba(127, 127, 127, 0.15));
+  border-radius: 8px;
+}
+.embedding-model-info {
+  min-width: 0;
+  flex: 1;
+}
+.embedding-model-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text-1, #222);
+}
+.embedding-model-desc {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--text-2, #666);
+}
+.embedding-model-meta {
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--text-3, #999);
+}
+.embedding-model-action {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  min-width: 160px;
+  justify-content: flex-end;
 }
 </style>

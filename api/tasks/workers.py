@@ -199,6 +199,21 @@ def batch_reset(task: dict, progress_cb, deps: dict) -> dict:
     return result
 
 
+def embedding_download(task: dict, progress_cb, deps: dict) -> dict:
+    """下载本地嵌入模型（切分语块用，B21 增强）。
+
+    经 TaskManager 后台执行（snapshot_download 阻塞较长），进度经 huggingface_hub
+    的 tqdm_class 上报 0~1。
+    """
+    from services import embedding_model_service as ems
+
+    params = task.get("params") or {}
+    model_id = params.get("model_id")
+    if not model_id:
+        raise RuntimeError("缺少 model_id 参数")
+    return ems.download_embedding_model(model_id, progress_cb=progress_cb)
+
+
 WORKERS: dict[str, object] = {
     "crawl_source": crawl_source,
     "crawl_all": crawl_all,
@@ -211,4 +226,5 @@ WORKERS: dict[str, object] = {
     "re_extract_notice": re_extract_notice,
     "batch_delete": batch_delete,
     "batch_reset": batch_reset,
+    "embedding_download": embedding_download,
 }

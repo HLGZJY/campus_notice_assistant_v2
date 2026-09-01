@@ -184,3 +184,36 @@ export interface DesktopQuitResult {
   ok: boolean
   message: string
 }
+
+// ---------------------------------------------------------------------------
+// 本地嵌入模型下载（B21 增强：切分语块本地模型下载选项）
+// 手写类型（对应 /config/embedding-models 与 /config/embedding-download，契约
+// 未被 openapi.json 覆盖——遵循 B02「openapi 单一事实源，schema.ts 仅保留生成
+// 类型无法表达的部分」规则）。
+// ---------------------------------------------------------------------------
+
+/** /config/embedding-models 清单项（含本地已下载状态）。 */
+export interface EmbeddingModelInfo {
+  model_id: string
+  hf_repo_id: string
+  display_name: string
+  desc: string
+  size_mb: number
+  local_path: string
+  downloaded: boolean
+  has_weights: boolean
+  size_bytes: number
+  local_size_mb: number
+}
+
+/** /config/embedding-download POST 请求体。 */
+export interface EmbeddingModelDownloadRequest {
+  model_id: string
+}
+
+/** /config/embedding-download POST 响应（202 提交 / already_downloaded）。 */
+export interface EmbeddingModelDownloadResult {
+  task_id: number
+  model_id: string
+  status: string
+}

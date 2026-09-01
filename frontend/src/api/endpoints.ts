@@ -59,6 +59,9 @@ export const endpoints = {
     testSource: `${API_BASE}/config/test-source`,
     testModel: `${API_BASE}/config/test-model`,
     apiKey: (providerName: string) => `${API_BASE}/config/providers/${providerName}/api-key`,
+    // B21：本地嵌入模型下载选项（切分语块用）
+    embeddingModels: `${API_BASE}/config/embedding-models`,
+    embeddingDownload: `${API_BASE}/config/embedding-download`,
   },
   tasks: {
     list: `${API_BASE}/tasks`,

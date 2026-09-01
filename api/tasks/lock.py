@@ -75,4 +75,9 @@ def compute_lock_key(task_type: str, params: dict) -> Optional[str]:
     if task_type == "batch_reset":
         return "batch_reset:" + _filter_signature(params)
 
+    if task_type == "embedding_download":
+        # 同一模型只允许一个下载任务（幂等去重）
+        model_id = params.get("model_id")
+        return f"embedding_download:{model_id}" if model_id else None
+
     return None
