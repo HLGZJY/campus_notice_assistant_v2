@@ -153,6 +153,7 @@ class DesktopApp:
         self.shutdown_hook: Any = None  # B08：WM_QUERYENDSESSION 关机钩子
         self.single_instance: Any = None  # B07：单实例锁（见 run()）
         self.idle_gate: Any = None  # B14：空闲重活 gate（见 run()）
+        self.embedding_guard: Any = None  # B21.T2：嵌入模型空闲释放守卫（见 run()）
 
     # ---------- 主入口 ----------
     def run(self) -> None:
@@ -183,6 +184,8 @@ class DesktopApp:
             sys.exit(1)
         # B14：启动空闲重活 gate（后台监控，活跃时挂起重活、空闲满阈值才恢复）
         self._setup_idle_gate()
+        # B21.T2：启动嵌入模型空闲释放守卫（空闲超阈值释放本地 bge，内存回落）
+        self._setup_embedding_guard()
         self._create_window()
 
     # ---------- 单实例（B07） ----------
@@ -500,6 +503,41 @@ class DesktopApp:
             logger.debug("空闲重活 gate 启动失败（降级为不触发）", exc_info=True)
             self.idle_gate = None
 
+    def _setup_embedding_guard(self) -> None:
+        """启动嵌入模型空闲释放守卫（B21.T2，内存优化）。
+
+        独立 daemon 线程（desktop.embedding_guard.EmbeddingIdleGuard）：连续空闲
+        超过阈值（settings.embedding_idle_release_seconds，默认 30 分钟）且本地
+        bge 已加载时，释放其强引用使内存回落；下次问答/检索按需重载。失败/不可用
+        静默降级（空闲检测不可用时不释放），不阻断启动。
+        """
+        try:
+            from desktop.embedding_guard import (
+                DEFAULT_EMBEDDING_IDLE_RELEASE_SECONDS,
+                EmbeddingIdleGuard,
+            )
+
+            threshold = (
+                self.settings.get(
+                    "embedding_idle_release_seconds",
+                    DEFAULT_EMBEDDING_IDLE_RELEASE_SECONDS,
+                )
+                if self.settings is not None
+                else DEFAULT_EMBEDDING_IDLE_RELEASE_SECONDS
+            )
+            try:
+                threshold = int(threshold)
+            except (TypeError, ValueError):
+                threshold = DEFAULT_EMBEDDING_IDLE_RELEASE_SECONDS
+
+            self.embedding_guard = EmbeddingIdleGuard(
+                idle_threshold_seconds=threshold,
+            )
+            self.embedding_guard.start()
+        except Exception:  # noqa: BLE001 - 守卫启动失败不影响主流程
+            logger.debug("嵌入模型空闲释放守卫启动失败（降级为不释放）", exc_info=True)
+            self.embedding_guard = None
+
     def _toggle_pause_scheduler(self) -> None:
         """托盘「暂停调度」：在全局 pause/resume 间切换（B14，K9）。
 
@@ -728,6 +766,15 @@ class DesktopApp:
             except Exception:  # noqa: BLE001 - 停止失败不阻塞退出
                 logger.debug("空闲重活 gate 停止异常（忽略）", exc_info=True)
             self.idle_gate = None
+        # 5c. 停嵌入模型空闲释放守卫（B21.T2）
+        embedding_guard = getattr(self, "embedding_guard", None)
+        if embedding_guard is not None:
+            try:
+                embedding_guard.stop()
+                logger.info("嵌入模型空闲释放守卫已停止")
+            except Exception:  # noqa: BLE001 - 停止失败不阻塞退出
+                logger.debug("嵌入模型空闲释放守卫停止异常（忽略）", exc_info=True)
+            self.embedding_guard = None
         # 6. 收尾
         if self.shutdown_hook is not None:
             try:

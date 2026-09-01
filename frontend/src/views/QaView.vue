@@ -28,10 +28,15 @@ function stageLabel(stage: string) {
 }
 
 const now = ref(Date.now())
+const statsLoading = ref(false) // B21.T2：本地嵌入冷加载提示（首次检索加载 bge）
 let timer: ReturnType<typeof setInterval> | undefined
 onMounted(async () => {
   timer = setInterval(() => { now.value = Date.now() }, 1000)
+  // B21.T2：首次取索引统计时若本地嵌入模型未加载，可能耗时较长（bge 冷加载），
+  // 给出「首次加载本地模型」提示，避免用户误以为卡死。
+  statsLoading.value = true
   indexStats.value = await qa.fetchIndexStats().catch(() => null)
+  statsLoading.value = false
   qa.loadHistory()
 })
 onUnmounted(() => { if (timer) clearInterval(timer) })
@@ -150,6 +155,16 @@ function openDetail(msg: QaMessage) {
               · 索引异常
             </template>
           </n-tag>
+          <span
+            v-if="statsLoading"
+            class="index-loading-hint"
+          >
+            <n-spin
+              size="small"
+              :show="true"
+            />
+            首次加载本地嵌入模型，请稍候…
+          </span>
         </div>
         <n-button
           quaternary
@@ -539,6 +554,14 @@ function openDetail(msg: QaMessage) {
 .index-tag :deep(.n-tag__content) {
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.index-loading-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-3, #999);
   white-space: nowrap;
 }
 .chat-body {

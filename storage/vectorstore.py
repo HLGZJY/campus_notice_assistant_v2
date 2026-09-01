@@ -303,6 +303,28 @@ class VectorIndex:
         except Exception as e:
             logger.warning(f"删除 collection 失败（可能不存在）: {e}")
 
+    def release_embeddings(self) -> bool:
+        """释放嵌入模型强引用，配合空闲期内存优化（B21.T2）。
+
+        同时解除 VectorIndex 与 Chroma 对 embedding 实例的强引用，使本地 bge
+        模型可被 GC 回收。``_get_store()`` 在下一次调用时会经 ``get_embeddings()``
+        重新加载（懒加载 + 按需重建），不影响功能。
+
+        注意：本方法只解引用，不删 collection、不触发重建。真正释放模型内存需
+        配合 ``utils.embedding.release_embeddings()`` 清空模块级缓存。
+
+        Returns:
+            此前是否持有 embedding（无论本地/云端）。
+        """
+        had = self._embedding is not None
+        # 置空 embedding 与 store：Chroma 通过 embedding_function 持有 embedding
+        # 强引用，必须一并丢弃；下次 _get_store 会重建并刷新 embedding。
+        self._embedding = None
+        self._store = None
+        if had:
+            logger.debug("VectorIndex 已释放 embedding 强引用（空闲期内存优化）")
+        return had
+
     def search(
         self,
         query: str,

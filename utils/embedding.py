@@ -272,6 +272,42 @@ def invalidate_embedding_cache() -> None:
     logger.info("embedding 缓存已清空")
 
 
+def release_embeddings() -> bool:
+    """释放（本地）嵌入模型，空闲期内存回落（B21.T2）。
+
+    与 ``invalidate_embedding_cache`` 的区别：前者只清空模块级缓存，本函数额外
+    返回本次是否确有本地模型被释放（供上层决定是否需要触发 VectorIndex 重建）。
+
+    仅当当前 embedding 是**本地 HuggingFace 模型**（bge 等，内存占用大）时才真正
+    释放；OpenAI-compatible API embedding 无本地模型占用，直接清空引用即可。
+
+    调用方（桌面壳空闲监控）在释放后应同步调用 ``VectorIndex.release_embeddings()``，
+    解除 Chroma / VectorIndex 对 embedding 的强引用，使模型实例可被 GC 回收。
+
+    Returns:
+        True 表示此前持有本地模型且本次已释放；False 表示无需释放（云端 embedding
+        或本就未加载）。
+    """
+    global _EMBEDDING_CACHE, _CONFIG_VERSION_AT_LOAD, _LAST_EMBEDDING_MODEL, _LAST_EMBEDDING_PROVIDER
+
+    had_local = False
+    if _EMBEDDING_CACHE is not None:
+        # 本地模型包装是 _CountingEmbeddings（内层 HuggingFaceEmbeddings）；
+        # 云端是 _MeteredOpenAIEmbeddings。仅前者占本地内存。
+        had_local = isinstance(_EMBEDDING_CACHE, _CountingEmbeddings)
+
+    _EMBEDDING_CACHE = None
+    _CONFIG_VERSION_AT_LOAD = -1
+    _LAST_EMBEDDING_MODEL = None
+    _LAST_EMBEDDING_PROVIDER = None
+
+    if had_local:
+        logger.info("已释放本地嵌入模型（空闲期内存优化），下次问答/检索时按需重新加载")
+    else:
+        logger.debug("release_embeddings：无本地模型需要释放（云端 embedding 或未加载）")
+    return had_local
+
+
 def get_embedding_model_info() -> dict:
     """返回当前 embedding 模型信息，供 UI 检测是否需要重建索引。"""
     store = ConfigStore.get_instance()
