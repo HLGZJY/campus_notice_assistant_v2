@@ -135,20 +135,43 @@ def scheduler_action(payload: SchedulerAction, request: Request) -> dict:
 
 @router.post("/autostart")
 def autostart(payload: AutostartRequest, request: Request) -> dict:
-    """开关开机自启（P0）。
+    """开关开机自启（P0，B13.T2 落地注册表写入）。
 
-    实际写入 HKCU Run 由 B13 落地；本批先把开关持久化到壳 settings.json，
-    并把期望值返回，供前端展示与 B13 对接。
+    两步：
+      1. 把开关持久化到壳 settings.json（壳未注册时也尽力记录，保留用户意图）；
+      2. 实际写/删 HKCU Run 注册表值（复用 desktop.autostart，B13.T1）。
+
+    ``desktop.autostart`` 是叶子模块（仅依赖 winreg/sys/logging，不拉 webview/
+    pystray 壳），从控制面路由安全 import，不会把桌面壳连带拉进纯后端进程。
+    返回 ``supported``/``applied`` 表示注册表操作是否成功，``enabled`` 为生效值，
+    ``message`` 供前端展示。
     """
     app = get_desktop_app()
     settings = getattr(app, "settings", None)
-    if settings is None:
-        return {"supported": False, "enabled": payload.enabled}
+    # 1. 持久化用户意图（settings.json）
+    if settings is not None:
+        settings.set("autostart", payload.enabled)
+        settings.save()
+    # 2. 实际写删 HKCU Run（B13.T1/T2）
+    try:
+        from desktop.autostart import set_enabled
+    except Exception as e:  # noqa: BLE001 - 模块缺失/平台不支持 → supported=False
+        logger.warning("desktop.autostart 不可用（%s），开关仅持久化未落地注册表", e)
+        return {
+            "supported": False,
+            "enabled": payload.enabled,
+            "applied": False,
+            "message": "当前环境不支持开机自启注册表操作",
+        }
 
-    settings.set("autostart", payload.enabled)
-    settings.save()
-    logger.info("桌面控制面：开机自启设为 %s（B13 落地注册表写入）", payload.enabled)
-    return {"supported": True, "enabled": payload.enabled}
+    ok, detail = set_enabled(payload.enabled)
+    logger.info("桌面控制面：开机自启设为 %s -> ok=%s（%s）", payload.enabled, ok, detail)
+    return {
+        "supported": ok,
+        "enabled": payload.enabled if ok else (not payload.enabled),
+        "applied": ok,
+        "message": detail,
+    }
 
 
 @router.post("/open-log-dir")
