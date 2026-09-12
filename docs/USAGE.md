@@ -24,7 +24,7 @@
 | **结构化提取**（extraction） | 把抓取到的网页通知解析成结构化字段（标题/时间/部门/正文…） | 百炼（bailian）                                                   |
 | **RAG 问答**（qa）        | 基于已抓通知做检索问答                     | 百炼（bailian）                                                   |
 | **待办生成**（todo）        | 从通知里抽取行动项/截止日期                  | 百炼（bailian）                                                   |
-| **向量嵌入**（embedding）   | 把文本转向量，支撑检索/问答                  | **云端版 = 百炼 `text-embedding-v4`**；完整版 = 本地 `bge-small-zh-v1.5` |
+| **向量嵌入**（embedding）   | 把文本转向量，支撑检索/问答                  | **云端版 = 百炼 `qwen3.7-text-embedding`**；完整版 = 本地 `bge-small-zh-v1.5` |
 
 - **云端版**：embedding 已经由安装包内置配置指向百炼云端，  
   你**不需要**下载任何本地模型，只要能联网调用百炼 API 即可。
@@ -44,7 +44,7 @@
 
 1. 打开 <https://dashscope.console.aliyun.com/> 注册并登录（需实名）。
 2. 进入「模型广场 / 总览」，**开通**你需要用到的模型服务  
-   （文本生成类如通义千问系列 + 文本向量 `text-embedding-v4`）。
+   （文本生成类如通义千问系列 + 文本向量 `qwen3.7-text-embedding`）。
 3. 进入「API-KEY 管理」→ **创建 API Key**。
 4. 复制这串 key，下面要用。它对应环境变量名 **`DASHSCOPE_API_KEY`**。
 
@@ -61,7 +61,7 @@
 3. 在 `.env` 里填对应的环境变量（变量名你自己定义，与 `api_key_env` 对齐）。
 
 > embedding 这步比较挑供应商：要用「文本向量」类模型。  
-> 云端版默认用百炼 `text-embedding-v4`；换供应商时，请确保它提供  
+> 云端版默认用百炼 `qwen3.7-text-embedding`；换供应商时，请确保它提供  
 > embedding 模型，否则检索/问答会失败。
 
 ---
@@ -123,7 +123,7 @@ models:
     models: [qwen-max]
   embedding:
     provider: bailian           # 云端版用百炼向量模型
-    models: [text-embedding-v4]
+    models: [qwen3.7-text-embedding]
 ```
 
 要点：

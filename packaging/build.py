@@ -41,7 +41,7 @@ PACKAGING_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = PACKAGING_DIR.parent
 
 CLOUD_EMBEDDING_DEFAULT_PROVIDER = "bailian"
-CLOUD_EMBEDDING_DEFAULT_MODEL = "text-embedding-v4"
+CLOUD_EMBEDDING_DEFAULT_MODEL = "qwen3.7-text-embedding"
 
 
 def log(msg: str) -> None:

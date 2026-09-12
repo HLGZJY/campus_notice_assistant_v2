@@ -29,7 +29,9 @@
 
 - **云端版（默认分发）**：`models.embedding.provider` 指向云端 API 供应商；PyInstaller
   `--exclude-module torch --exclude-module sentence_transformers`，不带 `models/`。
-  前提：`HuggingFaceEmbeddings` 是函数内延迟 import（`utils/embedding.py:166`），云端路径不会执行到它。
+  前提：`HuggingFaceEmbeddings` 仅在本地分支延迟 import（`utils/embedding.py` 的
+  `_load_huggingface_embeddings_class`），在线路径永不触发；本地依赖缺失时抛带指引的
+  RuntimeError（提示切云端或用完整版）。
   → 体积约 150MB。
 - **完整版（按需）**：provider 保持 `local`，`--add-data` 带上 `models/`（192MB bge 模型）。
   → 离线 embedding、无 token 费用，但下载 ~2.5GB、首次启动慢。
@@ -153,7 +155,7 @@ gh release create v0.2.0 ^
 
 构建时只改 dist 产物内的 `config/app.yaml`（不动仓库）：embedding 指向
 `--cloud-embedding-provider`（默认 bailian）/ `--cloud-embedding-model`（默认
-text-embedding-v4）。前提是同学反正要配 LLM API key，同一 key 走 embedding。
+qwen3.7-text-embedding）。前提是同学反正要配 LLM API key，同一 key 走 embedding。
 
 ### 产物布局（onedir）
 
