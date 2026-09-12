@@ -4,7 +4,7 @@
 >
 > 一个覆盖「多源抓取 → LLM 结构化提取 → RAG 智能问答 → 待办管理 → 截止提醒」全链路的  
 > **全栈 AI 应用**（FastAPI + Vue3 + OpenAI Agents SDK + Chroma），单开发者从 0 到 1  
-> 独立设计、开发并持续迭代 118 次提交。
+> 独立设计、开发并持续迭代 235 次提交。
 
 `FastAPI` `Vue 3` `TypeScript` `OpenAI Agents SDK` `RAG` `Chroma` `BM25+RRF` `SSE 流式` `APScheduler` `SQLite` `Docker`
 
@@ -35,12 +35,12 @@
 
 | 维度   | 数据                                                         |
 | ---- | ---------------------------------------------------------- |
-| 代码规模 | 后端 Python ≈ 26,500 行，前端 TypeScript/Vue ≈ 13,700 行          |
-| 迭代历史 | 118 次 Git 提交，历经 MVP → 短线开发 → 前后端分离重构 → 工程优化四个里程碑           |
+| 代码规模 | 后端 Python ≈ 19,900 行，前端 TypeScript/Vue ≈ 17,500 行          |
+| 迭代历史 | 235 次 Git 提交，历经 MVP → 短线开发 → 前后端分离重构 → 工程优化 → 桌面化五个里程碑  |
 | 测试资产 | 43 个离线验收测试脚本（爬虫 / 检索 / 任务 / 缓存 / 并发 / 崩溃恢复 / 桌面壳等）         |
 | 数据层  | SQLite 13 张业务表；Chroma 向量库 + BM25 稀疏索引双路检索                  |
-| 接口层  | 11 个路由模块 / 68 个 REST 端点（57 条路径，/api/v1）+ SSE 流式问答 + 异步任务接口 |
-| 页面   | 8 个前端页面（通知浏览 / 待办中心 / 智能问答 / 订阅管理 / 系统配置 / 数据源中心等）         |
+| 接口层  | 14 个路由模块 / 75 个 REST 端点（64 条路径，/api/v1）+ SSE 流式问答 + 异步任务接口 |
+| 页面   | 9 个前端页面（通知浏览 / 待办中心 / 智能问答 / 订阅管理 / 系统配置 / 数据源中心 / 通知中心等） |
 
 ### 1.5 设计哲学
 
@@ -59,21 +59,22 @@
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │ 前端 frontend/  Vue 3 + TypeScript + Vite + Naive UI         │
-│  8 页面 · Pinia 状态 · vue-router 守卫埋点 · useTaskPoll 轮询  │
+│  9 页面 · Pinia 状态 · vue-router 守卫埋点 · useTaskPoll 轮询  │
 │  契约：openapi.json ──openapi-typescript──▶ types.ts（零漂移） │
 └──────────────────────────┬──────────────────────────────────┘
                            │ HTTP /api/v1（REST + SSE）
 ┌──────────────────────────▼──────────────────────────────────┐
 │ 接口层 api/  FastAPI 应用工厂                                 │
-│  11 个路由模块 · Pydantic 响应模型 · deps 鉴权占位             │
+│  14 个路由模块 · Pydantic 响应模型 · deps 鉴权占位             │
 │  TaskManager 异步任务（202 → 轮询，单 worker，崩溃恢复）       │
-│  lifespan 拉起 APScheduler（5 job，可 CLI 独立运行）           │
+│  lifespan 拉起 APScheduler（6 job，可 CLI 独立运行）           │
 └──────────────────────────┬──────────────────────────────────┘
                            ▼
 ┌─────────────────────────────────────────────────────────────┐
-│ 业务服务层 services/  11 个服务（返回统一 dict 契约）           │
+│ 业务服务层 services/  13 个服务（返回统一 dict 契约）           │
 │  notice / todo / qa / subscription / reminder / config       │
 │  / admin / tracking / usage / health / source_center         │
+│  / embedding_model / update                                  │
 └──────────────────────────┬──────────────────────────────────┘
                            ▼
 ┌─────────────────────────────────────────────────────────────┐
@@ -83,6 +84,7 @@
 │  storage/   SQLite（13 表）+ Chroma + BM25/RRF 混合检索        │
 │  utils/     LLM 统一调用点（模型失败切换 + token 计量）         │
 │  config/    Pydantic + YAML（三层 fallback + 原子写 + 热更新） │
+│  desktop/   pywebview 桌面壳（单实例 / 托盘 / 空闲 gate / 更新）│
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -92,14 +94,14 @@
 | --------- | -------------------------------------------------- | ------------------------------------ | ------------------------------------ |
 | 后端框架      | **FastAPI + uvicorn**（Python 3.11）                 | 异步原生，天然契合 SSE / 异步任务；自动生成 OpenAPI 契约 | 不选 Flask/Django：同步 WSGI 模型对 SSE / 长连接支持弱，需额外引入方案 |
 | 前端        | **Vue 3.5 + TypeScript + Vite + Naive UI + Pinia** | 组合式 API 开发效率高；Naive UI 组件质量与 TS 支持好  | 不选 React：个人技术栈连贯性优先；组合式 API 逻辑复用贴合本项目页面形态 |
-| 前后端契约     | **openapi-typescript**                             | openapi.json 为唯一事实源，类型零漂移，杜绝字段对不上    | 不选手写类型 / GraphQL：手写易漂移；GraphQL 对 68 个 REST 端点过重 |
+| 前后端契约     | **openapi-typescript**                             | openapi.json 为唯一事实源，类型零漂移，杜绝字段对不上    | 不选手写类型 / GraphQL：手写易漂移；GraphQL 对 75 个 REST 端点过重 |
 | Agent 框架  | **OpenAI Agents SDK**（`output_type` 结构化输出）         | Function Calling 硬约束采样空间，适合通知字段提取    | 不选 LangGraph：本任务边界清晰、无动态分支需求，图状态机是过度设计；用 workflow 提供边界、agent 在边界内自主 |
 | LLM       | 阿里云百炼 qwen（OpenAI 兼容接口），**按任务配置 + 模型失败切换**         | 供应商可插拔，免费/付费模型配额不足时自动降级              | 不锁单一供应商：模型迭代快，兼容接口层保证随时可替换 |
 | Embedding | 本地 **bge-small-zh-v1.5**                           | 中文语义效果好，本地推理零 API 成本                 | 不选云端 embedding：中文场景效果优先，数据不出本地，无 API 成本 |
 | 向量库       | **Chroma**（langchain-chroma）                       | 嵌入式轻量，单机部署零运维                        | 不选 Milvus/Weaviate：当前单机万级 chunk 规模，重型分布式向量库是过度设计；多租户/高并发再迁移（storage 层已抽象） |
 | 混合检索      | **BM25（rank_bm25 + jieba）+ RRF 融合**                | 稀疏+稠密双路互补，中文分词适配                     | 不选纯向量检索：中文专有名词（比赛缩写 / 英文混排）稀疏召回不足 |
 | 数据存储      | **SQLite**（13 表，含迁移与断点续跑）                          | 单文件零依赖；storage 层已抽象，可平替 PG           | 不选 PostgreSQL：个人规模 + 单写者模型足够，引入 PG 增加运维成本 |
-| 定时调度      | **APScheduler**（5 job）                             | 并入后端 lifespan 或 CLI 独立运行，失败落库可恢复     | 不选 Celery/独立调度服务：任务量级轻、进程内足够，避免多组件运维 |
+| 定时调度      | **APScheduler**（6 job）                             | 并入后端 lifespan 或 CLI 独立运行，失败落库可恢复     | 不选 Celery/独立调度服务：任务量级轻、进程内足够，避免多组件运维 |
 | 抓取        | **newspaper4k**                                    | 列表页链接发现 + 详情页正文提取，免手写选择器             | 不选手写 CSS/XPath 选择器：站点改版维护成本高，库自带降级策略 |
 | 部署        | **Docker Multi-stage**（Node 构建 → Python 运行时）       | 前端产物由后端直接托管，单镜像启动                    | 不选前后端分离部署：单机场景单镜像零运维，需要扩容时再拆分 |
 
@@ -118,7 +120,7 @@
 | **异步任务系统**     | 抓取 / 批量提取 / 重匹配等长耗时操作统一任务化                   | `POST /tasks` 返回 202 → 前端轮询；**实时进度回调**；任务锁幂等去重；**崩溃恢复**（重启自动标记遗留任务）                                         |
 | **系统配置**       | 模型 / 供应商 / 数据源 / 抓取提取参数可视化配置                 | Pydantic + YAML 三层 fallback；**原子写**；配置热更新（调度器 60s 轮询）；供应商 API Key 免重启生效                                     |
 | **Token 用量计量** | 所有 LLM 调用成功/失败统一记账，按任务×供应商×模型聚合              | LLM **统一调用点**（`run_agent` / `run_agent_stream`），三条链路共用一处埋点                                                  |
-| **数据源中心**      | 公共数据源目录（**112 个**高校来源），组织树三级筛选、链接预览、一键选用     | 目录与个人数据源按 `list_url` 判重联动，双向同步                                                                              |
+| **数据源中心**      | 公共数据源目录（**112 个**校内数据源，覆盖 37 个机构 / 2 个分组），组织树三级筛选、链接预览、一键选用     | 目录与个人数据源按 `list_url` 判重联动，双向同步                                                                              |
 | **埋点与体检**      | 页面浏览 / 行为埋点 + 每日健康检查 + 向量一致性自动修复             | 埋点写库失败不阻塞主流程；RAG 污染三层防线兜底                                                                                   |
 
 ### 3.1 功能界面预览
@@ -133,9 +135,9 @@
 | :---: | :---: |
 | ![智能问答：RAG 流式 + 引用来源](docs/assets/readme/ui-qa-stream.png) | ![待办中心：按截止升序 + 逾期高亮](docs/assets/readme/ui-todos.png) |
 
-| 订阅管理：命中明细 + 全库回填 | 数据源中心：112 高校三级组织树 |
+| 订阅管理：命中明细 + 全库回填 | 数据源中心：112 校内数据源三级组织树 |
 | :---: | :---: |
-| ![订阅管理：命中明细 + 全库回填](docs/assets/readme/ui-subs.png) | ![数据源中心：112 高校三级组织树](docs/assets/readme/ui-datasource-catalog.png) |
+| ![订阅管理：命中明细 + 全库回填](docs/assets/readme/ui-subs.png) | ![数据源中心：112 校内数据源三级组织树](docs/assets/readme/ui-datasource-catalog.png) |
 
 | 数据源中心：个人数据源 + 抓取策略 | 系统配置：模型按任务分配 + 失败切换 |
 | :---: | :---: |
@@ -145,7 +147,7 @@
 | :---: | :---: |
 | ![系统配置：供应商管理](docs/assets/readme/ui-config-providers.png) | ![系统配置：抓取与提取参数](docs/assets/readme/ui-config-crawl.png) |
 
-| Token 用量计量：按任务×供应商×模型聚合（近 30 天 2,793 次调用） |
+| Token 用量计量：按任务×供应商×模型聚合（近 30 天 2,984 次调用） |
 | :---: |
 | ![Token 用量计量](docs/assets/readme/ui-config-token.png) |
 
@@ -177,7 +179,7 @@
 
 - **问题**：全量抓取 + 全量提取 + 重复问答的 LLM 开销不可控。
 - **方案**：三层节流——① **增量抓取**（已入库不重抓详情页，整页已知早停）；② **提取规则预筛**（时效 → 正文长度 → 关键词 → 时间线索 → 订阅命中，不通过**不调 LLM**，落 `extract_skipped_reason`）；③ **模型失败切换**（有序候选列表，`is_failover_worthy` 判定：400/401/403 不切，429/5xx/网络错误切换）。
-- **成效**：所有调用统一经 `utils/llm.py` 计量（成功/失败都记账），实测已累计 **2,778 条 token 用量记录**，可审计、可聚合、可做预算。
+- **成效**：所有调用统一经 `utils/llm.py` 计量（成功/失败都记账），实测已累计 **2,984 条 token 用量记录**，可审计、可聚合、可做预算。
 
 ### 4.5 三层问答缓存：重复问题零 LLM 调用
 
@@ -230,7 +232,7 @@
 | 增量抓取      | 6 源全库一轮 **≈ 3.5s**                               | 调度器实测                                              |
 | 检索质量      | 20 题检索测试集（含 RAG 污染专项 2 阶段验收）                     | `evaluate_retrieval.py` / `reproduce_pollution.py` |
 | 自动化测试     | 43 个测试脚本，覆盖爬虫 / 检索 / 任务 / 缓存 / 并发 / 崩溃恢复 / 桌面壳         | `test_*.py` 离线验收                                   |
-| 系统真实运行    | 1,065 条抓取日志、2,778 条 LLM 用量记录、1,793 条行为埋点（开发环境实测） | SQLite 数据审计                                        |
+| 系统真实运行    | 1,158 条抓取日志、2,984 条 LLM 用量记录、1,880 条行为埋点（开发环境实测） | SQLite 数据审计                                        |
 
 ### 5.2 应用场景
 
@@ -304,22 +306,26 @@ python evaluate_extraction.py             # 黄金集提取准确率评估
 ## 七、项目结构
 
 ```
-├── frontend/            # Vue 3 + TS + Naive UI（8 页面）
+├── frontend/            # Vue 3 + TS + Naive UI（9 页面）
 │   ├── src/api/         #   HTTP 客户端 + openapi-typescript 生成类型
-│   ├── src/views/       #   8 个页面视图
-│   ├── src/stores/      #   Pinia 状态（含全局任务轮询 store）
+│   ├── src/views/       #   9 个页面视图
+│   ├── src/stores/      #   Pinia 状态（10 个 store，含全局任务轮询）
 │   └── openapi.json     #   前后端唯一契约
-├── api/                 # FastAPI（/api/v1，11 路由模块）
+├── api/                 # FastAPI（/api/v1，14 路由模块）
 │   ├── routes/          #   薄转发层：校验 + 调服务 + 序列化
 │   ├── tasks/           #   TaskManager + WORKERS 注册表 + 任务锁
+│   ├── desktop_token.py #   桌面控制面令牌校验（K7 中间件）
 │   └── main.py          #   应用工厂：CORS + 路由 + lifespan + SPA 挂载
-├── services/            # 业务编排层（11 个服务，统一 dict 契约）
+├── services/            # 业务编排层（13 个服务，统一 dict 契约）
 ├── core/                # LLM Agent（提取/待办/问答）+ 中文时间解析
-├── storage/             # SQLite（13 表）+ Chroma + BM25/RRF 混合检索
+├── storage/             # SQLite（13 表，WAL）+ Chroma + BM25/RRF 混合检索
 ├── crawler/             # newspaper4k 抓取 + 内容指纹
 ├── config/              # Pydantic + YAML（app.yaml / schools/ / source_catalog.yaml）
-├── utils/               # LLM 统一调用点（失败切换 + token 计量）+ embedding
-├── scheduler.py         # APScheduler 常驻服务（5 job）
+├── utils/               # LLM 统一调用点（失败切换 + token 计量）+ embedding + app_paths
+├── desktop/             # pywebview 桌面壳（16 模块：单实例/托盘/自启/空闲 gate/备份/更新/日志）
+├── packaging/           # PyInstaller 打包 + Inno Setup 安装包构建
+├── tools/               # 批次看板与开发辅助脚本
+├── scheduler.py         # APScheduler 常驻服务（6 job）
 ├── crawl.py / extract.py / index.py / qa.py / todo.py   # CLI 入口
 ├── evaluate_*.py / check_*.py / reproduce_*.py          # 评估与检查工具
 └── test_*.py            # 43 个离线验收测试（含 10 个 test_desktop_*）
@@ -330,13 +336,19 @@ python evaluate_extraction.py             # 黄金集提取准确率评估
 | 文档                                             | 内容                  |
 | ---------------------------------------------- | ------------------- |
 | [docs/PRD.md](docs/PRD.md)                     | 产品需求、用户故事、功能清单与交付状态 |
+| [docs/SYSTEM-DESIGN.md](docs/SYSTEM-DESIGN.md) | 系统设计总览：分层、模块职责、关键机制与数据流 |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)   | 技术架构、模块设计、数据流、选型理由  |
 | [docs/DATA-MODEL.md](docs/DATA-MODEL.md)       | 数据表结构、Pydantic 模型   |
 | [docs/ROADMAP.md](docs/ROADMAP.md)             | 开发路线图与里程碑           |
+| [docs/RELEASE-NOTES.md](docs/RELEASE-NOTES.md) | 版本发布记录与变更说明         |
 | [docs/RAG-POLLUTION.md](docs/RAG-POLLUTION.md) | RAG 污染防护专项          |
 | [docs/DEMO.md](docs/DEMO.md)                   | 订阅 + 提醒全链路演示        |
 | [docs/PACKAGING.md](docs/PACKAGING.md)         | 打包发布方案（PyInstaller + Inno Setup）实践记录 |
 | [docs/DESKTOP-UPGRADE.md](docs/DESKTOP-UPGRADE.md) | **桌面版升级方案 v0.2.0**：前端优化收尾 + 免后台命令的原生 PC 应用改造 |
+| [docs/DESKTOP-BATCH-PLAN.md](docs/DESKTOP-BATCH-PLAN.md) | 桌面化批次看板（B00–B22 逐批目标、Gate 与验收记录） |
+| [docs/DESKTOP-ACCEPTANCE.md](docs/DESKTOP-ACCEPTANCE.md) | 桌面版验收清单：功能、性能、兼容性逐项验收口径 |
+| [docs/DESKTOP-UPDATER.md](docs/DESKTOP-UPDATER.md) | 更新闭环设计：latest.json 清单、sha256 校验、确认安装流程 |
+| [docs/DISTRIBUTION.md](docs/DISTRIBUTION.md)   | 分发页与 CI 发布说明：安装包校验、WebView2 依赖、误报申诉 |
 | [PLAN.md](PLAN.md)                             | 原生桌面版规划：选型对比、功能分解、里程碑 |
 | [docs/USAGE.md](docs/USAGE.md)                 | **打包版使用说明**：需要什么模型、怎么获取/配置 API Key、桌面版托盘与日志导出/卸载策略 |
 

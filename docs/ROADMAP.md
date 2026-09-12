@@ -244,7 +244,7 @@ frontend/   Vue3 + Naive UI（7 路由）──▶ POST /api/v1/events（埋点�
    ▼
 api/        FastAPI 应用工厂 + 9 个路由模块 + deps 鉴权占位
    ├── tasks/    TaskManager（asyncio 单 worker + 202 轮询 + 重启恢复）
-   ├── lifespan  拉起 scheduler（APScheduler，5 job）与 TaskManager
+   ├── lifespan  拉起 scheduler（APScheduler，6 job）与 TaskManager
    ▼
 services/   业务编排层（notice / todo / qa / subscription / reminder /
             config / admin / tracking / health / usage）

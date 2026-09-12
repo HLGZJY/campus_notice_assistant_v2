@@ -131,7 +131,7 @@
 
 ### 3.3 选定理由（pywebview）
 
-1. **后端零改动**：同进程内嵌，68 个端点、5 个调度 job、TaskManager、SSE 全部原样工作，不需要 sidecar 进程管理与 IPC；
+1. **后端零改动**：同进程内嵌，75 个端点、6 个调度 job、TaskManager、SSE 全部原样工作，不需要 sidecar 进程管理与 IPC；
 2. **打包链路 100% 复用**：只需新增一个 `desktop` flavor 与入口脚本，spec 的 hiddenimports / datas 体系不动；
 3. **前端已天然适配**：相对路径 + fetch 流 SSE + 后端 SPA fallback（§2.2），这是选型时最大的不确定项，实测已排除；
 4. **纯 Python**：与现有团队栈一致，无 Rust/Node 工具链，CI 与本地联调成本最低；
