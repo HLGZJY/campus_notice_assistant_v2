@@ -156,6 +156,26 @@ class _CountingEmbeddings:
         return vector
 
 
+def _load_huggingface_embeddings_class():
+    """延迟加载 HuggingFaceEmbeddings（仅本地 embedding 路径用到）。
+
+    云端/桌面版安装包不含 langchain-huggingface / torch（见 packaging/campus_notice.spec
+    的 excludes），因此本 import 必须只在本地分支触发——若放在 ``create_embeddings``
+    函数体顶部，纯云端包连在线路径都会 ImportError。依赖缺失时抛出带指引的
+    RuntimeError，而非裸 ImportError。
+    """
+    try:
+        from langchain_huggingface import HuggingFaceEmbeddings
+    except ImportError as e:  # pragma: no cover - 仅纯云端包内触发
+        raise RuntimeError(
+            "本地 embedding 依赖未安装（langchain-huggingface / torch）。"
+            "云端版安装包不包含本地模型：请检查网络与 API Key 后使用云端 embedding，"
+            "或在系统配置中将 embedding 切换到已配置 Key 的云端供应商；"
+            "如确需本地模型请使用完整版（full flavor）。"
+        ) from e
+    return HuggingFaceEmbeddings
+
+
 def create_embeddings(provider_name: Optional[str] = None, model_name: Optional[str] = None):
     """创建 embedding 实例。
 
@@ -163,8 +183,6 @@ def create_embeddings(provider_name: Optional[str] = None, model_name: Optional[
         provider_name: 供应商名；None 则从 ConfigStore 读取
         model_name: 模型名；None 则从 ConfigStore 读取
     """
-    from langchain_huggingface import HuggingFaceEmbeddings
-
     store = ConfigStore.get_instance()
     if provider_name is None or model_name is None:
         provider, model_name = store.get_model("embedding")
@@ -191,7 +209,7 @@ def create_embeddings(provider_name: Optional[str] = None, model_name: Optional[
             resolved_model = str(get_app_root() / local_model)
             logger.info(f"本地模型解析为绝对路径: {resolved_model}")
         return _CountingEmbeddings(
-            HuggingFaceEmbeddings(
+            _load_huggingface_embeddings_class()(
                 model_name=resolved_model,
                 model_kwargs={"local_files_only": True},
             ),
@@ -226,7 +244,7 @@ def create_embeddings(provider_name: Optional[str] = None, model_name: Optional[
         )
 
     return _CountingEmbeddings(
-        HuggingFaceEmbeddings(
+        _load_huggingface_embeddings_class()(
             model_name=DEFAULT_LOCAL_EMBEDDING_MODEL,
             model_kwargs={"local_files_only": True},
         ),

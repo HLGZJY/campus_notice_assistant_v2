@@ -85,8 +85,8 @@ if FLAVOR == "full":
     pass
 else:
     # 云端瘦身版：embedding 只走 OpenAI-compatible API。
-    # 前提：utils/embedding.py 的 HuggingFaceEmbeddings 是函数内延迟 import，
-    # 云端路径不会执行到（PACKAGING.md 已核实，开始前复核清单项）。
+    # 前提：utils/embedding.py 的 HuggingFaceEmbeddings 仅在本地分支内延迟 import，
+    # 且本地依赖缺失时抛带指引的 RuntimeError（在线路径永不触发该 import）。
     excludes += [
         "torch",
         "torchvision",
