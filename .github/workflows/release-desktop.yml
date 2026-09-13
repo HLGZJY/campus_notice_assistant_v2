@@ -29,6 +29,8 @@ on:
 env:
   PYTHON_VERSION: '3.11'
   NODE_VERSION: '20'
+  # runner 英文 locale 下 stdout 默认 cp1252，构建脚本中文输出须强制 UTF-8
+  PYTHONIOENCODING: 'utf-8'
   # 桌面版构建环境变量（campus_notice.spec 据此选入口与 console 值）
   CNA_FLAVOR: 'desktop'
 

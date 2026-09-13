@@ -40,6 +40,12 @@ import yaml
 PACKAGING_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = PACKAGING_DIR.parent
 
+# CI 的 Windows runner（英文 locale）stdout 默认 cp1252，中文日志会炸
+# UnicodeEncodeError；强制 UTF-8（Python 3.7+ TextIOWrapper.reconfigure）。
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(encoding="utf-8")
+
 CLOUD_EMBEDDING_DEFAULT_PROVIDER = "bailian"
 CLOUD_EMBEDDING_DEFAULT_MODEL = "qwen3.7-text-embedding"
 
