@@ -1,0 +1,37 @@
+# 校园通知智能助手 - 云端默认配置模板（入库，供 CI 打包与新装跑起步）
+# 本地个性化配置 config/app.yaml 不入库（.gitignore）；缺失时打包脚本以本文件为基底。
+# API Key 不在本文件保存，请通过 api_key_env 引用 .env 中的环境变量。
+
+active_school: scuec
+models:
+  extraction:
+    provider: bailian
+    models:
+    - qwen3.7-flash-2026-07-15
+  qa:
+    provider: bailian
+    models:
+    - qwen3.7-flash-2026-07-15
+  todo:
+    provider: bailian
+    models:
+    - qwen3.7-flash-2026-07-15
+  embedding:
+    provider: bailian
+    models:
+    - qwen3.7-text-embedding
+providers:
+  bailian:
+    name: bailian
+    display_name: ''
+    base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+    api_key_env: DASHSCOPE_API_KEY
+    models: []
+    type: bailian
+  local:
+    name: local
+    display_name: ''
+    base_url: ''
+    api_key_env: ''
+    models: []
+    type: local

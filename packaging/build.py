@@ -98,11 +98,19 @@ def patch_cloud_embedding(app_yaml: Path, provider: str, model: str) -> None:
 def layout_app_root(dist_app: Path, flavor: str, cloud_provider: str, cloud_model: str) -> None:
     """布置应用根目录（exe 同级），与 utils/app_paths.py 冻结路径对齐。"""
     # config：只带 YAML（*.py 已作为代码进 _internal；*.bak / __pycache__ 不带）
+    # app.yaml 是 gitignore 的本机个性化配置，CI checkout 不存在 → 退回入库模板
+    # config/app.example.yaml 作为基底（云端默认，patch_cloud_embedding 再补丁 embedding）。
     config_dst = dist_app / "config"
     config_dst.mkdir(parents=True, exist_ok=True)
     src_config = PROJECT_ROOT / "config"
     copied = []
-    for item in ["app.yaml", "source_catalog.yaml"]:
+    app_yaml_src = src_config / "app.yaml"
+    if not app_yaml_src.exists():
+        app_yaml_src = src_config / "app.example.yaml"
+        log("config/app.yaml 不存在（CI/新环境），使用入库模板 app.example.yaml 为基底")
+    shutil.copy2(app_yaml_src, config_dst / "app.yaml")
+    copied.append("app.yaml")
+    for item in ["source_catalog.yaml"]:
         if (src_config / item).exists():
             shutil.copy2(src_config / item, config_dst / item)
             copied.append(item)
