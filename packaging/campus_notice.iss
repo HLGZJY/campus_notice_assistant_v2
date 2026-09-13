@@ -50,9 +50,10 @@ WizardStyle=modern
 ArchitecturesInstallIn64BitMode=x64compatible
 ; 无代码签名证书（个人开发者），关闭 UAC 对未签名安装器的额外弹窗提示可选项
 DisableProgramGroupPage=yes
-; 中文界面（Inno Setup 6 自带；若你的安装目录缺该文件，注释掉下一行即可回退英文）
+; 中文界面：Inno 官方不带简中语言包，本仓库自带 packaging/ChineseSimplified.isl
+; （相对路径基于脚本目录解析，本机与 CI runner 通用）
 [Languages]
-Name: "chinesesimplified"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
+Name: "chinesesimplified"; MessagesFile: "ChineseSimplified.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "创建桌面快捷方式(&D)"; GroupDescription: "附加任务:"
