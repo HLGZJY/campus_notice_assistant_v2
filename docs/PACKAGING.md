@@ -22,6 +22,7 @@
 | 版本检测 | `GET api.github.com/repos/{owner}/{repo}/releases/latest` | 免维护 update.json，tag 即版本号，body 即更新日志 |
 | 下载加速 | 直连 GitHub + app.yaml 可配镜像前缀 | 国内直连慢，预留切换位 |
 | 数据保留 | 安装器/卸载器均不碰 `data/` | 更新覆盖安装不丢用户数据 |
+| 可写配置（v0.2.1） | `get_config_dir()` 运行时可写性探测：exe 同级 config 可写则用之，不可写落 `%APPDATA%\CampusNoticeAssistant\config` 并从安装目录模板**种子化**（只补缺不覆盖） | 用户实测反馈：`schools/<code>.yaml` 是可写数据（「我的数据源」会写），安装目录只读时报 errno 13 / 文件缺失 500；`config/schools/scuec.yaml` 自此入库随包分发作初始模板 |
 
 ## 双 Embedding 版本组织
 

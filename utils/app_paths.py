@@ -19,10 +19,15 @@ B16 起（v0.2.0 数据目录三态，见 docs/DESKTOP-BATCH-PLAN.md §B16）：
 
 迁移向导：``migrate_data_dir`` 只读复制 legacy（exe 同级 data）到 installed data，
 校验后写 ``.migrated`` 标记，源数据保留、可重试、幂等（R8）。
+
+v0.2.1 起``get_config_dir``（可写配置）采用**可写性探测**：exe 同级 config
+不可写（如误装 Program Files）时落 ``%APPDATA%/CampusNoticeAssistant/config``
+并从安装目录只读模板种子化；可写（localappdata 默认装法）与 dev 行为不变。
 """
 from __future__ import annotations
 
 import os
+import shutil
 import sys
 from pathlib import Path
 
@@ -95,12 +100,79 @@ def get_data_dir() -> Path:
 
 
 def get_config_dir() -> Path:
-    """可写配置目录（app.yaml / schools/ / source_catalog.yaml）。
+    """可写配置目录（app.yaml / schools/ / source_catalog.yaml / settings.json）。
 
-    B16 只对「数据目录」三态化（标题与迁移目标均为 data）；配置仍随应用根
-    （冻结 = exe 同级 config），与 build.py 布局严格对齐。见模块文档说明。
+    v0.2.1 修复（B22 用户实测反馈）：schools/<code>.yaml 是用户可写数据
+    （「我的数据源」添加数据源会写它），而配置可能随安装目录落在不可写位置
+    （如用户把安装目录选到 Program Files），写它报 errno 13、文件缺失时
+    「我的数据源」直接 500。
+
+    判定采用**可写性探测**（不依赖 data 目录三态猜测）：
+    - 未冻结（dev）→ 仓库根 config；
+    - 冻结且 exe 同级 config 可写 → 直接用之（localappdata per-user 装法，
+      与 build.py / iss 布局严格对齐，行为不变）；
+    - 冻结且 exe 同级 config 不可写 → ``%APPDATA%/CampusNoticeAssistant/config``，
+      首次访问时从安装目录的只读模板**种子化**缺失文件（幂等，只补缺不覆盖）。
     """
-    return get_app_root() / "config"
+    app_config = get_app_root() / "config"
+    if not getattr(sys, "frozen", False):
+        return app_config
+    if _is_writable_dir(app_config):
+        return app_config
+    target = _installed_root() / "config"
+    _seed_writable_config(target)
+    return target
+
+
+def _is_writable_dir(path: Path) -> bool:
+    """探测目录（含其 schools 子目录的父级）是否对当前用户可写。
+
+    以「实际写入一个探针文件」为准，而非 ACL 检查（同效果、更贴近真实）。
+    探针文件用完即删，残留风险为零。
+    """
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+        probe = path / ".write_probe"
+        probe.write_text("probe\n", encoding="utf-8")
+        probe.unlink()
+        return True
+    except OSError:
+        return False
+
+
+def _installed_root() -> Path:
+    """installed 态用户目录根：%APPDATA%/CampusNoticeAssistant。"""
+    appdata = os.environ.get("APPDATA")
+    if appdata:
+        return Path(appdata).resolve() / _INSTALLED_DIR_NAME
+    # 兜底：回退 exe 同级（至少可用，与 portable 同级）
+    return _frozen_exe_dir()
+
+
+def _seed_writable_config(target: Path) -> None:
+    """把安装目录只读模板中的缺失配置文件补进可写配置目录（幂等）。
+
+    只补缺、不覆盖：用户已有配置永不被模板冲掉；模板缺失（极罕见）时仅确保
+    目录存在。失败向上抛 OSError——调用方拿到真实错误好过静默用错目录。
+    """
+    target.mkdir(parents=True, exist_ok=True)
+    template = _frozen_exe_dir() / "config"
+    if not template.is_dir():
+        return
+    # 顶层文件种子清单（.py/.bak/__pycache__ 不带）
+    for name in ("app.yaml", "source_catalog.yaml", "settings.json"):
+        src = template / name
+        if src.is_file() and not (target / name).exists():
+            shutil.copy2(src, target / name)
+    # 学校数据源目录
+    src_schools = template / "schools"
+    if src_schools.is_dir():
+        dst_schools = target / "schools"
+        dst_schools.mkdir(parents=True, exist_ok=True)
+        for yml in src_schools.glob("*.yaml"):
+            dst = dst_schools / yml.name
+            if not dst.exists():
+                shutil.copy2(yml, dst)
 
 
 def get_frontend_dist() -> Path:
@@ -109,8 +181,12 @@ def get_frontend_dist() -> Path:
 
 
 def get_env_path() -> Path:
-    """.env 文件路径（API key，安装后用户可编辑）。"""
-    return get_app_root() / ".env"
+    """.env 文件路径（API key，安装后用户可编辑）。
+
+    与 ConfigStore 的写入口（config_dir.parent / ".env"）保持一致：
+    installed 态随配置目录落 %APPDATA%/CampusNoticeAssistant/.env（可写）。
+    """
+    return get_config_dir().parent / ".env"
 
 
 def resolve_legacy_data_dir() -> Path | None:
