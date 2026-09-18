@@ -48,6 +48,8 @@ Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
 ArchitecturesInstallIn64BitMode=x64compatible
+; 安装器/卸载器品牌图标（与 exe/托盘/窗口同一份 packaging/app.ico）
+SetupIconFile=app.ico
 ; 无代码签名证书（个人开发者），关闭 UAC 对未签名安装器的额外弹窗提示可选项
 DisableProgramGroupPage=yes
 ; 中文界面：Inno 官方不带简中语言包，本仓库自带 packaging/ChineseSimplified.isl

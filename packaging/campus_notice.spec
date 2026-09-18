@@ -73,6 +73,8 @@ datas = [
     # 包内 .md 提示词文件；不收集会炸掉 agents.run 整条 import 链
     # （症状：路由注册跳过 / TaskManager / 调度器启动失败 / 健康检查 degraded）
     *collect_data_files("agents"),
+    # 品牌图标：托盘运行时加载（sys._MEIPASS/app.ico）；exe 图标见 EXE(icon=)
+    (str(Path(SPECPATH) / "app.ico"), "."),
 ]
 
 # chromadb 用 importlib 字符串加载 segment 实现（运行期拼模块名），
@@ -128,6 +130,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon=str(Path(SPECPATH) / "app.ico"),  # exe/快捷方式/窗口标题栏共用品牌图标
 )
 
 coll = COLLECT(

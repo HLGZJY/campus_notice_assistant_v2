@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import logging
 import threading
+from pathlib import Path
 from typing import Any, Callable
 
 from utils.app_paths import get_version
@@ -53,21 +54,50 @@ def _ensure_imports() -> None:
     _imported = True
 
 
-def _build_icon_image(size: int = 64) -> Any:
-    """用 Pillow 绘制一个简单的应用图标（圆角蓝底 + 白底「校」字首画）。
+def _icon_file() -> Path | None:
+    """定位品牌图标 app.ico：冻结态取 _internal（spec datas），dev 态取 packaging/。"""
+    import sys
 
-    无现成 .ico 资源时兜底生成，保证托盘图标始终可见；B21 打磨时可用真图标替换。
+    candidates = []
+    if getattr(sys, "frozen", False):
+        meipass = getattr(sys, "_MEIPASS", None)
+        if meipass:
+            candidates.append(Path(meipass) / "app.ico")
+    else:
+        candidates.append(Path(__file__).resolve().parents[1] / "packaging" / "app.ico")
+    for p in candidates:
+        if p.is_file():
+            return p
+    return None
+
+
+def _build_icon_image(size: int = 64) -> Any:
+    """托盘图标：优先加载品牌 app.ico（与 exe/窗口图标统一）。
+
+    ico 缺失时（如非打包环境手动清理）退回 Pillow 程序绘制兜底，保证托盘
+    图标始终可见。品牌图标由 scratch/make_app_icon.py 生成（packaging/app.ico）。
     """
     _ensure_imports()
+    ico_path = _icon_file()
+    if ico_path is not None:
+        try:
+            img = _Image.open(ico_path)
+            img.load()
+            img = img.convert("RGBA")
+            if img.width != size:
+                img = img.resize((size, size), _Image.LANCZOS)
+            return img
+        except Exception:  # noqa: BLE001 - ico 损坏时退回绘制兜底
+            logger.debug("品牌图标加载失败，退回绘制兜底", exc_info=True)
     img = _Image.new("RGBA", (size, size), (0, 0, 0, 0))
     draw = _ImageDraw.Draw(img)
-    # 圆角方形底（校园蓝）
+    # 圆角方形底（品牌靛紫，与应用 --primary 一致）
     radius = size // 5
     draw.rounded_rectangle(
         (1, 1, size - 1, size - 1),
         radius=radius,
-        fill=(31, 96, 216, 255),
-        outline=(20, 70, 160, 255),
+        fill=(99, 102, 241, 255),
+        outline=(79, 70, 229, 255),
         width=max(1, size // 32),
     )
     # 中央白色「C」字形（Campus Notice Assistant）
