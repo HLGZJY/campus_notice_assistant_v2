@@ -289,7 +289,7 @@ def _notify_user(message: str, log_path: Path) -> None:
                 messagebox.showinfo("日志导出", "已取消导出")
 
         answer = messagebox.askquestion(
-            "校园通知智能助手 · 发生错误",
+            "南湖窗 · 发生错误",
             f"程序发生未捕获异常：\n\n{message}\n\n"
             f"日志已记录到：\n{log_path}\n\n是否立即导出日志以便排查？",
             icon="error",
@@ -382,7 +382,7 @@ def write_crash_report(
 
     sections = [
         "=" * 60,
-        f"校园通知智能助手 · 崩溃转储",
+        f"南湖窗 · 崩溃转储",
         f"时间: {_dt.datetime.now().isoformat()}",
         f"标题: {title}",
         "-" * 60,

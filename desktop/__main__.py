@@ -36,7 +36,7 @@ def main() -> None:
     setup_logging(console=False)
     install_excepthooks()
 
-    logger.info("校园通知智能助手 桌面版 v%s 启动中……", get_version())
+    logger.info("南湖窗 桌面版 v%s 启动中……", get_version())
     app = DesktopApp(
         enable_tray=not args.no_tray,
         start_minimized=args.minimized,

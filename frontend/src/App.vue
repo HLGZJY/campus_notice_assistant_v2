@@ -204,10 +204,10 @@ onUnmounted(() => {
                       class="brand-text"
                     >
                       <div class="brand-title">
-                        校园通知智能助手
+                        南湖窗
                       </div>
                       <div class="brand-sub">
-                        Campus Notice Assistant
+                        Nanhu Window
                       </div>
                     </div>
                   </transition>

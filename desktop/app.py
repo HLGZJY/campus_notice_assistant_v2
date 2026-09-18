@@ -41,7 +41,7 @@ def parse_cli_args(argv: list[str] | None = None) -> argparse.Namespace:
     """
     parser = argparse.ArgumentParser(
         prog="desktop",
-        description="校园通知智能助手 桌面版（Windows x64）",
+        description="南湖窗 桌面版（Windows x64）",
     )
     parser.add_argument(
         "--minimized",
@@ -125,7 +125,7 @@ class DesktopApp:
         self,
         host: str = "127.0.0.1",
         port: int | None = None,
-        title: str = "校园通知智能助手",
+        title: str = "南湖窗",
         enable_tray: bool = True,
         enable_single_instance: bool = True,
         start_minimized: bool = False,
@@ -334,6 +334,8 @@ class DesktopApp:
         self._window.events.loaded += lambda: inject_new_window_guard(self._window)
         # K5：点 X 是否最小化到托盘，由 closing handler 决定（见 _on_closing）
         self._window.events.closing += self._on_closing
+        # 深色原生标题栏（B22 反馈：浅色系统标题栏与深色 UI 割裂）
+        self._window.events.shown += self._apply_dark_titlebar
         # B08.T2：注册 Windows 关机/注销信号（WM_QUERYENDSESSION 走同一退出路径）。
         # 在 webview.start() 前后皆可调用；非 Windows/无 GUI 环境静默降级。
         self._setup_shutdown_hook()
@@ -345,6 +347,42 @@ class DesktopApp:
             logger.exception("窗口事件循环异常")
         finally:
             self._shutdown()
+
+    def _apply_dark_titlebar(self) -> None:
+        """深色原生标题栏（B22 反馈：浅色系统标题栏与深色 UI 割裂）。
+
+        DWMWA_USE_IMMERSIVE_DARK_MODE（属性 20；19041 前的内部 build 用 19）
+        把 Win10 19041+/Win11 的原生标题栏切深色；更老系统调用失败静默忽略，
+        回退系统默认浅色。挂在 events.shown（native 句柄就绪后）执行一次。
+
+        说明：当前固定深色（应用默认主题）；后续若做主题跟随，可由此扩展为
+        js_api 暴露给前端在主题切换时回调。
+        """
+        import ctypes
+
+        try:
+            form = getattr(self._window, "native", None)
+            if form is None:
+                logger.info("深色标题栏：窗口句柄未就绪，跳过")
+                return
+            # pythonnet 的 System.IntPtr 不支持 int()，必须走 ToInt64()
+            hwnd = int(form.Handle.ToInt64())
+            if not hwnd:
+                logger.info("深色标题栏：句柄为空，跳过")
+                return
+            value = ctypes.c_int(1)
+            for attr in (20, 19):
+                if (
+                    ctypes.windll.dwmapi.DwmSetWindowAttribute(
+                        hwnd, attr, ctypes.byref(value), ctypes.sizeof(value)
+                    )
+                    == 0
+                ):
+                    logger.info("深色标题栏已启用（DWM 属性 %s）", attr)
+                    return
+            logger.info("深色标题栏设置未生效（系统不支持 DWM 深色属性）")
+        except Exception:  # noqa: BLE001 - 非关键外观增强，失败不阻塞启动
+            logger.info("深色标题栏设置失败（忽略）", exc_info=True)
 
     def _inject_token_script(self) -> None:
         """K7：把启动令牌注入 webview 的 window.__CNA_TOKEN__。

@@ -123,7 +123,7 @@ class DesktopTray:
 
     def __init__(
         self,
-        title: str = "校园通知智能助手",
+        title: str = "南湖窗",
         callbacks: dict[str, Callable[[], Any] | None] | None = None,
     ) -> None:
         _ensure_imports()
@@ -235,7 +235,7 @@ class DesktopTray:
 def notify(
     message: str,
     title: str | None = None,
-    tray_title: str = "校园通知智能助手",
+    tray_title: str = "南湖窗",
 ) -> bool:
     """模块级便捷函数：创建一次性托盘发通知（供暂未持有 DesktopTray 的场景）。
 

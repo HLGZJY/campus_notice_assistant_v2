@@ -71,7 +71,7 @@ const quickActions = [
           {{ todayText }}
         </div>
         <div class="hero-sub">
-          校园通知智能助手为你聚合最新通知、提取行动项并跟踪截止时间。
+          南湖窗为你聚合最新通知、提取行动项并跟踪截止时间。
         </div>
       </div>
       <div class="hero-actions">

@@ -265,7 +265,7 @@ def write_latest_json(setup: Path, version: str) -> Path | None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="校园通知智能助手一键构建")
+    parser = argparse.ArgumentParser(description="南湖窗一键构建")
     parser.add_argument("--flavor", choices=["cloud", "full", "desktop"], default="cloud",
                         help="cloud=云端瘦身版（默认）| full=完整版（含 torch + 本地模型）| "
                              "desktop=桌面版（pywebview 壳，console=False）")

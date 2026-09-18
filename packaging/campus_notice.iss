@@ -26,7 +26,7 @@
 #define SetupSuffix "完整版"
 #endif
 
-#define MyAppName "校园通知智能助手"
+#define MyAppName "南湖窗"
 #define MyAppNameEn "CampusNoticeAssistant"
 #define MyAppExeName "CampusNoticeAssistant.exe"
 #define MyAppPublisher "HLGZJY"
